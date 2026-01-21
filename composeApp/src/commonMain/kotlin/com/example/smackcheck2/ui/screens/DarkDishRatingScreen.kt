@@ -1,0 +1,586 @@
+package com.example.smackcheck2.ui.screens
+
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.theme.appColors
+
+/**
+ * Dark themed Dish Rating Screen
+ * Allows users to rate dishes with stars, tags, and comments
+ */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+fun DarkDishRatingScreen(
+    dishName: String,
+    imageUri: String,
+    restaurantName: String = "",
+    onNavigateBack: () -> Unit,
+    onSubmitRating: (rating: Float, comment: String, tags: List<String>) -> Unit
+) {
+    var rating by remember { mutableFloatStateOf(0f) }
+    var comment by remember { mutableStateOf("") }
+    var restaurantInput by remember { mutableStateOf(restaurantName) }
+    var selectedTags by remember { mutableStateOf(setOf<String>()) }
+    var isSubmitting by remember { mutableStateOf(false) }
+    var showSuccess by remember { mutableStateOf(false) }
+    
+    val tags = listOf(
+        "🔥 Spicy", "😋 Tasty", "🥗 Healthy", "💰 Value for Money",
+        "🎨 Good Presentation", "⚡ Quick Service", "🍽️ Large Portion",
+        "🌿 Fresh Ingredients", "👨‍🍳 Chef's Special", "❤️ Must Try"
+    )
+    
+    Scaffold(
+        containerColor = appColors().Background,
+        topBar = {
+            TopAppBar(
+                title = { 
+                    Text(
+                        "Rate Dish",
+                        color = appColors().TextPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = appColors().TextPrimary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = appColors().Background
+                )
+            )
+        }
+    ) { paddingValues ->
+        if (showSuccess) {
+            // Success screen
+            RatingSuccessScreen(
+                dishName = dishName,
+                rating = rating,
+                xpEarned = 50,
+                onContinue = onNavigateBack
+            )
+        } else {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // Dish preview card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = appColors().Surface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Dish image placeholder
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    Brush.radialGradient(
+                                        colors = listOf(
+                                            Color(0xFF3D3D3D),
+                                            Color(0xFF252525)
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Restaurant,
+                                contentDescription = null,
+                                tint = appColors().TextSecondary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(16.dp))
+                        
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = appColors().Primary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "AI Detected",
+                                    color = appColors().Primary,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            Text(
+                                text = dishName,
+                                color = appColors().TextPrimary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                
+                // Restaurant input
+                OutlinedTextField(
+                    value = restaurantInput,
+                    onValueChange = { restaurantInput = it },
+                    label = { Text("Restaurant Name (optional)") },
+                    placeholder = { Text("Where did you eat this?") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = appColors().Primary,
+                        unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                        focusedLabelColor = appColors().Primary,
+                        unfocusedLabelColor = appColors().TextSecondary,
+                        cursorColor = appColors().Primary,
+                        focusedTextColor = appColors().TextPrimary,
+                        unfocusedTextColor = appColors().TextPrimary,
+                        focusedPlaceholderColor = appColors().TextSecondary,
+                        unfocusedPlaceholderColor = appColors().TextSecondary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Star rating section
+                Text(
+                    text = "How would you rate it?",
+                    color = appColors().TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Interactive star rating
+                StarRatingInput(
+                    rating = rating,
+                    onRatingChange = { rating = it },
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                
+                // Rating label
+                Text(
+                    text = when {
+                        rating >= 4.5f -> "Amazing! 🤩"
+                        rating >= 4f -> "Great! 😄"
+                        rating >= 3f -> "Good 👍"
+                        rating >= 2f -> "Okay 😐"
+                        rating >= 1f -> "Not Good 😕"
+                        else -> "Tap to rate"
+                    },
+                    color = if (rating > 0) appColors().Primary else appColors().TextSecondary,
+                    fontSize = 14.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    textAlign = TextAlign.Center
+                )
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Tags section
+                Text(
+                    text = "Add tags (optional)",
+                    color = appColors().TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    tags.forEach { tag ->
+                        val isSelected = selectedTags.contains(tag)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (isSelected) appColors().Primary.copy(alpha = 0.2f)
+                                    else appColors().Surface
+                                )
+                                .border(
+                                    width = 1.dp,
+                                    color = if (isSelected) appColors().Primary 
+                                           else appColors().TextSecondary.copy(alpha = 0.3f),
+                                    shape = RoundedCornerShape(20.dp)
+                                )
+                                .clickable {
+                                    selectedTags = if (isSelected) {
+                                        selectedTags - tag
+                                    } else {
+                                        selectedTags + tag
+                                    }
+                                }
+                                .padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = tag,
+                                color = if (isSelected) appColors().Primary 
+                                       else appColors().TextSecondary,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Comment section
+                Text(
+                    text = "Add a comment (optional)",
+                    color = appColors().TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    placeholder = { Text("Share your experience...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .padding(horizontal = 16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = appColors().Primary,
+                        unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                        cursorColor = appColors().Primary,
+                        focusedTextColor = appColors().TextPrimary,
+                        unfocusedTextColor = appColors().TextPrimary,
+                        focusedPlaceholderColor = appColors().TextSecondary,
+                        unfocusedPlaceholderColor = appColors().TextSecondary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                // XP Preview
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = appColors().Primary.copy(alpha = 0.15f)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.EmojiEvents,
+                            contentDescription = null,
+                            tint = appColors().Primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "You'll earn",
+                                color = appColors().TextSecondary,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "+${calculateXP(rating, comment, selectedTags)} XP",
+                                color = appColors().Primary,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                // Submit button
+                Button(
+                    onClick = {
+                        isSubmitting = true
+                        // Simulate submission delay
+                        onSubmitRating(rating, comment, selectedTags.toList())
+                        showSuccess = true
+                    },
+                    enabled = rating > 0 && !isSubmitting,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = appColors().Primary,
+                        contentColor = Color.White,
+                        disabledContainerColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                        disabledContentColor = appColors().TextSecondary
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    if (isSubmitting) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        Text(
+                            text = "Submit Rating",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StarRatingInput(
+    rating: Float,
+    onRatingChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        for (i in 1..5) {
+            val isSelected = i <= rating
+            val scale by animateFloatAsState(
+                targetValue = if (isSelected) 1.1f else 1f,
+                animationSpec = tween(150)
+            )
+            val starColor by animateColorAsState(
+                targetValue = if (isSelected) Color(0xFFFFD700) else appColors().TextSecondary.copy(alpha = 0.4f),
+                animationSpec = tween(150)
+            )
+            
+            Icon(
+                imageVector = Icons.Default.Star,
+                contentDescription = "Star $i",
+                tint = starColor,
+                modifier = Modifier
+                    .size(48.dp)
+                    .scale(scale)
+                    .clickable { onRatingChange(i.toFloat()) }
+                    .padding(4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RatingSuccessScreen(
+    dishName: String,
+    rating: Float,
+    xpEarned: Int,
+    onContinue: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(appColors().Background)
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        // Success animation placeholder
+        Box(
+            modifier = Modifier
+                .size(120.dp)
+                .background(
+                    appColors().Primary.copy(alpha = 0.2f),
+                    CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = appColors().Primary,
+                modifier = Modifier.size(64.dp)
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        Text(
+            text = "Rating Submitted!",
+            color = appColors().TextPrimary,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Bold
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Text(
+            text = "Thanks for rating $dishName",
+            color = appColors().TextSecondary,
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center
+        )
+        
+        Spacer(modifier = Modifier.height(32.dp))
+        
+        // XP earned card
+        Card(
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = appColors().Primary.copy(alpha = 0.15f)
+            )
+        ) {
+            Row(
+                modifier = Modifier.padding(24.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.EmojiEvents,
+                    contentDescription = null,
+                    tint = appColors().Primary,
+                    modifier = Modifier.size(32.dp)
+                )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column {
+                    Text(
+                        text = "You earned",
+                        color = appColors().TextSecondary,
+                        fontSize = 14.sp
+                    )
+                    Text(
+                        text = "+$xpEarned XP",
+                        color = appColors().Primary,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(48.dp))
+        
+        Button(
+            onClick = onContinue,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = appColors().Primary,
+                contentColor = Color.White
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Text(
+                text = "Continue",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+private fun calculateXP(rating: Float, comment: String, tags: Set<String>): Int {
+    var xp = 25 // Base XP for rating
+    if (rating > 0) xp += 15 // Extra for providing rating
+    if (comment.length > 20) xp += 10 // Bonus for detailed comment
+    xp += tags.size * 2 // 2 XP per tag
+    return xp
+}

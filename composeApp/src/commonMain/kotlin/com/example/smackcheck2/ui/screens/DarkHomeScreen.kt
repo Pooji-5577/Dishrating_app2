@@ -1,0 +1,410 @@
+package com.example.smackcheck2.ui.screens
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.CameraAlt
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.components.CategoryChip
+import com.example.smackcheck2.ui.components.DarkSearchBar
+import com.example.smackcheck2.ui.components.FavoriteButton
+import com.example.smackcheck2.ui.components.FeaturedDishCard
+import com.example.smackcheck2.ui.components.FilterChipDark
+import com.example.smackcheck2.ui.components.LargeDishCard
+import com.example.smackcheck2.ui.components.LocationHeader
+import com.example.smackcheck2.ui.components.RestaurantCardDark
+import com.example.smackcheck2.ui.theme.appColors
+
+data class NavItem(
+    val label: String,
+    val selectedIcon: @Composable () -> Unit,
+    val unselectedIcon: @Composable () -> Unit
+)
+
+@Composable
+fun DarkHomeScreen(
+    currentLocation: String,
+    onLocationClick: () -> Unit,
+    onDishClick: (String) -> Unit,
+    onRestaurantClick: (String) -> Unit,
+    onSearchClick: () -> Unit,
+    onProfileClick: () -> Unit,
+    onGameClick: () -> Unit,
+    onCameraClick: () -> Unit = {},
+    onTopDishesClick: () -> Unit = {},
+    onTopRestaurantsClick: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    val themeColors = appColors()
+    
+    var selectedNavItem by remember { mutableIntStateOf(0) }
+    var selectedCategory by remember { mutableStateOf("Healthy") }
+    var searchQuery by remember { mutableStateOf("") }
+    
+    val categories = listOf("Healthy", "Gourmet", "Chef's Special", "Quick Bites", "Desserts")
+    val filters = listOf("Great Offers", "Nearest", "Rating 4.0+", "Pure Veg")
+    var selectedFilters by remember { mutableStateOf(setOf<String>()) }
+    
+    // Sample dishes data
+    val featuredDishes = remember {
+        listOf(
+            DishInfo("1", "Grilled Salmon", "Ocean Grill", 4.5f, 453),
+            DishInfo("2", "Avocado Toast", "Green Cafe", 4.3f, 320),
+            DishInfo("3", "Caesar Salad", "Fresh Bowl", 4.2f, 280),
+            DishInfo("4", "Quinoa Bowl", "Healthy Hub", 4.6f, 410),
+            DishInfo("5", "Mediterranean Wrap", "Pita Palace", 4.1f, 380)
+        )
+    }
+    
+    val tryThisOut = remember {
+        TryDishInfo("Truffle Pasta", "La Cucina", 4.7f, 856, 553, true)
+    }
+    
+    val restaurants = remember {
+        listOf(
+            RestaurantInfo("1", "Spice Garden", "Indian, Asian", 4.5f, 230, "30-40 min"),
+            RestaurantInfo("2", "Burger Barn", "American, Fast Food", 4.3f, 420, "20-30 min"),
+            RestaurantInfo("3", "Sushi Master", "Japanese", 4.8f, 180, "35-45 min")
+        )
+    }
+    
+    val navItems = listOf(
+        NavItem(
+            "Home",
+            { Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(24.dp)) },
+            { Icon(Icons.Outlined.Home, contentDescription = null, modifier = Modifier.size(24.dp)) }
+        ),
+        NavItem(
+            "Search",
+            { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(24.dp)) },
+            { Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(24.dp)) }
+        ),
+        NavItem(
+            "Rate",
+            { Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) },
+            { Icon(Icons.Outlined.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) }
+        ),
+        NavItem(
+            "Profile",
+            { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) },
+            { Icon(Icons.Outlined.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) }
+        )
+    )
+    
+    Scaffold(
+        containerColor = themeColors.Background,
+        bottomBar = {
+            NavigationBar(
+                containerColor = themeColors.Surface,
+                tonalElevation = 0.dp
+            ) {
+                navItems.forEachIndexed { index, item ->
+                    NavigationBarItem(
+                        selected = selectedNavItem == index,
+                        onClick = {
+                            selectedNavItem = index
+                            when (index) {
+                                1 -> onSearchClick()
+                                2 -> onCameraClick()
+                                3 -> onProfileClick()
+                            }
+                        },
+                        icon = {
+                            if (selectedNavItem == index) item.selectedIcon() else item.unselectedIcon()
+                        },
+                        label = {
+                            Text(
+                                text = item.label,
+                                fontSize = 11.sp
+                            )
+                        },
+                        colors = NavigationBarItemDefaults.colors(
+                            selectedIconColor = themeColors.Primary,
+                            selectedTextColor = themeColors.Primary,
+                            unselectedIconColor = themeColors.TextSecondary,
+                            unselectedTextColor = themeColors.TextSecondary,
+                            indicatorColor = themeColors.Primary.copy(alpha = 0.1f)
+                        )
+                    )
+                }
+            }
+        },
+        modifier = modifier
+    ) { paddingValues ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .background(themeColors.Background),
+            contentPadding = PaddingValues(bottom = 16.dp)
+        ) {
+            // Location Header
+            item {
+                LocationHeader(
+                    locationType = "Location",
+                    address = currentLocation,
+                    onLocationClick = onLocationClick,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                )
+            }
+            
+            // Search Bar
+            item {
+                DarkSearchBar(
+                    query = searchQuery,
+                    onQueryChange = { searchQuery = it },
+                    placeholder = "Search dishes, restaurants...",
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .fillMaxWidth()
+                )
+            }
+            
+            // Category Tabs
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    categories.forEach { category ->
+                        CategoryChip(
+                            text = category,
+                            isSelected = selectedCategory == category,
+                            onClick = { selectedCategory = category }
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(4.dp))
+                }
+            }
+            
+            // Featured Section Header
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Top Picks for You",
+                        color = themeColors.TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "See All >",
+                        color = themeColors.Primary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { onTopDishesClick() }
+                    )
+                }
+            }
+            
+            // Featured Dishes Horizontal Scroll
+            item {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    items(featuredDishes) { dish ->
+                        var isFavorite by remember { mutableStateOf(false) }
+                        FeaturedDishCard(
+                            dishName = dish.name,
+                            restaurantName = dish.restaurant,
+                            rating = dish.rating,
+                            calories = dish.calories,
+                            isFavorite = isFavorite,
+                            onClick = { onDishClick(dish.id) },
+                            onFavoriteClick = { isFavorite = !isFavorite }
+                        )
+                    }
+                }
+            }
+            
+            // Try This Out Section
+            item {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                ) {
+                    Text(
+                        text = "Try This Out",
+                        color = themeColors.TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    LargeDishCard(
+                        dishName = tryThisOut.name,
+                        restaurantName = tryThisOut.restaurant,
+                        rating = tryThisOut.rating,
+                        reviewCount = tryThisOut.reviewCount,
+                        calories = tryThisOut.calories,
+                        isBestseller = tryThisOut.isBestseller,
+                        onClick = { onDishClick("bestseller") }
+                    )
+                }
+            }
+            
+            // All Restaurants Section Header
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "All Restaurants",
+                        color = themeColors.TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "See All >",
+                        color = themeColors.Primary,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { onTopRestaurantsClick() }
+                    )
+                }
+            }
+            
+            // Restaurant Filters
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    filters.forEach { filter ->
+                        FilterChipDark(
+                            text = filter,
+                            isSelected = selectedFilters.contains(filter),
+                            onClick = {
+                                selectedFilters = if (selectedFilters.contains(filter)) {
+                                    selectedFilters - filter
+                                } else {
+                                    selectedFilters + filter
+                                }
+                            }
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                }
+            }
+            
+            // Restaurant Cards
+            items(restaurants) { restaurant ->
+                var isFavorite by remember { mutableStateOf(false) }
+                RestaurantCardDark(
+                    restaurantName = restaurant.name,
+                    cuisine = restaurant.cuisine,
+                    rating = restaurant.rating,
+                    reviewCount = restaurant.reviewCount,
+                    deliveryTime = restaurant.deliveryTime,
+                    isFavorite = isFavorite,
+                    onClick = { onRestaurantClick(restaurant.id) },
+                    onFavoriteClick = { isFavorite = !isFavorite },
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            
+            // Bottom spacing
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+        }
+    }
+}
+
+// Data classes for the screen
+private data class DishInfo(
+    val id: String,
+    val name: String,
+    val restaurant: String,
+    val rating: Float,
+    val calories: Int
+)
+
+private data class TryDishInfo(
+    val name: String,
+    val restaurant: String,
+    val rating: Float,
+    val reviewCount: Int,
+    val calories: Int,
+    val isBestseller: Boolean
+)
+
+private data class RestaurantInfo(
+    val id: String,
+    val name: String,
+    val cuisine: String,
+    val rating: Float,
+    val reviewCount: Int,
+    val deliveryTime: String
+)
