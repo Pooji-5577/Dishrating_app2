@@ -1,11 +1,32 @@
 package com.example.smackcheck2.navigation
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.model.Restaurant
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.ui.screens.AllRestaurantsScreen
@@ -30,6 +51,7 @@ import com.example.smackcheck2.ui.screens.LocationPermissionScreen
 import com.example.smackcheck2.ui.screens.LocationSelectionScreen
 import com.example.smackcheck2.ui.screens.LoginScreen
 import com.example.smackcheck2.ui.screens.ManualRestaurantEntryScreen
+import com.example.smackcheck2.ui.screens.NearbyRestaurantsScreen
 import com.example.smackcheck2.ui.screens.DarkProfileScreen
 import com.example.smackcheck2.ui.screens.RegisterScreen
 import com.example.smackcheck2.ui.screens.RestaurantDetailScreen
@@ -39,7 +61,13 @@ import com.example.smackcheck2.ui.screens.SplashScreen
 import com.example.smackcheck2.ui.screens.TopDishesScreen
 import com.example.smackcheck2.ui.screens.TopRestaurantsScreen
 import com.example.smackcheck2.ui.screens.UserProgressScreen
+import com.example.smackcheck2.platform.LocalLocationService
+import com.example.smackcheck2.platform.LocalPlacesService
+import com.example.smackcheck2.platform.RequestLocationPermission
+import com.example.smackcheck2.platform.LocalImagePicker
 import com.example.smackcheck2.viewmodel.AuthViewModel
+import com.example.smackcheck2.viewmodel.NearbyRestaurantsViewModel
+import com.example.smackcheck2.viewmodel.DishCaptureViewModel
 import com.example.smackcheck2.viewmodel.DishRatingViewModel
 import com.example.smackcheck2.viewmodel.GameViewModel
 import com.example.smackcheck2.viewmodel.LocationHomeViewModel
@@ -57,8 +85,14 @@ import com.example.smackcheck2.viewmodel.UserProgressViewModel
 class NavigationState {
     var currentScreen by mutableStateOf<Screen>(Screen.Splash)
         private set
-    
+
     private val backStack = mutableListOf<Screen>()
+
+    /**
+     * Check if back navigation is possible
+     */
+    val canGoBack: Boolean
+        get() = backStack.isNotEmpty()
     
     // Route arguments with observable state
     var imageUri by mutableStateOf("")
@@ -72,7 +106,10 @@ class NavigationState {
     
     var dishId by mutableStateOf("")
         private set
-    
+
+    var imageBytes by mutableStateOf<ByteArray?>(null)
+        private set
+
     fun navigateTo(screen: Screen) {
         backStack.add(currentScreen)
         currentScreen = screen
@@ -104,6 +141,10 @@ class NavigationState {
         backStack.clear()
         currentScreen = Screen.DarkHome
     }
+
+    fun updateImageBytes(bytes: ByteArray?) {
+        imageBytes = bytes
+    }
 }
 
 /**
@@ -115,13 +156,45 @@ fun SmackCheckNavHost() {
     val navigationState = remember { NavigationState() }
     val authViewModel: AuthViewModel = viewModel { AuthViewModel() }
     val authState by authViewModel.authState.collectAsState()
-    
+
+    // Shared LocationHomeViewModel across all screens
+    val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
+    val locationService = LocalLocationService.current
+
+    // Set location service once at the top level
+    androidx.compose.runtime.LaunchedEffect(locationService) {
+        locationHomeViewModel.setLocationService(locationService)
+    }
+
+    // Handle system back button press
+    // Always enable back handler to prevent app from closing unexpectedly
+    BackHandler(enabled = true) {
+        when {
+            // If there's a back stack, navigate back
+            navigationState.canGoBack -> {
+                navigationState.navigateBack()
+            }
+            // On home screen, do nothing (stay on home screen instead of exiting)
+            navigationState.currentScreen is Screen.DarkHome -> {
+                // Consume the back press - don't exit the app
+                println("NavHost: On home screen, back press ignored to prevent app exit")
+            }
+            // On other screens (Login, Profile, etc.), navigate back if possible
+            else -> {
+                // Attempt to go back, if not possible, stay on current screen
+                if (!navigationState.navigateBack()) {
+                    println("NavHost: Cannot navigate back, staying on current screen")
+                }
+            }
+        }
+    }
+
     val isAuthenticated = when (authState) {
         is AuthState.Authenticated -> true
         is AuthState.Unauthenticated -> false
         is AuthState.Unknown -> null
     }
-    
+
     when (navigationState.currentScreen) {
         is Screen.Splash -> {
             DarkSplashScreen(
@@ -135,6 +208,7 @@ fun SmackCheckNavHost() {
             val loginViewModel: LoginViewModel = viewModel { LoginViewModel() }
             DarkLoginScreen(
                 viewModel = loginViewModel,
+                authViewModel = authViewModel,
                 onNavigateToRegister = { navigationState.navigateTo(Screen.Register) },
                 onNavigateToHome = { navigationState.navigateTo(Screen.DarkHome) }
             )
@@ -144,14 +218,13 @@ fun SmackCheckNavHost() {
             val registerViewModel: RegisterViewModel = viewModel { RegisterViewModel() }
             RegisterScreen(
                 viewModel = registerViewModel,
+                authViewModel = authViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onNavigateToHome = { navigationState.navigateTo(Screen.DarkHome) }
             )
         }
         
         is Screen.Home -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
-            val uiState by locationHomeViewModel.uiState.collectAsState()
             LocationHomeScreen(
                 viewModel = locationHomeViewModel,
                 onNavigateToAddDish = { navigationState.navigateTo(Screen.DishCapture) },
@@ -172,19 +245,53 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.Profile -> {
-            val profileViewModel: ProfileViewModel = viewModel { ProfileViewModel() }
+            val profileViewModel: ProfileViewModel = viewModel { ProfileViewModel(authViewModel) }
             DarkProfileScreen(
                 viewModel = profileViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
-                onEditProfile = { /* Navigate to edit profile */ },
+                onEditProfile = { navigationState.navigateTo(Screen.EditProfile) },
                 onSignOut = {
                     authViewModel.signOut()
                     navigationState.navigateTo(Screen.Login)
                 },
-                onNavigateToGames = { navigationState.navigateTo(Screen.Game) }
+                onNavigateToGames = { navigationState.navigateTo(Screen.Game) },
+                onNavigateToNotifications = { navigationState.navigateTo(Screen.NotificationSettings) },
+                onNavigateToAccount = { navigationState.navigateTo(Screen.AccountSettings) },
+                onNavigateToPrivacy = { navigationState.navigateTo(Screen.PrivacySettings) }
             )
         }
-        
+
+        // Edit Profile Screen
+        is Screen.EditProfile -> {
+            EditProfilePlaceholderScreen(
+                onNavigateBack = { navigationState.navigateBack() }
+            )
+        }
+
+        // Notification Settings Screen
+        is Screen.NotificationSettings -> {
+            SettingsPlaceholderScreen(
+                title = "Notifications",
+                onNavigateBack = { navigationState.navigateBack() }
+            )
+        }
+
+        // Account Settings Screen
+        is Screen.AccountSettings -> {
+            SettingsPlaceholderScreen(
+                title = "Account Settings",
+                onNavigateBack = { navigationState.navigateBack() }
+            )
+        }
+
+        // Privacy Settings Screen
+        is Screen.PrivacySettings -> {
+            SettingsPlaceholderScreen(
+                title = "Privacy & Security",
+                onNavigateBack = { navigationState.navigateBack() }
+            )
+        }
+
         is Screen.DishCapture -> {
             DishCaptureScreen(
                 onNavigateBack = { navigationState.navigateBack() },
@@ -288,24 +395,58 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.LocationSelection -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
-            LocationSelectionScreen(
-                currentLocation = uiState.selectedLocation,
-                onNavigateBack = { navigationState.navigateBack() },
-                onLocationSelected = { location ->
-                    locationHomeViewModel.selectLocation(location)
-                    navigationState.navigateBack()
-                },
-                onUseCurrentLocation = {
-                    locationHomeViewModel.useCurrentLocation()
+            var locationDetectedAndSelected by remember { mutableStateOf(false) }
+
+            // Navigate back after GPS location is successfully detected and selected
+            androidx.compose.runtime.LaunchedEffect(locationDetectedAndSelected) {
+                if (locationDetectedAndSelected) {
                     navigationState.navigateBack()
                 }
-            )
+            }
+
+            RequestLocationPermission(
+                onPermissionResult = { granted ->
+                    if (granted) {
+                        locationHomeViewModel.useCurrentLocation()
+                    }
+                }
+            ) { requestPermission ->
+                // Watch for successful location detection
+                val wasDetecting = remember { mutableStateOf(false) }
+                if (uiState.isDetectingLocation) {
+                    wasDetecting.value = true
+                } else if (wasDetecting.value && !uiState.isDetectingLocation && uiState.locationError == null) {
+                    // Location was detected successfully
+                    wasDetecting.value = false
+                    locationDetectedAndSelected = true
+                }
+
+                LocationSelectionScreen(
+                    currentLocation = uiState.selectedLocation,
+                    isDetectingLocation = uiState.isDetectingLocation,
+                    locationError = uiState.locationError,
+                    searchResults = uiState.searchResults,
+                    onNavigateBack = { navigationState.navigateBack() },
+                    onLocationSelected = { location ->
+                        locationHomeViewModel.selectLocation(location)
+                        navigationState.navigateBack()
+                    },
+                    onUseCurrentLocation = {
+                        // Request permission first, then get location
+                        requestPermission()
+                    },
+                    onSearchLocation = { query ->
+                        locationHomeViewModel.searchLocations(query)
+                    },
+                    onClearError = {
+                        locationHomeViewModel.clearLocationError()
+                    }
+                )
+            }
         }
         
         is Screen.AllRestaurants -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             AllRestaurantsScreen(
                 location = uiState.selectedLocation ?: "Unknown",
@@ -321,7 +462,6 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.TopDishes -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             DarkTopDishesScreen(
                 location = uiState.selectedLocation ?: "New York, NY",
@@ -337,7 +477,6 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.TopRestaurants -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             DarkTopRestaurantsScreen(
                 location = uiState.selectedLocation ?: "New York, NY",
@@ -359,10 +498,29 @@ fun SmackCheckNavHost() {
                 onNavigateBack = { navigationState.navigateBack() }
             )
         }
-        
+
+        is Screen.NearbyRestaurants -> {
+            val placesService = LocalPlacesService.current
+            val nearbyRestaurantsViewModel: NearbyRestaurantsViewModel = viewModel {
+                NearbyRestaurantsViewModel(locationService, placesService)
+            }
+            NearbyRestaurantsScreen(
+                viewModel = nearbyRestaurantsViewModel,
+                onNavigateBack = { navigationState.navigateBack() },
+                onRestaurantClick = { restaurant ->
+                    // Navigate to restaurant detail or handle restaurant click
+                    navigationState.navigateToWithArgs(
+                        Screen.RestaurantDetail,
+                        "restaurantId" to restaurant.id
+                    )
+                }
+            )
+        }
+
         is Screen.DarkHome -> {
+            val uiState by locationHomeViewModel.uiState.collectAsState()
             DarkHomeScreen(
-                currentLocation = "123 Main Street, New York, NY",
+                currentLocation = uiState.selectedLocation ?: "Select Location",
                 onLocationClick = { navigationState.navigateTo(Screen.LocationSelection) },
                 onDishClick = { dishId ->
                     navigationState.navigateToWithArgs(
@@ -381,14 +539,21 @@ fun SmackCheckNavHost() {
                 onGameClick = { navigationState.navigateTo(Screen.Game) },
                 onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
                 onTopDishesClick = { navigationState.navigateTo(Screen.TopDishes) },
-                onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) }
+                onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
+                onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) }
             )
         }
         
         is Screen.DarkDishCapture -> {
+            val imagePicker = LocalImagePicker.current
+            val dishCaptureViewModel: DishCaptureViewModel = viewModel { DishCaptureViewModel() }
+
             DarkDishCaptureScreen(
+                viewModel = dishCaptureViewModel,
+                imagePicker = imagePicker,
                 onNavigateBack = { navigationState.navigateBack() },
-                onImageCaptured = { imageUri, dishName ->
+                onImageCaptured = { imageUri, dishName, imageBytes ->
+                    navigationState.updateImageBytes(imageBytes)
                     navigationState.navigateToWithArgs(
                         Screen.DarkDishRating,
                         "imageUri" to imageUri,
@@ -399,13 +564,103 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.DarkDishRating -> {
+            val dishRatingViewModel: DishRatingViewModel = viewModel { DishRatingViewModel() }
+            val ratingUiState by dishRatingViewModel.uiState.collectAsState()
+            val databaseRepository = remember { DatabaseRepository() }
+            val locationUiState by locationHomeViewModel.uiState.collectAsState()
+
+            // State for restaurants
+            var allRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
+            var nearbyRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
+            var isLoadingRestaurants by remember { mutableStateOf(true) }
+
+            // Load restaurants when screen opens - both all and nearby
+            LaunchedEffect(Unit) {
+                isLoadingRestaurants = true
+                println("DarkDishRating: Loading restaurants...")
+
+                // Load all restaurants
+                val allResult = databaseRepository.getRestaurants()
+                allResult.onSuccess { restaurants ->
+                    allRestaurants = restaurants
+                    println("DarkDishRating: Loaded ${restaurants.size} total restaurants")
+                }.onFailure { error ->
+                    println("DarkDishRating: Failed to load restaurants: ${error.message}")
+                }
+
+                // Load nearby restaurants based on current selected city
+                val currentCity = locationUiState.selectedLocation
+                println("DarkDishRating: Current location = $currentCity")
+
+                if (!currentCity.isNullOrBlank()) {
+                    println("DarkDishRating: Loading nearby restaurants for: $currentCity")
+                    val nearbyResult = databaseRepository.getRestaurantsByCity(currentCity)
+                    nearbyResult.onSuccess { restaurants ->
+                        nearbyRestaurants = restaurants
+                        println("DarkDishRating: ✓ Loaded ${restaurants.size} nearby restaurants in $currentCity")
+                    }.onFailure { error ->
+                        println("DarkDishRating: ✗ Failed to load nearby restaurants: ${error.message}")
+                    }
+                } else {
+                    println("DarkDishRating: ⚠ No location selected - nearby restaurants unavailable")
+                    println("DarkDishRating: User should select a location from the home screen first")
+                }
+
+                isLoadingRestaurants = false
+            }
+
+            // Reload nearby restaurants when location changes
+            LaunchedEffect(locationUiState.selectedLocation) {
+                val currentCity = locationUiState.selectedLocation
+                if (!currentCity.isNullOrBlank() && allRestaurants.isNotEmpty()) {
+                    println("DarkDishRating: Location changed to $currentCity, reloading nearby restaurants...")
+                    val nearbyResult = databaseRepository.getRestaurantsByCity(currentCity)
+                    nearbyResult.onSuccess { restaurants ->
+                        nearbyRestaurants = restaurants
+                        println("DarkDishRating: ✓ Updated nearby restaurants: ${restaurants.size} found")
+                    }
+                }
+            }
+
+            // Initialize the ViewModel with data
+            LaunchedEffect(navigationState.dishName, navigationState.imageUri) {
+                dishRatingViewModel.initialize(
+                    dishName = navigationState.dishName,
+                    imageUri = navigationState.imageUri
+                )
+                navigationState.imageBytes?.let { bytes ->
+                    dishRatingViewModel.setImageBytes(bytes)
+                }
+            }
+
+            // Navigate back to home on success
+            LaunchedEffect(ratingUiState.isSuccess) {
+                if (ratingUiState.isSuccess) {
+                    navigationState.popToRoot()
+                }
+            }
+
             DarkDishRatingScreen(
                 dishName = navigationState.dishName,
                 imageUri = navigationState.imageUri,
+                restaurants = allRestaurants,
+                nearbyRestaurants = nearbyRestaurants,
+                isLoadingRestaurants = isLoadingRestaurants,
+                isSubmitting = ratingUiState.isSubmitting,
+                showSuccess = ratingUiState.isSuccess,
+                errorMessage = ratingUiState.errorMessage,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitRating = { _, _, _ ->
-                    // Rating submitted - will show success screen then navigate back
-                }
+                onSubmitRating = { rating, comment, tags, restaurantId ->
+                    dishRatingViewModel.onRatingChange(rating)
+                    dishRatingViewModel.onCommentChange(comment)
+                    if (restaurantId != null) {
+                        dishRatingViewModel.setRestaurantId(restaurantId)
+                        dishRatingViewModel.submitRating {
+                            // Success is handled by LaunchedEffect above
+                        }
+                    }
+                },
+                onDismissError = { dishRatingViewModel.clearError() }
             )
         }
         
@@ -420,6 +675,92 @@ fun SmackCheckNavHost() {
                         "dishId" to dishId
                     )
                 }
+            )
+        }
+    }
+}
+
+// Placeholder screens for profile settings
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsPlaceholderScreen(
+    title: String,
+    onNavigateBack: () -> Unit
+) {
+    val colors = appColors()
+    Scaffold(
+        containerColor = colors.Background,
+        topBar = {
+            TopAppBar(
+                title = { Text(title, color = colors.TextPrimary) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = colors.TextPrimary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = colors.Background
+                )
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "$title\n\nComing Soon!",
+                color = colors.TextSecondary,
+                textAlign = TextAlign.Center,
+                fontSize = 18.sp
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditProfilePlaceholderScreen(
+    onNavigateBack: () -> Unit
+) {
+    val colors = appColors()
+    Scaffold(
+        containerColor = colors.Background,
+        topBar = {
+            TopAppBar(
+                title = { Text("Edit Profile", color = colors.TextPrimary) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = colors.TextPrimary
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = colors.Background
+                )
+            )
+        }
+    ) { padding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "Edit Profile\n\nComing Soon!\n\nYou'll be able to:\n• Change your name\n• Update profile photo\n• Edit bio",
+                color = colors.TextSecondary,
+                textAlign = TextAlign.Center,
+                fontSize = 16.sp
             )
         }
     }

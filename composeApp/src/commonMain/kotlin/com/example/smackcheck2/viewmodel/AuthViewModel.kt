@@ -2,6 +2,8 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.SupabaseClientProvider
+import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.model.User
 import kotlinx.coroutines.delay
@@ -14,65 +16,114 @@ import kotlinx.coroutines.launch
  * ViewModel for authentication state management
  */
 class AuthViewModel : ViewModel() {
-    
+
+    private val authRepository = AuthRepository()
+
     private val _authState = MutableStateFlow<AuthState>(AuthState.Unknown)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
-    
+
     init {
+        // Initialize session from storage
+        SupabaseClientProvider.initializeSession()
         checkAuthState()
     }
-    
+
     private fun checkAuthState() {
         viewModelScope.launch {
-            // Simulate checking auth state
-            delay(2000)
-            // For demo purposes, start as unauthenticated
-            _authState.value = AuthState.Unauthenticated
+            try {
+                // Small delay to allow session to load from storage
+                delay(500)
+                val user = authRepository.getCurrentUser()
+                _authState.value = if (user != null) {
+                    println("AuthViewModel: User restored from session: ${user.email}")
+                    AuthState.Authenticated(user)
+                } else {
+                    println("AuthViewModel: No saved session found")
+                    AuthState.Unauthenticated
+                }
+            } catch (e: Exception) {
+                println("AuthViewModel: Error checking auth state: ${e.message}")
+                _authState.value = AuthState.Unauthenticated
+            }
         }
     }
-    
+
     fun signIn(email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                // Simulate sign in
-                delay(1500)
-                if (email.isNotBlank() && password.isNotBlank()) {
-                    _authState.value = AuthState.Authenticated(
-                        User(
-                            id = "user_123",
-                            name = "John Doe",
-                            email = email
-                        )
-                    )
-                    onSuccess()
-                } else {
-                    onError("Invalid credentials")
-                }
+                val result = authRepository.signIn(email, password)
+                result.fold(
+                    onSuccess = { user ->
+                        _authState.value = AuthState.Authenticated(user)
+                        onSuccess()
+                    },
+                    onFailure = { error ->
+                        onError(error.message ?: "Sign in failed")
+                    }
+                )
             } catch (e: Exception) {
                 onError(e.message ?: "Sign in failed")
             }
         }
     }
-    
+
     fun signInWithGoogle(onSuccess: () -> Unit, onError: (String) -> Unit) {
         viewModelScope.launch {
             try {
-                // Simulate Google sign in
-                delay(1500)
-                _authState.value = AuthState.Authenticated(
-                    User(
-                        id = "user_google_123",
-                        name = "Google User",
-                        email = "user@gmail.com"
-                    )
+                val result = authRepository.signInWithGoogle()
+                result.fold(
+                    onSuccess = { user ->
+                        _authState.value = AuthState.Authenticated(user)
+                        onSuccess()
+                    },
+                    onFailure = { error ->
+                        onError(error.message ?: "Google Sign-In failed")
+                    }
                 )
-                onSuccess()
             } catch (e: Exception) {
-                onError(e.message ?: "Google sign in failed")
+                onError(e.message ?: "Google Sign-In failed")
             }
         }
     }
-    
+
+    fun signInWithFacebook(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val result = authRepository.signInWithFacebook()
+                result.fold(
+                    onSuccess = { user ->
+                        _authState.value = AuthState.Authenticated(user)
+                        onSuccess()
+                    },
+                    onFailure = { error ->
+                        onError(error.message ?: "Facebook Sign-In failed")
+                    }
+                )
+            } catch (e: Exception) {
+                onError(e.message ?: "Facebook Sign-In failed")
+            }
+        }
+    }
+
+    fun signInWithApple(onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val result = authRepository.signInWithApple()
+                result.fold(
+                    onSuccess = { user ->
+                        _authState.value = AuthState.Authenticated(user)
+                        onSuccess()
+                    },
+                    onFailure = { error ->
+                        onError(error.message ?: "Apple Sign-In failed")
+                    }
+                )
+            } catch (e: Exception) {
+                onError(e.message ?: "Apple Sign-In failed")
+            }
+        }
+    }
+
     fun register(
         name: String,
         email: String,
@@ -82,32 +133,63 @@ class AuthViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
-                // Simulate registration
-                delay(1500)
-                _authState.value = AuthState.Authenticated(
-                    User(
-                        id = "user_new_123",
-                        name = name,
-                        email = email
-                    )
+                val result = authRepository.signUp(name, email, password)
+                result.fold(
+                    onSuccess = { user ->
+                        _authState.value = AuthState.Authenticated(user)
+                        onSuccess()
+                    },
+                    onFailure = { error ->
+                        onError(error.message ?: "Registration failed")
+                    }
                 )
-                onSuccess()
             } catch (e: Exception) {
                 onError(e.message ?: "Registration failed")
             }
         }
     }
-    
+
     fun signOut() {
         viewModelScope.launch {
+            authRepository.signOut()
             _authState.value = AuthState.Unauthenticated
         }
     }
-    
+
     fun getCurrentUser(): User? {
         return when (val state = _authState.value) {
             is AuthState.Authenticated -> state.user
             else -> null
+        }
+    }
+
+    /**
+     * Sign in as demo user (no Supabase call)
+     */
+    fun signInAsDemo(onSuccess: () -> Unit) {
+        val demoUser = User(
+            id = "demo_user_001",
+            name = "Demo User",
+            email = "demo@smackcheck.com",
+            level = 5,
+            xp = 450,
+            streakCount = 7
+        )
+        _authState.value = AuthState.Authenticated(demoUser)
+        onSuccess()
+    }
+
+    fun resetPassword(email: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val result = authRepository.resetPassword(email)
+                result.fold(
+                    onSuccess = { onSuccess() },
+                    onFailure = { error -> onError(error.message ?: "Password reset failed") }
+                )
+            } catch (e: Exception) {
+                onError(e.message ?: "Password reset failed")
+            }
         }
     }
 }

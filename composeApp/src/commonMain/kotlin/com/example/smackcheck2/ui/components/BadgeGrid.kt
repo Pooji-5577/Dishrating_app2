@@ -2,14 +2,11 @@ package com.example.smackcheck2.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Explore
@@ -34,7 +31,8 @@ import com.example.smackcheck2.ui.theme.BadgeShape
 
 /**
  * Badge Grid composable for displaying earned badges
- * 
+ * Uses non-lazy layout to work inside scrollable containers
+ *
  * @param badges List of badges to display
  * @param modifier Modifier for the grid
  * @param columns Number of columns in the grid
@@ -45,18 +43,27 @@ fun BadgeGrid(
     modifier: Modifier = Modifier,
     columns: Int = 3
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        modifier = modifier,
-        contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    Column(
+        modifier = modifier.padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(badges) { badge ->
-            BadgeItem(
-                badge = badge,
-                modifier = Modifier.fillMaxWidth()
-            )
+        // Chunk badges into rows
+        badges.chunked(columns).forEach { rowBadges ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowBadges.forEach { badge ->
+                    BadgeItem(
+                        badge = badge,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                // Fill empty spaces in the last row
+                repeat(columns - rowBadges.size) {
+                    androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }
@@ -70,7 +77,7 @@ fun BadgeItem(
     modifier: Modifier = Modifier
 ) {
     val icon = getBadgeIcon(badge.id)
-    
+
     Card(
         modifier = modifier.aspectRatio(1f),
         shape = BadgeShape,
@@ -102,7 +109,7 @@ fun BadgeItem(
                     MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                 }
             )
-            
+
             Text(
                 text = badge.name,
                 style = MaterialTheme.typography.labelMedium,

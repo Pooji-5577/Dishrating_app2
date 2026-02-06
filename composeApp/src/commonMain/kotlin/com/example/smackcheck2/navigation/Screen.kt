@@ -32,6 +32,7 @@ sealed class Screen(val route: String) {
     data object TopDishes : Screen("top_dishes")
     data object TopRestaurants : Screen("top_restaurants")
     data object Game : Screen("game")
+    data object NearbyRestaurants : Screen("nearby_restaurants")
     
     // Dark theme screens
     data object DarkHome : Screen("dark_home")
@@ -40,4 +41,10 @@ sealed class Screen(val route: String) {
     data object DishDetail : Screen("dish_detail/{dishId}") {
         fun createRoute(dishId: String) = "dish_detail/$dishId"
     }
+
+    // Profile-related screens
+    data object EditProfile : Screen("edit_profile")
+    data object NotificationSettings : Screen("notification_settings")
+    data object AccountSettings : Screen("account_settings")
+    data object PrivacySettings : Screen("privacy_settings")
 }

@@ -83,6 +83,7 @@ fun DarkHomeScreen(
     onCameraClick: () -> Unit = {},
     onTopDishesClick: () -> Unit = {},
     onTopRestaurantsClick: () -> Unit = {},
+    onNearbyRestaurantsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = appColors()
@@ -95,28 +96,10 @@ fun DarkHomeScreen(
     val filters = listOf("Great Offers", "Nearest", "Rating 4.0+", "Pure Veg")
     var selectedFilters by remember { mutableStateOf(setOf<String>()) }
     
-    // Sample dishes data
-    val featuredDishes = remember {
-        listOf(
-            DishInfo("1", "Grilled Salmon", "Ocean Grill", 4.5f, 453),
-            DishInfo("2", "Avocado Toast", "Green Cafe", 4.3f, 320),
-            DishInfo("3", "Caesar Salad", "Fresh Bowl", 4.2f, 280),
-            DishInfo("4", "Quinoa Bowl", "Healthy Hub", 4.6f, 410),
-            DishInfo("5", "Mediterranean Wrap", "Pita Palace", 4.1f, 380)
-        )
-    }
-    
-    val tryThisOut = remember {
-        TryDishInfo("Truffle Pasta", "La Cucina", 4.7f, 856, 553, true)
-    }
-    
-    val restaurants = remember {
-        listOf(
-            RestaurantInfo("1", "Spice Garden", "Indian, Asian", 4.5f, 230, "30-40 min"),
-            RestaurantInfo("2", "Burger Barn", "American, Fast Food", 4.3f, 420, "20-30 min"),
-            RestaurantInfo("3", "Sushi Master", "Japanese", 4.8f, 180, "35-45 min")
-        )
-    }
+    // TODO: Load dishes and restaurants from database/API
+    val featuredDishes = remember { emptyList<DishInfo>() }
+    val tryThisOut = remember<TryDishInfo?> { null }
+    val restaurants = remember { emptyList<RestaurantInfo>() }
     
     val navItems = listOf(
         NavItem(
@@ -259,11 +242,15 @@ fun DarkHomeScreen(
             
             // Featured Dishes Horizontal Scroll
             item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(featuredDishes) { dish ->
+                    Spacer(modifier = Modifier.width(4.dp))
+                    featuredDishes.forEach { dish ->
                         var isFavorite by remember { mutableStateOf(false) }
                         FeaturedDishCard(
                             dishName = dish.name,
@@ -275,32 +262,35 @@ fun DarkHomeScreen(
                             onFavoriteClick = { isFavorite = !isFavorite }
                         )
                     }
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
             }
             
             // Try This Out Section
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "Try This Out",
-                        color = themeColors.TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    LargeDishCard(
-                        dishName = tryThisOut.name,
-                        restaurantName = tryThisOut.restaurant,
-                        rating = tryThisOut.rating,
-                        reviewCount = tryThisOut.reviewCount,
-                        calories = tryThisOut.calories,
-                        isBestseller = tryThisOut.isBestseller,
-                        onClick = { onDishClick("bestseller") }
-                    )
+            tryThisOut?.let { dish ->
+                item {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "Try This Out",
+                            color = themeColors.TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        LargeDishCard(
+                            dishName = dish.name,
+                            restaurantName = dish.restaurant,
+                            rating = dish.rating,
+                            reviewCount = dish.reviewCount,
+                            calories = dish.calories,
+                            isBestseller = dish.isBestseller,
+                            onClick = { onDishClick("bestseller") }
+                        )
+                    }
                 }
             }
             
@@ -331,6 +321,67 @@ fun DarkHomeScreen(
                 }
             }
             
+            // Nearby Restaurants Banner
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clickable { onNearbyRestaurantsClick() },
+                    colors = CardDefaults.cardColors(
+                        containerColor = themeColors.Primary.copy(alpha = 0.15f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(themeColors.Primary.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.LocationOn,
+                                    contentDescription = null,
+                                    tint = themeColors.Primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Find Nearby Restaurants",
+                                    color = themeColors.TextPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Discover restaurants around you",
+                                    color = themeColors.TextSecondary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = themeColors.Primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+
             // Restaurant Filters
             item {
                 Row(

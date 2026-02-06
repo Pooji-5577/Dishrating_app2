@@ -33,7 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+// import androidx.compose.material3.pulltorefresh.PullToRefreshBox // Not available in Compose Multiplatform 1.6.11
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -68,50 +68,8 @@ fun SocialFeedScreen(
     // Mock timestamps for demo data
     val currentTime = 1737417600000L // Fixed timestamp for demo
     
-    // Sample feed items
-    val feedItems = remember {
-        listOf(
-            FeedItem(
-                id = "1",
-                userProfileImageUrl = null,
-                userName = "Sarah Johnson",
-                dishImageUrl = null,
-                dishName = "Truffle Pasta",
-                restaurantName = "La Bella Italia",
-                rating = 5f,
-                likesCount = 42,
-                commentsCount = 8,
-                isLiked = true,
-                timestamp = currentTime
-            ),
-            FeedItem(
-                id = "2",
-                userProfileImageUrl = null,
-                userName = "Mike Chen",
-                dishImageUrl = null,
-                dishName = "Dragon Roll",
-                restaurantName = "Sakura Sushi",
-                rating = 4.5f,
-                likesCount = 28,
-                commentsCount = 5,
-                isLiked = false,
-                timestamp = currentTime - 3600000
-            ),
-            FeedItem(
-                id = "3",
-                userProfileImageUrl = null,
-                userName = "Emily Davis",
-                dishImageUrl = null,
-                dishName = "Butter Chicken",
-                restaurantName = "Taj Mahal",
-                rating = 4f,
-                likesCount = 35,
-                commentsCount = 12,
-                isLiked = false,
-                timestamp = currentTime - 7200000
-            )
-        )
-    }
+    // TODO: Load feed items from database/API
+    val feedItems = remember { emptyList<FeedItem>() }
     
     Scaffold(
         topBar = {
@@ -138,28 +96,20 @@ fun SocialFeedScreen(
                 message = "Follow friends to see their dish ratings here"
             )
         } else {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { 
-                    isRefreshing = true
-                    // Simulate refresh
-                    isRefreshing = false
-                },
-                modifier = Modifier.padding(paddingValues)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(feedItems) { item ->
-                        SocialFeedCard(
-                            item = item,
-                            onLikeClick = { /* Toggle like */ },
-                            onCommentClick = { /* Open comments */ },
-                            onShareClick = { onShareClick(item) }
-                        )
-                    }
+                items(feedItems) { item ->
+                    SocialFeedCard(
+                        item = item,
+                        onLikeClick = { /* Toggle like */ },
+                        onCommentClick = { /* Open comments */ },
+                        onShareClick = { onShareClick(item) }
+                    )
                 }
             }
         }

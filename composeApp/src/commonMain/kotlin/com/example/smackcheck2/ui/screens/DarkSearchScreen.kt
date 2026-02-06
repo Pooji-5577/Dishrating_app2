@@ -3,6 +3,7 @@ package com.example.smackcheck2.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -223,46 +224,48 @@ fun DarkSearchScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Results
-            if (uiState.isLoading) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Searching...",
-                        color = themeColors.TextSecondary
-                    )
-                }
-            } else if (uiState.results.isEmpty() && uiState.query.isNotEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "No restaurants found",
-                        color = themeColors.TextSecondary,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = "Try a different search",
-                        color = themeColors.TextTertiary,
-                        fontSize = 14.sp
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(uiState.results) { restaurant ->
-                        DarkRestaurantSearchCard(
-                            restaurant = restaurant,
-                            onClick = { onRestaurantClick(restaurant.id) }
+            // Results - use weight(1f) to fill remaining space and enable smooth scrolling
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (uiState.isLoading) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Searching...",
+                            color = themeColors.TextSecondary
                         )
+                    }
+                } else if (uiState.results.isEmpty() && uiState.query.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "No restaurants found",
+                            color = themeColors.TextSecondary,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = "Try a different search",
+                            color = themeColors.TextTertiary,
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.results) { restaurant ->
+                            DarkRestaurantSearchCard(
+                                restaurant = restaurant,
+                                onClick = { onRestaurantClick(restaurant.id) }
+                            )
+                        }
                     }
                 }
             }

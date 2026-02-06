@@ -35,7 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+// import androidx.compose.material3.pulltorefresh.PullToRefreshBox // Not available in Compose Multiplatform 1.6.11
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -135,24 +135,20 @@ fun HomeScreen(
                 )
             }
             else -> {
-                PullToRefreshBox(
-                    isRefreshing = uiState.isRefreshing,
-                    onRefresh = { viewModel.refresh() },
-                    modifier = Modifier.padding(paddingValues)
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(uiState.feedItems) { item ->
-                            FeedCard(
-                                item = item,
-                                onLikeClick = { viewModel.toggleLike(item.id) },
-                                onCommentClick = { /* Handle comment */ },
-                                onClick = { /* Navigate to detail */ }
-                            )
-                        }
+                    items(uiState.feedItems) { item ->
+                        FeedCard(
+                            item = item,
+                            onLikeClick = { viewModel.toggleLike(item.id) },
+                            onCommentClick = { /* Handle comment */ },
+                            onClick = { /* Navigate to detail */ }
+                        )
                     }
                 }
             }

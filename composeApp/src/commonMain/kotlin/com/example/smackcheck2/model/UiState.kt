@@ -141,3 +141,65 @@ sealed class PermissionState {
     data object Denied : PermissionState()
     data object PermanentlyDenied : PermissionState()
 }
+
+/**
+ * Dish capture UI state for camera capture and AI detection
+ */
+data class DishCaptureUiState(
+    val imageUri: String? = null,
+    val imageBytes: ByteArray? = null,
+    val isAnalyzing: Boolean = false,
+    val detectedDishName: String? = null,
+    val detectedCuisine: String? = null,
+    val detectionConfidence: Float = 0f,
+    val alternatives: List<String> = emptyList(),
+    val isAIDetected: Boolean = false,
+    val isEditingName: Boolean = false,
+    val editedName: String = "",
+    val errorMessage: String? = null,
+    val debugInfo: String? = null,
+    val showConfirmation: Boolean = false
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+
+        other as DishCaptureUiState
+
+        if (imageUri != other.imageUri) return false
+        if (imageBytes != null) {
+            if (other.imageBytes == null) return false
+            if (!imageBytes.contentEquals(other.imageBytes)) return false
+        } else if (other.imageBytes != null) return false
+        if (isAnalyzing != other.isAnalyzing) return false
+        if (detectedDishName != other.detectedDishName) return false
+        if (detectedCuisine != other.detectedCuisine) return false
+        if (detectionConfidence != other.detectionConfidence) return false
+        if (alternatives != other.alternatives) return false
+        if (isAIDetected != other.isAIDetected) return false
+        if (isEditingName != other.isEditingName) return false
+        if (editedName != other.editedName) return false
+        if (errorMessage != other.errorMessage) return false
+        if (debugInfo != other.debugInfo) return false
+        if (showConfirmation != other.showConfirmation) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = imageUri?.hashCode() ?: 0
+        result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
+        result = 31 * result + isAnalyzing.hashCode()
+        result = 31 * result + (detectedDishName?.hashCode() ?: 0)
+        result = 31 * result + (detectedCuisine?.hashCode() ?: 0)
+        result = 31 * result + detectionConfidence.hashCode()
+        result = 31 * result + alternatives.hashCode()
+        result = 31 * result + isAIDetected.hashCode()
+        result = 31 * result + isEditingName.hashCode()
+        result = 31 * result + editedName.hashCode()
+        result = 31 * result + (errorMessage?.hashCode() ?: 0)
+        result = 31 * result + (debugInfo?.hashCode() ?: 0)
+        result = 31 * result + showConfirmation.hashCode()
+        return result
+    }
+}

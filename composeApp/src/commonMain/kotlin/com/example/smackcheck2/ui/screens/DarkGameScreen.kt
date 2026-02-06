@@ -145,19 +145,21 @@ fun DarkGameScreen(
                 }
             }
             
-            // Tab content
-            when (selectedTab) {
-                0 -> DarkChallengesTab(
-                    dailyChallenges = uiState.dailyChallenges,
-                    weeklyChallenges = uiState.weeklyChallenges
-                )
-                1 -> DarkLeaderboardTab(
-                    leaderboard = uiState.leaderboard,
-                    currentUserRank = uiState.rank
-                )
-                2 -> DarkAchievementsTab(
-                    achievements = uiState.achievements
-                )
+            // Tab content - use weight(1f) to fill remaining space and enable smooth scrolling
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when (selectedTab) {
+                    0 -> DarkChallengesTab(
+                        dailyChallenges = uiState.dailyChallenges,
+                        weeklyChallenges = uiState.weeklyChallenges
+                    )
+                    1 -> DarkLeaderboardTab(
+                        leaderboard = uiState.leaderboard,
+                        currentUserRank = uiState.rank
+                    )
+                    2 -> DarkAchievementsTab(
+                        achievements = uiState.achievements
+                    )
+                }
             }
         }
     }
@@ -336,6 +338,7 @@ private fun DarkChallengesTab(
     val themeColors = appColors()
     
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -487,8 +490,9 @@ private fun DarkLeaderboardTab(
 ) {
     val isDark = LocalThemeState.current.isDarkMode
     val themeColors = appColors()
-    
+
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
@@ -591,8 +595,9 @@ private fun DarkAchievementsTab(
 ) {
     val isDark = LocalThemeState.current.isDarkMode
     val themeColors = appColors()
-    
+
     LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

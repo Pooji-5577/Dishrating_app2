@@ -51,12 +51,14 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.ui.theme.TextFieldShape
+import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.RegisterViewModel
 
 /**
  * Register Screen composable
- * 
+ *
  * @param viewModel RegisterViewModel instance
+ * @param authViewModel AuthViewModel instance for actual registration
  * @param onNavigateBack Callback to navigate back
  * @param onNavigateToHome Callback to navigate to home after successful registration
  */
@@ -64,6 +66,7 @@ import com.example.smackcheck2.viewmodel.RegisterViewModel
 @Composable
 fun RegisterScreen(
     viewModel: RegisterViewModel,
+    authViewModel: AuthViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToHome: () -> Unit
 ) {
@@ -101,7 +104,7 @@ fun RegisterScreen(
     ) { paddingValues ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(paddingValues)
                 .padding(horizontal = 24.dp)
                 .verticalScroll(rememberScrollState()),
@@ -241,9 +244,24 @@ fun RegisterScreen(
                     imeAction = ImeAction.Done
                 ),
                 keyboardActions = KeyboardActions(
-                    onDone = { 
+                    onDone = {
                         focusManager.clearFocus()
-                        viewModel.register(onNavigateToHome)
+                        viewModel.register {
+                            // On validation success, call AuthViewModel to register
+                            authViewModel.register(
+                                name = uiState.name,
+                                email = uiState.email,
+                                password = uiState.password,
+                                onSuccess = {
+                                    viewModel.setLoading(false)
+                                    viewModel.setSuccess(true)
+                                    onNavigateToHome()
+                                },
+                                onError = { error ->
+                                    viewModel.setLoading(false)
+                                }
+                            )
+                        }
                     }
                 ),
                 singleLine = true,
@@ -255,7 +273,24 @@ fun RegisterScreen(
             
             // Register button
             Button(
-                onClick = { viewModel.register(onNavigateToHome) },
+                onClick = {
+                    viewModel.register {
+                        // On validation success, call AuthViewModel to register
+                        authViewModel.register(
+                            name = uiState.name,
+                            email = uiState.email,
+                            password = uiState.password,
+                            onSuccess = {
+                                viewModel.setLoading(false)
+                                viewModel.setSuccess(true)
+                                onNavigateToHome()
+                            },
+                            onError = { error ->
+                                viewModel.setLoading(false)
+                            }
+                        )
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp),

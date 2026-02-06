@@ -3,6 +3,7 @@ package com.example.smackcheck2.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -188,26 +189,28 @@ fun SearchScreen(
             }
             
             Spacer(modifier = Modifier.height(8.dp))
-            
-            // Results
-            when {
-                uiState.isLoading -> {
-                    LoadingState(message = "Searching...")
-                }
-                uiState.results.isEmpty() && uiState.query.isNotEmpty() -> {
-                    EmptySearchState(query = uiState.query)
-                }
-                else -> {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(uiState.results) { restaurant ->
-                            RestaurantSearchCard(
-                                restaurant = restaurant,
-                                onClick = { onRestaurantClick(restaurant.id) }
-                            )
+
+            // Results - use weight(1f) to fill remaining space and enable scrolling
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    uiState.isLoading -> {
+                        LoadingState(message = "Searching...")
+                    }
+                    uiState.results.isEmpty() && uiState.query.isNotEmpty() -> {
+                        EmptySearchState(query = uiState.query)
+                    }
+                    else -> {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(uiState.results) { restaurant ->
+                                RestaurantSearchCard(
+                                    restaurant = restaurant,
+                                    onClick = { onRestaurantClick(restaurant.id) }
+                                )
+                            }
                         }
                     }
                 }

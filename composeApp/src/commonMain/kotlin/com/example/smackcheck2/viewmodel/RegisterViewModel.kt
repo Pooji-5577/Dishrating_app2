@@ -2,8 +2,8 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.RegisterUiState
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,36 +14,38 @@ import kotlinx.coroutines.launch
  * ViewModel for Register screen
  */
 class RegisterViewModel : ViewModel() {
-    
+
+    private val authRepository = AuthRepository()
+
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
-    
+
     fun onNameChange(name: String) {
         _uiState.update { it.copy(name = name, nameError = null) }
     }
-    
+
     fun onEmailChange(email: String) {
         _uiState.update { it.copy(email = email, emailError = null) }
     }
-    
+
     fun onPasswordChange(password: String) {
         _uiState.update { it.copy(password = password, passwordError = null) }
     }
-    
+
     fun onConfirmPasswordChange(confirmPassword: String) {
         _uiState.update { it.copy(confirmPassword = confirmPassword, confirmPasswordError = null) }
     }
-    
+
     fun register(onSuccess: () -> Unit) {
         val currentState = _uiState.value
-        
+
         // Validate inputs
         var hasError = false
         var nameError: String? = null
         var emailError: String? = null
         var passwordError: String? = null
         var confirmPasswordError: String? = null
-        
+
         if (currentState.name.isBlank()) {
             nameError = "Name is required"
             hasError = true
@@ -51,7 +53,7 @@ class RegisterViewModel : ViewModel() {
             nameError = "Name must be at least 2 characters"
             hasError = true
         }
-        
+
         if (currentState.email.isBlank()) {
             emailError = "Email is required"
             hasError = true
@@ -59,7 +61,7 @@ class RegisterViewModel : ViewModel() {
             emailError = "Invalid email format"
             hasError = true
         }
-        
+
         if (currentState.password.isBlank()) {
             passwordError = "Password is required"
             hasError = true
@@ -73,7 +75,7 @@ class RegisterViewModel : ViewModel() {
             passwordError = "Password must contain at least one digit"
             hasError = true
         }
-        
+
         if (currentState.confirmPassword.isBlank()) {
             confirmPasswordError = "Please confirm your password"
             hasError = true
@@ -81,7 +83,7 @@ class RegisterViewModel : ViewModel() {
             confirmPasswordError = "Passwords do not match"
             hasError = true
         }
-        
+
         if (hasError) {
             _uiState.update {
                 it.copy(
@@ -93,16 +95,38 @@ class RegisterViewModel : ViewModel() {
             }
             return
         }
-        
-        // Perform registration
+
+        // Perform registration with Supabase
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            
+
             try {
-                // Simulate API call
-                delay(1500)
-                _uiState.update { it.copy(isLoading = false, isSuccess = true) }
-                onSuccess()
+                val result = authRepository.signUp(
+                    name = currentState.name,
+                    email = currentState.email,
+                    password = currentState.password
+                )
+
+                result.fold(
+                    onSuccess = {
+                        _uiState.update { it.copy(isLoading = false, isSuccess = true) }
+                        onSuccess()
+                    },
+                    onFailure = { error ->
+                        // Check if email confirmation is required
+                        if (error.message == "CHECK_EMAIL") {
+                            _uiState.update { it.copy(isLoading = false, isSuccess = true) }
+                            onSuccess()
+                        } else {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    errorMessage = error.message ?: "Registration failed"
+                                )
+                            }
+                        }
+                    }
+                )
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -113,19 +137,27 @@ class RegisterViewModel : ViewModel() {
             }
         }
     }
-    
+
+    fun setLoading(isLoading: Boolean) {
+        _uiState.update { it.copy(isLoading = isLoading) }
+    }
+
+    fun setSuccess(isSuccess: Boolean) {
+        _uiState.update { it.copy(isSuccess = isSuccess) }
+    }
+
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }
-    
+
     private fun isValidEmail(email: String): Boolean {
         return email.contains("@") && email.contains(".")
     }
-    
+
     private fun hasUpperCase(password: String): Boolean {
         return password.any { it.isUpperCase() }
     }
-    
+
     private fun hasDigit(password: String): Boolean {
         return password.any { it.isDigit() }
     }

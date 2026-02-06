@@ -12,8 +12,15 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Restaurant
+import com.example.smackcheck2.data.repository.AuthRepository
+import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.platform.LocationErrorReason
+import com.example.smackcheck2.platform.LocationOperationResult
+import com.example.smackcheck2.platform.LocationResult
+import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.ui.screens.Achievement
 import com.example.smackcheck2.ui.screens.Challenge
 import com.example.smackcheck2.ui.screens.LeaderboardEntry
@@ -21,17 +28,21 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /**
  * UI State for Location-based Home Screen
  */
 data class LocationHomeUiState(
     val isLoading: Boolean = false,
+    val isDetectingLocation: Boolean = false,
     val selectedLocation: String? = null,
     val topRestaurants: List<Restaurant> = emptyList(),
     val topDishes: List<Dish> = emptyList(),
     val allRestaurants: List<Restaurant> = emptyList(),
-    val error: String? = null
+    val searchResults: List<LocationResult> = emptyList(),
+    val error: String? = null,
+    val locationError: String? = null
 )
 
 /**
@@ -40,175 +51,206 @@ data class LocationHomeUiState(
 class LocationHomeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(LocationHomeUiState())
     val uiState: StateFlow<LocationHomeUiState> = _uiState.asStateFlow()
-    
+
+    private var locationService: LocationService? = null
+    private val authRepository = AuthRepository()
+
     init {
-        // Load mock data
-        loadMockData()
+        // Load saved location from user profile or use default
+        loadSavedLocation()
     }
-    
+
+    private fun loadSavedLocation() {
+        viewModelScope.launch {
+            try {
+                // Small delay to ensure auth session is loaded
+                kotlinx.coroutines.delay(500)
+
+                val savedLocation = authRepository.getLastLocation()
+                if (savedLocation != null) {
+                    println("LocationHomeViewModel: Loaded saved location from profile: $savedLocation")
+                    _uiState.update { it.copy(selectedLocation = savedLocation) }
+                    loadDataForLocation(savedLocation)
+                } else {
+                    println("LocationHomeViewModel: No saved location found, using default: New York")
+                    selectLocation("New York")
+                }
+            } catch (e: Exception) {
+                println("LocationHomeViewModel: Error loading saved location: ${e.message}")
+                e.printStackTrace()
+                // Use default location on error
+                selectLocation("New York")
+            }
+        }
+    }
+
+    fun setLocationService(service: LocationService?) {
+        locationService = service
+    }
+
     fun selectLocation(location: String) {
-        _uiState.update { it.copy(selectedLocation = location, isLoading = true) }
-        // Simulate loading location-based data
+        _uiState.update { it.copy(selectedLocation = location, isLoading = true, locationError = null) }
+
+        // Save the selected location to user profile
+        viewModelScope.launch {
+            try {
+                val result = authRepository.updateLastLocation(location)
+                result.fold(
+                    onSuccess = {
+                        println("LocationHomeViewModel: ✓ Successfully saved location to profile: $location")
+                    },
+                    onFailure = { error ->
+                        println("LocationHomeViewModel: ✗ Failed to save location: ${error.message}")
+                        error.printStackTrace()
+                    }
+                )
+            } catch (e: Exception) {
+                println("LocationHomeViewModel: ✗ Exception saving location: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+
         loadDataForLocation(location)
     }
-    
+
     fun useCurrentLocation() {
-        // Simulate GPS location detection
-        selectLocation("New York")
+        val service = locationService
+        if (service == null) {
+            _uiState.update { it.copy(locationError = "Location service not available") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isDetectingLocation = true, locationError = null) }
+
+            when (val result = service.getCurrentLocationWithDetails()) {
+                is LocationOperationResult.Success -> {
+                    val location = result.location
+                    if (location.cityName != null) {
+                        _uiState.update { it.copy(isDetectingLocation = false) }
+                        selectLocation(location.cityName)
+                    } else {
+                        _uiState.update {
+                            it.copy(
+                                isDetectingLocation = false,
+                                locationError = "Could not determine city name. Please select manually."
+                            )
+                        }
+                    }
+                }
+                is LocationOperationResult.Error -> {
+                    val errorMessage = getErrorMessage(result.reason, result.isEmulator)
+                    _uiState.update {
+                        it.copy(
+                            isDetectingLocation = false,
+                            locationError = errorMessage
+                        )
+                    }
+                }
+            }
+        }
     }
-    
-    private fun loadMockData() {
-        // Pre-load with a default location for demo
-        selectLocation("New York")
+
+    private fun getErrorMessage(reason: LocationErrorReason, isEmulator: Boolean): String {
+        return when (reason) {
+            LocationErrorReason.PERMISSION_DENIED ->
+                "Location permission denied. Please grant location access in Settings."
+
+            LocationErrorReason.LOCATION_SERVICES_DISABLED ->
+                "Location services are disabled. Please enable GPS in Settings."
+
+            LocationErrorReason.NO_LOCATION_AVAILABLE -> {
+                if (isEmulator) {
+                    "No location available. On emulator, use Extended Controls > Location to set a simulated location."
+                } else {
+                    "Could not get location. Please ensure GPS is enabled and try again outdoors."
+                }
+            }
+
+            LocationErrorReason.TIMEOUT ->
+                "Location request timed out. Please try again."
+
+            LocationErrorReason.UNKNOWN ->
+                "An unknown error occurred while getting location. Please try again."
+        }
     }
-    
+
+    fun searchLocations(query: String) {
+        val service = locationService ?: return
+
+        viewModelScope.launch {
+            val results = service.searchPlaces(query)
+            _uiState.update { it.copy(searchResults = results) }
+        }
+    }
+
+    fun clearSearchResults() {
+        _uiState.update { it.copy(searchResults = emptyList()) }
+    }
+
+    fun clearLocationError() {
+        _uiState.update { it.copy(locationError = null) }
+    }
+
+    private val databaseRepository = DatabaseRepository()
+
     private fun loadDataForLocation(location: String) {
-        // Mock data for the selected location
-        val mockRestaurants = listOf(
-            Restaurant(
-                id = "1",
-                name = "Italian Kitchen",
-                city = location,
-                cuisine = "Italian",
-                averageRating = 4.8f,
-                reviewCount = 342,
-                latitude = 40.7128,
-                longitude = -74.0060
-            ),
-            Restaurant(
-                id = "2",
-                name = "Tokyo Bites",
-                city = location,
-                cuisine = "Japanese",
-                averageRating = 4.7f,
-                reviewCount = 256,
-                latitude = 40.7130,
-                longitude = -74.0065
-            ),
-            Restaurant(
-                id = "3",
-                name = "Spice Garden",
-                city = location,
-                cuisine = "Indian",
-                averageRating = 4.6f,
-                reviewCount = 189,
-                latitude = 40.7125,
-                longitude = -74.0055
-            ),
-            Restaurant(
-                id = "4",
-                name = "Taco Fiesta",
-                city = location,
-                cuisine = "Mexican",
-                averageRating = 4.5f,
-                reviewCount = 210,
-                latitude = 40.7135,
-                longitude = -74.0070
-            ),
-            Restaurant(
-                id = "5",
-                name = "Golden Dragon",
-                city = location,
-                cuisine = "Chinese",
-                averageRating = 4.4f,
-                reviewCount = 178,
-                latitude = 40.7120,
-                longitude = -74.0050
-            ),
-            Restaurant(
-                id = "6",
-                name = "Le Petit Bistro",
-                city = location,
-                cuisine = "French",
-                averageRating = 4.9f,
-                reviewCount = 420,
-                latitude = 40.7140,
-                longitude = -74.0075
-            ),
-            Restaurant(
-                id = "7",
-                name = "Burger Joint",
-                city = location,
-                cuisine = "American",
-                averageRating = 4.3f,
-                reviewCount = 534,
-                latitude = 40.7145,
-                longitude = -74.0080
-            ),
-            Restaurant(
-                id = "8",
-                name = "Mediterranean Delight",
-                city = location,
-                cuisine = "Mediterranean",
-                averageRating = 4.6f,
-                reviewCount = 267,
-                latitude = 40.7150,
-                longitude = -74.0085
-            )
-        )
-        
-        val mockDishes = listOf(
-            Dish(
-                id = "d1",
-                name = "Margherita Pizza",
-                comment = "Classic Italian pizza with fresh basil",
-                restaurantId = "1",
-                restaurantName = "Italian Kitchen",
-                rating = 4.9f
-            ),
-            Dish(
-                id = "d2",
-                name = "Sushi Platter",
-                comment = "Assorted fresh sushi",
-                restaurantId = "2",
-                restaurantName = "Tokyo Bites",
-                rating = 4.8f
-            ),
-            Dish(
-                id = "d3",
-                name = "Butter Chicken",
-                comment = "Creamy tomato curry with tender chicken",
-                restaurantId = "3",
-                restaurantName = "Spice Garden",
-                rating = 4.7f
-            ),
-            Dish(
-                id = "d4",
-                name = "Tacos al Pastor",
-                comment = "Traditional pork tacos",
-                restaurantId = "4",
-                restaurantName = "Taco Fiesta",
-                rating = 4.6f
-            ),
-            Dish(
-                id = "d5",
-                name = "Kung Pao Chicken",
-                comment = "Spicy stir-fried chicken with peanuts",
-                restaurantId = "5",
-                restaurantName = "Golden Dragon",
-                rating = 4.5f
-            ),
-            Dish(
-                id = "d6",
-                name = "Croissant",
-                comment = "Buttery French pastry",
-                restaurantId = "6",
-                restaurantName = "Le Petit Bistro",
-                rating = 4.9f
-            )
-        )
-        
-        // Sort by rating for "top" lists
-        val topRestaurants = mockRestaurants.sortedByDescending { it.averageRating }.take(5)
-        val topDishes = mockDishes.sortedByDescending { it.rating }
-        
-        _uiState.update {
-            it.copy(
-                isLoading = false,
-                topRestaurants = topRestaurants,
-                topDishes = topDishes,
-                allRestaurants = mockRestaurants
-            )
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+
+            try {
+                // Fetch restaurants for the selected city from Supabase
+                val restaurantsResult = databaseRepository.getRestaurantsByCity(location)
+
+                restaurantsResult.fold(
+                    onSuccess = { restaurants ->
+                        // Get top 5 restaurants by rating
+                        val topRestaurants = restaurants
+                            .sortedByDescending { it.averageRating }
+                            .take(5)
+
+                        // Fetch dishes for these restaurants
+                        val restaurantIds = restaurants.map { it.id }
+                        val dishesResult = databaseRepository.getDishesForRestaurants(restaurantIds)
+
+                        val topDishes = dishesResult.getOrNull()
+                            ?.sortedByDescending { it.rating }
+                            ?.take(6)
+                            ?: emptyList()
+
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                topRestaurants = topRestaurants,
+                                topDishes = topDishes,
+                                allRestaurants = restaurants,
+                                error = null
+                            )
+                        }
+                    },
+                    onFailure = { error ->
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                error = "Failed to load restaurants: ${error.message}",
+                                topRestaurants = emptyList(),
+                                topDishes = emptyList(),
+                                allRestaurants = emptyList()
+                            )
+                        }
+                    }
+                )
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        error = "Error loading data: ${e.message}",
+                        topRestaurants = emptyList(),
+                        topDishes = emptyList(),
+                        allRestaurants = emptyList()
+                    )
+                }
+            }
         }
     }
 }
@@ -218,10 +260,10 @@ class LocationHomeViewModel : ViewModel() {
  */
 data class GameUiState(
     val isLoading: Boolean = false,
-    val totalXp: Int = 2450,
-    val level: Int = 8,
-    val rank: Int = 42,
-    val streakDays: Int = 7,
+    val totalXp: Int = 0,
+    val level: Int = 1,
+    val rank: Int = 0,
+    val streakDays: Int = 0,
     val dailyChallenges: List<Challenge> = emptyList(),
     val weeklyChallenges: List<Challenge> = emptyList(),
     val leaderboard: List<LeaderboardEntry> = emptyList(),
@@ -238,43 +280,44 @@ class GameViewModel : ViewModel() {
     init {
         loadGameData()
     }
-    
+
     private fun loadGameData() {
+        // TODO: Load game data from database/API
         val dailyChallenges = listOf(
             Challenge(
                 id = "dc1",
-                title = "Rate 3 Dishes",
-                description = "Rate any 3 dishes today",
-                icon = Icons.Filled.Star,
+                title = "Daily Explorer",
+                description = "Rate 3 dishes today",
+                icon = Icons.Filled.Restaurant,
                 xpReward = 50,
                 progress = 0.66f,
                 isCompleted = false
             ),
             Challenge(
                 id = "dc2",
-                title = "Capture a New Dish",
-                description = "Take a photo of a dish you haven't tried",
+                title = "Photo Pro",
+                description = "Upload 5 dish photos",
                 icon = Icons.Filled.CameraAlt,
                 xpReward = 30,
-                progress = 1f,
-                isCompleted = true
+                progress = 0.8f,
+                isCompleted = false
             ),
             Challenge(
                 id = "dc3",
-                title = "Visit a New Restaurant",
-                description = "Check in at a restaurant you haven't visited",
-                icon = Icons.Filled.Restaurant,
+                title = "Taste Tester",
+                description = "Try a new cuisine today",
+                icon = Icons.Filled.Fastfood,
                 xpReward = 40,
-                progress = 0f,
-                isCompleted = false
+                progress = 1f,
+                isCompleted = true
             )
         )
-        
+
         val weeklyChallenges = listOf(
             Challenge(
                 id = "wc1",
-                title = "Food Explorer",
-                description = "Try 5 different cuisines this week",
+                title = "Restaurant Hopper",
+                description = "Visit 5 different restaurants",
                 icon = Icons.Filled.Explore,
                 xpReward = 200,
                 progress = 0.4f,
@@ -308,7 +351,7 @@ class GameViewModel : ViewModel() {
                 isCompleted = true
             )
         )
-        
+
         val leaderboard = listOf(
             LeaderboardEntry("u1", "FoodMaster", 15420, 25),
             LeaderboardEntry("u2", "TasteHunter", 14850, 24),
@@ -321,7 +364,7 @@ class GameViewModel : ViewModel() {
             LeaderboardEntry("u9", "TastyTraveler", 7200, 13),
             LeaderboardEntry("u10", "PlateRater", 6800, 12)
         )
-        
+
         val achievements = listOf(
             Achievement(
                 id = "a1",
@@ -366,7 +409,7 @@ class GameViewModel : ViewModel() {
                 isUnlocked = false
             )
         )
-        
+
         _uiState.update {
             it.copy(
                 dailyChallenges = dailyChallenges,
@@ -376,20 +419,20 @@ class GameViewModel : ViewModel() {
             )
         }
     }
-    
+
     fun completeChallenge(challengeId: String) {
         // Mark challenge as completed and award XP
         _uiState.update { state ->
-            val updatedDaily = state.dailyChallenges.map { 
-                if (it.id == challengeId) it.copy(isCompleted = true, progress = 1f) else it 
+            val updatedDaily = state.dailyChallenges.map {
+                if (it.id == challengeId) it.copy(isCompleted = true, progress = 1f) else it
             }
-            val updatedWeekly = state.weeklyChallenges.map { 
-                if (it.id == challengeId) it.copy(isCompleted = true, progress = 1f) else it 
+            val updatedWeekly = state.weeklyChallenges.map {
+                if (it.id == challengeId) it.copy(isCompleted = true, progress = 1f) else it
             }
-            
+
             val xpGained = (state.dailyChallenges + state.weeklyChallenges)
                 .find { it.id == challengeId }?.xpReward ?: 0
-            
+
             state.copy(
                 dailyChallenges = updatedDaily,
                 weeklyChallenges = updatedWeekly,

@@ -11,6 +11,7 @@ data class User(
     val level: Int = 1,
     val xp: Int = 0,
     val streakCount: Int = 0,
+    val lastLocation: String? = null,
     val badges: List<Badge> = emptyList()
 )
 

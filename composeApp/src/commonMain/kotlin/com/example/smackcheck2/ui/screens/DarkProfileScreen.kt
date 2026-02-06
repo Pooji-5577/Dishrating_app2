@@ -64,7 +64,10 @@ fun DarkProfileScreen(
     onNavigateBack: () -> Unit,
     onEditProfile: () -> Unit,
     onSignOut: () -> Unit,
-    onNavigateToGames: () -> Unit = {}
+    onNavigateToGames: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {},
+    onNavigateToAccount: () -> Unit = {},
+    onNavigateToPrivacy: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val themeState = LocalThemeState.current
@@ -97,10 +100,10 @@ fun DarkProfileScreen(
         }
     ) { paddingValues ->
         val user = uiState.user
-        
+
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(paddingValues)
                 .background(colors.Background)
                 .verticalScroll(rememberScrollState())
@@ -116,43 +119,43 @@ fun DarkProfileScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = user?.name?.firstOrNull()?.toString() ?: "J",
+                    text = user?.name?.firstOrNull()?.toString()?.uppercase() ?: "",
                     fontSize = 48.sp,
                     fontWeight = FontWeight.Bold,
                     color = colors.Primary
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
+
             // Name
             Text(
-                text = user?.name ?: "John Doe",
+                text = user?.name ?: "",
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
                 color = colors.TextPrimary
             )
-            
+
             Spacer(modifier = Modifier.height(4.dp))
-            
+
             // Email
             Text(
-                text = user?.email ?: "john.doe@example.com",
+                text = user?.email ?: "",
                 fontSize = 14.sp,
                 color = colors.TextSecondary
             )
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
+
             // Stats row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                ProfileStatItemThemed(value = "${user?.level ?: 5}", label = "Level")
-                ProfileStatItemThemed(value = "${user?.xp ?: 450}", label = "XP")
-                ProfileStatItemThemed(value = "${user?.streakCount ?: 7}", label = "Streak")
-                ProfileStatItemThemed(value = "${user?.badges?.size ?: 2}", label = "Badges")
+                ProfileStatItemThemed(value = "${user?.level ?: 0}", label = "Level")
+                ProfileStatItemThemed(value = "${user?.xp ?: 0}", label = "XP")
+                ProfileStatItemThemed(value = "${user?.streakCount ?: 0}", label = "Streak")
+                ProfileStatItemThemed(value = "${user?.badges?.size ?: 0}", label = "Badges")
             }
             
             Spacer(modifier = Modifier.height(32.dp))
@@ -256,27 +259,27 @@ fun DarkProfileScreen(
                         icon = Icons.Filled.Notifications,
                         title = "Notifications",
                         subtitle = "Manage push notifications",
-                        onClick = { /* TODO */ }
+                        onClick = onNavigateToNotifications
                     )
-                    
+
                     HorizontalDivider(color = colors.Divider)
-                    
+
                     // Account Settings
                     SettingsItemThemed(
                         icon = Icons.Filled.Person,
                         title = "Account",
                         subtitle = "Manage account settings",
-                        onClick = { /* TODO */ }
+                        onClick = onNavigateToAccount
                     )
-                    
+
                     HorizontalDivider(color = colors.Divider)
-                    
+
                     // Privacy
                     SettingsItemThemed(
                         icon = Icons.Filled.Security,
                         title = "Privacy & Security",
                         subtitle = "Manage your data and privacy",
-                        onClick = { /* TODO */ }
+                        onClick = onNavigateToPrivacy
                     )
                 }
             }
