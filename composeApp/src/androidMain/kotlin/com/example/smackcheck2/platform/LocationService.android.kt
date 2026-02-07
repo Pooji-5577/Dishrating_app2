@@ -289,4 +289,40 @@ actual class LocationService(private val context: Context) {
             null
         }
     }
+
+    /**
+     * Get coordinates for a city name using geocoding
+     * Returns LocationResult with coordinates or null if geocoding fails
+     */
+    actual suspend fun getCoordinatesForCity(cityName: String): LocationResult? {
+        if (cityName.isBlank()) return null
+
+        return try {
+            Log.d(TAG, "Geocoding city: $cityName")
+            @Suppress("DEPRECATION")
+            val addresses = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                suspendCancellableCoroutine { continuation ->
+                    geocoder.getFromLocationName(cityName, 1) { addresses ->
+                        continuation.resume(addresses)
+                    }
+                }
+            } else {
+                geocoder.getFromLocationName(cityName, 1) ?: emptyList()
+            }
+
+            addresses.firstOrNull()?.let { address ->
+                val result = LocationResult(
+                    latitude = address.latitude,
+                    longitude = address.longitude,
+                    cityName = cityName,
+                    fullAddress = address.getAddressLine(0)
+                )
+                Log.d(TAG, "Geocoded $cityName to: ${result.latitude}, ${result.longitude}")
+                result
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error geocoding city: $cityName", e)
+            null
+        }
+    }
 }

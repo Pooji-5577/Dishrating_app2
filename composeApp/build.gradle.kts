@@ -84,6 +84,8 @@ kotlin {
             implementation(libs.google.play.services.maps)
             implementation(libs.google.play.services.location)
             implementation(libs.google.places)
+            // DataStore for preferences
+            implementation("androidx.datastore:datastore-preferences:1.1.1")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

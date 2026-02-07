@@ -73,7 +73,16 @@ class StorageRepository {
             storage.from(bucketName).delete(path)
             Result.success(Unit)
         } catch (e: Exception) {
-            Result.failure(e)
+            val message = when {
+                e.message?.contains("not found", ignoreCase = true) == true ->
+                    "Image not found."
+                e.message?.contains("network", ignoreCase = true) == true ->
+                    "Network error. Please check your connection and try again."
+                e.message?.contains("unauthorized", ignoreCase = true) == true ->
+                    "You don't have permission to delete this image."
+                else -> "Failed to delete image. Please try again later."
+            }
+            Result.failure(Exception(message))
         }
     }
 
@@ -93,6 +102,11 @@ class StorageRepository {
         fileName: String
     ): Result<String> {
         return try {
+            // Validate image size (max 10MB)
+            if (imageBytes.size > 10 * 1024 * 1024) {
+                return Result.failure(Exception("Image is too large. Maximum size is 10MB."))
+            }
+
             val extension = fileName.substringAfterLast(".", "jpg")
             val timestamp = Clock.System.now().toEpochMilliseconds()
             val path = "$folderName/${timestamp}.$extension"
@@ -104,7 +118,21 @@ class StorageRepository {
             val publicUrl = storage.from(bucketName).publicUrl(path)
             Result.success(publicUrl)
         } catch (e: Exception) {
-            Result.failure(e)
+            val message = when {
+                e.message?.contains("size", ignoreCase = true) == true ->
+                    "Image is too large. Maximum size is 10MB."
+                e.message?.contains("type", ignoreCase = true) == true ||
+                e.message?.contains("format", ignoreCase = true) == true ->
+                    "Invalid image format. Please use JPG, PNG, or WebP."
+                e.message?.contains("network", ignoreCase = true) == true ->
+                    "Network error. Please check your connection and try again."
+                e.message?.contains("quota", ignoreCase = true) == true ->
+                    "Storage limit reached. Please contact support."
+                e.message?.contains("unauthorized", ignoreCase = true) == true ->
+                    "Session expired. Please sign in again."
+                else -> "Failed to upload image. Please try again later."
+            }
+            Result.failure(Exception(message))
         }
     }
 }

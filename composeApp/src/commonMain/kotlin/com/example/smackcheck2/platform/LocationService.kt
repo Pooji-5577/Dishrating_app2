@@ -60,4 +60,10 @@ expect class LocationService {
      * Check if running on an emulator
      */
     fun isEmulator(): Boolean
+
+    /**
+     * Get coordinates for a city name using geocoding
+     * Returns LocationResult with coordinates or null if geocoding fails
+     */
+    suspend fun getCoordinatesForCity(cityName: String): LocationResult?
 }

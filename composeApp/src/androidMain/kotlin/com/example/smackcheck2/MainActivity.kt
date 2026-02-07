@@ -13,6 +13,7 @@ import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.PlacesService
+import com.example.smackcheck2.platform.PreferencesManager
 
 class MainActivity : ComponentActivity() {
     // ImagePicker must be created at Activity level for ActivityResult APIs
@@ -30,9 +31,11 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val context = LocalContext.current
+            val preferencesManager = remember { PreferencesManager(context) }
             val locationService = remember { LocationService(context) }
             val placesService = remember { PlacesService(context) }
             App(
+                preferencesManager = preferencesManager,
                 locationService = locationService,
                 imagePicker = imagePicker,
                 placesService = placesService
@@ -44,5 +47,7 @@ class MainActivity : ComponentActivity() {
 @Preview
 @Composable
 fun AppAndroidPreview() {
-    App()
+    val context = LocalContext.current
+    val preferencesManager = remember { PreferencesManager(context) }
+    App(preferencesManager = preferencesManager)
 }

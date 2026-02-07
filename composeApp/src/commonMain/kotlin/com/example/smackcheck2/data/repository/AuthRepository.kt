@@ -335,7 +335,9 @@ class AuthRepository {
                 profilePhotoUrl = user.profilePhotoUrl,
                 level = user.level,
                 xp = user.xp,
-                streakCount = user.streakCount
+                streakCount = user.streakCount,
+                lastLocation = user.lastLocation,
+                bio = user.bio
             )
 
             client.postgrest["profiles"]
@@ -347,7 +349,129 @@ class AuthRepository {
 
             Result.success(user)
         } catch (e: Exception) {
-            Result.failure(e)
+            // Check if error is due to missing bio column
+            if (e.message?.contains("bio", ignoreCase = true) == true) {
+                // Try updating without bio field
+                try {
+                    val profileWithoutBio = ProfileDto(
+                        id = user.id,
+                        name = user.name,
+                        email = user.email,
+                        profilePhotoUrl = user.profilePhotoUrl,
+                        level = user.level,
+                        xp = user.xp,
+                        streakCount = user.streakCount,
+                        lastLocation = user.lastLocation,
+                        bio = null
+                    )
+
+                    client.postgrest["profiles"]
+                        .update(profileWithoutBio) {
+                            filter {
+                                eq("id", user.id)
+                            }
+                        }
+
+                    // Return success but without bio
+                    return Result.success(user.copy(bio = null))
+                } catch (retryException: Exception) {
+                    return Result.failure(Exception("Failed to update profile. Please try again later."))
+                }
+            }
+
+            // Return user-friendly error message
+            val message = when {
+                e.message?.contains("network", ignoreCase = true) == true ->
+                    "Network error. Please check your connection and try again."
+                e.message?.contains("unauthorized", ignoreCase = true) == true ->
+                    "Session expired. Please sign in again."
+                e.message?.contains("not found", ignoreCase = true) == true ->
+                    "Profile not found. Please try signing in again."
+                else -> "Failed to update profile. Please try again later."
+            }
+            Result.failure(Exception(message))
+        }
+    }
+
+    /**
+     * Update user password
+     */
+    suspend fun updatePassword(newPassword: String): Result<Unit> {
+        return try {
+            auth.updateUser {
+                password = newPassword
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val message = when {
+                e.message?.contains("weak", ignoreCase = true) == true ->
+                    "Password is too weak. Use at least 8 characters with mix of letters and numbers."
+                e.message?.contains("same", ignoreCase = true) == true ->
+                    "New password cannot be the same as the old password."
+                e.message?.contains("network", ignoreCase = true) == true ->
+                    "Network error. Please check your connection and try again."
+                e.message?.contains("unauthorized", ignoreCase = true) == true ->
+                    "Session expired. Please sign in again."
+                else -> "Failed to change password. Please try again later."
+            }
+            Result.failure(Exception(message))
+        }
+    }
+
+    /**
+     * Update user email
+     */
+    suspend fun updateEmail(newEmail: String): Result<Unit> {
+        return try {
+            auth.updateUser {
+                email = newEmail
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val message = when {
+                e.message?.contains("already", ignoreCase = true) == true ->
+                    "This email is already registered to another account."
+                e.message?.contains("invalid", ignoreCase = true) == true ->
+                    "Invalid email format. Please enter a valid email address."
+                e.message?.contains("network", ignoreCase = true) == true ->
+                    "Network error. Please check your connection and try again."
+                e.message?.contains("unauthorized", ignoreCase = true) == true ->
+                    "Session expired. Please sign in again."
+                else -> "Failed to change email. Please try again later."
+            }
+            Result.failure(Exception(message))
+        }
+    }
+
+    /**
+     * Delete user account
+     * Note: This deletes the profile but Supabase Auth user deletion
+     * requires additional setup (database function or REST API)
+     */
+    suspend fun deleteAccount(): Result<Unit> {
+        return try {
+            val userId = auth.currentUserOrNull()?.id
+                ?: return Result.failure(Exception("Not signed in. Please sign in and try again."))
+
+            // Delete user profile from database
+            client.postgrest["profiles"].delete {
+                filter {
+                    eq("id", userId)
+                }
+            }
+
+            Result.success(Unit)
+        } catch (e: Exception) {
+            val message = when {
+                e.message?.contains("network", ignoreCase = true) == true ->
+                    "Network error. Please check your connection and try again."
+                e.message?.contains("unauthorized", ignoreCase = true) == true ->
+                    "Session expired. Please sign in again."
+                e.message?.contains("foreign key", ignoreCase = true) == true ->
+                    "Cannot delete account. Please contact support."
+                else -> "Failed to delete account. Please try again later."
+            }
+            Result.failure(Exception(message))
         }
     }
 
@@ -384,7 +508,8 @@ class AuthRepository {
             level = level,
             xp = xp,
             streakCount = streakCount,
-            lastLocation = lastLocation
+            lastLocation = lastLocation,
+            bio = bio
         )
     }
 

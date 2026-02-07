@@ -25,12 +25,16 @@ expect class PlacesService {
      * @param latitude User's current latitude
      * @param longitude User's current longitude
      * @param radiusInMeters Search radius in meters (default: 2000m = 2km)
+     * @param keyword Optional keyword to search for (e.g., "Italian", "Japanese")
+     * @param minRating Optional minimum rating filter
      * @return List of nearby restaurants
      */
     suspend fun findNearbyRestaurants(
         latitude: Double,
         longitude: Double,
-        radiusInMeters: Int = 2000
+        radiusInMeters: Int = 2000,
+        keyword: String? = null,
+        minRating: Double? = null
     ): List<NearbyRestaurant>
 
     /**

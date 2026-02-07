@@ -17,6 +17,7 @@ import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.ChallengeRepository
 import com.example.smackcheck2.platform.LocationErrorReason
 import com.example.smackcheck2.platform.LocationOperationResult
 import com.example.smackcheck2.platform.LocationResult
@@ -218,26 +219,41 @@ class LocationHomeViewModel : ViewModel() {
                 // Fetch restaurants for the selected city from Supabase
                 val restaurantsResult = databaseRepository.getRestaurantsByCity(location)
 
-                // Fetch nearby restaurants from Google Places API if location is available
-                val nearbyRestaurants = if (placesService != null && locationService != null) {
+                // Get coordinates for the selected location using geocoding
+                val coordinates = if (locationService != null) {
                     try {
-                        val currentLoc = locationService?.getCurrentLocation()
-                        if (currentLoc != null) {
-                            // Update GPS coordinates in state
-                            _uiState.update {
-                                it.copy(
-                                    currentLatitude = currentLoc.latitude,
-                                    currentLongitude = currentLoc.longitude
-                                )
-                            }
-                            placesService?.findNearbyRestaurants(
-                                latitude = currentLoc.latitude,
-                                longitude = currentLoc.longitude,
-                                radiusInMeters = 5000
-                            ) ?: emptyList()
+                        // Try geocoding the selected city first
+                        val geocodedLocation = locationService?.getCoordinatesForCity(location)
+                        if (geocodedLocation != null) {
+                            println("LocationHomeViewModel: Geocoded $location to: ${geocodedLocation.latitude}, ${geocodedLocation.longitude}")
+                            geocodedLocation
                         } else {
-                            emptyList()
+                            // Fall back to current GPS if geocoding fails
+                            println("LocationHomeViewModel: Geocoding failed, falling back to GPS location")
+                            locationService?.getCurrentLocation()
                         }
+                    } catch (e: Exception) {
+                        println("LocationHomeViewModel: Geocoding error: ${e.message}, falling back to GPS")
+                        locationService?.getCurrentLocation()
+                    }
+                } else null
+
+                // Fetch nearby restaurants from Google Places API using the location's coordinates
+                val nearbyRestaurants = if (placesService != null && coordinates != null) {
+                    try {
+                        // Update coordinates in state
+                        _uiState.update {
+                            it.copy(
+                                currentLatitude = coordinates.latitude,
+                                currentLongitude = coordinates.longitude
+                            )
+                        }
+                        println("LocationHomeViewModel: Fetching nearby restaurants at: ${coordinates.latitude}, ${coordinates.longitude}")
+                        placesService?.findNearbyRestaurants(
+                            latitude = coordinates.latitude,
+                            longitude = coordinates.longitude,
+                            radiusInMeters = 5000
+                        ) ?: emptyList()
                     } catch (e: Exception) {
                         println("LocationHomeViewModel: Failed to load nearby restaurants: ${e.message}")
                         emptyList()
@@ -253,14 +269,12 @@ class LocationHomeViewModel : ViewModel() {
                             .sortedByDescending { it.averageRating }
                             .take(5)
 
-                        // Fetch dishes for these restaurants
-                        val restaurantIds = restaurants.map { it.id }
-                        val dishesResult = databaseRepository.getDishesForRestaurants(restaurantIds)
-
-                        val topDishes = dishesResult.getOrNull()
-                            ?.sortedByDescending { it.rating }
-                            ?.take(6)
-                            ?: emptyList()
+                        // Fetch top-rated dishes across all users
+                        val topDishesResult = databaseRepository.getTopRatedDishes(limit = 10)
+                        val topDishes = topDishesResult.getOrElse {
+                            println("LocationHomeViewModel: Failed to load top dishes: ${it.message}")
+                            emptyList()
+                        }
 
                         _uiState.update {
                             it.copy(
@@ -317,7 +331,11 @@ data class GameUiState(
     val dailyChallenges: List<Challenge> = emptyList(),
     val weeklyChallenges: List<Challenge> = emptyList(),
     val leaderboard: List<LeaderboardEntry> = emptyList(),
-    val achievements: List<Achievement> = emptyList()
+    val achievements: List<Achievement> = emptyList(),
+    val showLevelUpAnimation: Boolean = false,
+    val newLevel: Int? = null,
+    val showAchievementUnlock: Boolean = false,
+    val newAchievement: Achievement? = null
 )
 
 /**
@@ -326,167 +344,226 @@ data class GameUiState(
 class GameViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(GameUiState())
     val uiState: StateFlow<GameUiState> = _uiState.asStateFlow()
-    
+
+    private val authRepository = AuthRepository()
+    private val databaseRepository = DatabaseRepository()
+    private val challengeRepository = ChallengeRepository()
+
     init {
         loadGameData()
     }
 
-    private fun loadGameData() {
-        // TODO: Load game data from database/API
-        val dailyChallenges = listOf(
-            Challenge(
-                id = "dc1",
-                title = "Daily Explorer",
-                description = "Rate 3 dishes today",
-                icon = Icons.Filled.Restaurant,
-                xpReward = 50,
-                progress = 0.66f,
-                isCompleted = false
-            ),
-            Challenge(
-                id = "dc2",
-                title = "Photo Pro",
-                description = "Upload 5 dish photos",
-                icon = Icons.Filled.CameraAlt,
-                xpReward = 30,
-                progress = 0.8f,
-                isCompleted = false
-            ),
-            Challenge(
-                id = "dc3",
-                title = "Taste Tester",
-                description = "Try a new cuisine today",
-                icon = Icons.Filled.Fastfood,
-                xpReward = 40,
-                progress = 1f,
-                isCompleted = true
-            )
-        )
+    fun loadGameData() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
 
-        val weeklyChallenges = listOf(
-            Challenge(
-                id = "wc1",
-                title = "Restaurant Hopper",
-                description = "Visit 5 different restaurants",
-                icon = Icons.Filled.Explore,
-                xpReward = 200,
-                progress = 0.4f,
-                isCompleted = false
-            ),
-            Challenge(
-                id = "wc2",
-                title = "Review Master",
-                description = "Write 10 detailed reviews",
-                icon = Icons.Filled.RateReview,
-                xpReward = 250,
-                progress = 0.3f,
-                isCompleted = false
-            ),
-            Challenge(
-                id = "wc3",
-                title = "Social Foodie",
-                description = "Share 5 dishes on social media",
-                icon = Icons.Filled.Share,
-                xpReward = 150,
-                progress = 0.6f,
-                isCompleted = false
-            ),
-            Challenge(
-                id = "wc4",
-                title = "Streak Champion",
-                description = "Maintain a 7-day rating streak",
-                icon = Icons.Filled.LocalFireDepartment,
-                xpReward = 300,
-                progress = 1f,
-                isCompleted = true
-            )
-        )
+            try {
+                val userId = authRepository.getCurrentUserId()
+                if (userId == null) {
+                    _uiState.update { it.copy(isLoading = false) }
+                    return@launch
+                }
 
-        val leaderboard = listOf(
-            LeaderboardEntry("u1", "FoodMaster", 15420, 25),
-            LeaderboardEntry("u2", "TasteHunter", 14850, 24),
-            LeaderboardEntry("u3", "GourmetKing", 13200, 22),
-            LeaderboardEntry("u4", "DishExplorer", 12800, 21),
-            LeaderboardEntry("u5", "FlavorSeeker", 11500, 20),
-            LeaderboardEntry("u6", "CuisinePro", 10200, 18),
-            LeaderboardEntry("u7", "BiteReviewer", 9800, 17),
-            LeaderboardEntry("u8", "FoodNinja", 8500, 15),
-            LeaderboardEntry("u9", "TastyTraveler", 7200, 13),
-            LeaderboardEntry("u10", "PlateRater", 6800, 12)
-        )
+                val user = authRepository.getCurrentUser()
 
-        val achievements = listOf(
+                // Load real challenges
+                val (dailyChallenges, weeklyChallenges) = challengeRepository.getUserChallenges(userId)
+                    .getOrDefault(Pair(emptyList(), emptyList()))
+
+                // Load real leaderboard
+                val leaderboard = loadLeaderboard()
+
+                // Load real achievements
+                val achievements = loadAchievements()
+
+                // Calculate user's rank
+                val userRank = leaderboard.indexOfFirst { it.userId == userId } + 1
+
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        totalXp = user?.xp ?: 0,
+                        level = user?.level ?: 1,
+                        rank = userRank,
+                        streakDays = user?.streakCount ?: 0,
+                        dailyChallenges = dailyChallenges,
+                        weeklyChallenges = weeklyChallenges,
+                        leaderboard = leaderboard,
+                        achievements = achievements
+                    )
+                }
+            } catch (e: Exception) {
+                println("GameViewModel: Error loading game data: ${e.message}")
+                e.printStackTrace()
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    private suspend fun loadLeaderboard(): List<LeaderboardEntry> {
+        return try {
+            val result = databaseRepository.getLeaderboard(50)
+            val profiles = result.getOrDefault(emptyList())
+
+            profiles.map { profile ->
+                LeaderboardEntry(
+                    userId = profile.id,
+                    userName = profile.name,
+                    xp = profile.xp,
+                    level = profile.level
+                )
+            }
+        } catch (e: Exception) {
+            println("GameViewModel: Error loading leaderboard: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private suspend fun loadAchievements(): List<Achievement> {
+        return try {
+            val userId = authRepository.getCurrentUserId() ?: return getDefaultAchievements()
+
+            // Get all available badges
+            val allBadges = databaseRepository.getAllBadges().getOrDefault(emptyList())
+
+            // Get user's earned badges
+            val earnedBadges = databaseRepository.getUserBadges(userId).getOrDefault(emptyList())
+            val earnedBadgeIds = earnedBadges.map { it.id }.toSet()
+
+            // If no badges exist in database, return defaults
+            if (allBadges.isEmpty()) {
+                return getDefaultAchievements()
+            }
+
+            // Map badges to achievements
+            allBadges.map { badge ->
+                Achievement(
+                    id = badge.id,
+                    title = badge.name,
+                    description = badge.description,
+                    icon = getIconForBadge(badge.id),
+                    isUnlocked = earnedBadgeIds.contains(badge.id)
+                )
+            }
+        } catch (e: Exception) {
+            println("GameViewModel: Error loading achievements: ${e.message}")
+            getDefaultAchievements()
+        }
+    }
+
+    private fun getIconForBadge(badgeId: String): androidx.compose.ui.graphics.vector.ImageVector {
+        return when (badgeId) {
+            "first_bite" -> Icons.Filled.Star
+            "foodie_explorer", "restaurant_hopper" -> Icons.Filled.Explore
+            "rating_streak" -> Icons.Filled.LocalFireDepartment
+            "cuisine_master" -> Icons.Filled.Fastfood
+            "photo_pro" -> Icons.Filled.CameraAlt
+            else -> Icons.Filled.Star
+        }
+    }
+
+    private fun getDefaultAchievements(): List<Achievement> {
+        // Fallback default achievements if database is empty
+        return listOf(
             Achievement(
-                id = "a1",
+                id = "first_bite",
                 title = "First Bite",
                 description = "Rate your first dish",
                 icon = Icons.Filled.Star,
-                isUnlocked = true
+                isUnlocked = false
             ),
             Achievement(
-                id = "a2",
+                id = "foodie_explorer",
                 title = "Foodie Explorer",
                 description = "Try 10 different restaurants",
                 icon = Icons.Filled.Explore,
-                isUnlocked = true
+                isUnlocked = false
             ),
             Achievement(
-                id = "a3",
+                id = "rating_streak",
                 title = "Rating Streak",
                 description = "Maintain a 7-day streak",
                 icon = Icons.Filled.LocalFireDepartment,
-                isUnlocked = true
+                isUnlocked = false
             ),
             Achievement(
-                id = "a4",
+                id = "cuisine_master",
                 title = "Cuisine Master",
                 description = "Try 15 different cuisines",
                 icon = Icons.Filled.Fastfood,
                 isUnlocked = false
             ),
             Achievement(
-                id = "a5",
-                title = "Top Reviewer",
-                description = "Be in the top 10 on leaderboard",
-                icon = Icons.Filled.EmojiEvents,
+                id = "photo_pro",
+                title = "Photo Pro",
+                description = "Upload 20 photos with reviews",
+                icon = Icons.Filled.CameraAlt,
                 isUnlocked = false
             ),
             Achievement(
-                id = "a6",
-                title = "Trending Taste",
-                description = "Have a review go viral",
-                icon = Icons.Filled.TrendingUp,
+                id = "restaurant_hopper",
+                title = "Restaurant Hopper",
+                description = "Visit 5 different restaurants",
+                icon = Icons.Filled.Restaurant,
                 isUnlocked = false
             )
         )
+    }
 
-        _uiState.update {
-            it.copy(
-                dailyChallenges = dailyChallenges,
-                weeklyChallenges = weeklyChallenges,
-                leaderboard = leaderboard,
-                achievements = achievements
+    /**
+     * Manually complete a challenge and award XP
+     */
+    fun completeChallenge(challengeId: String) {
+        viewModelScope.launch {
+            val userId = authRepository.getCurrentUserId() ?: return@launch
+            val challenge = (_uiState.value.dailyChallenges + _uiState.value.weeklyChallenges)
+                .find { it.id == challengeId } ?: return@launch
+
+            // Award XP through ChallengeRepository
+            val result = challengeRepository.markChallengeCompleted(userId, challengeId, challenge.xpReward)
+            result.fold(
+                onSuccess = {
+                    println("GameViewModel: ✓ Challenge completed: ${challenge.title}")
+                    // Reload game data to refresh challenges and XP
+                    loadGameData()
+                },
+                onFailure = { error ->
+                    println("GameViewModel: ✗ Failed to complete challenge: ${error.message}")
+                }
             )
         }
     }
 
-    fun completeChallenge(challengeId: String) {
-        // Mark challenge as completed and award XP
-        _uiState.update { state ->
-            val updatedDaily = state.dailyChallenges.map {
-                if (it.id == challengeId) it.copy(isCompleted = true, progress = 1f) else it
-            }
-            val updatedWeekly = state.weeklyChallenges.map {
-                if (it.id == challengeId) it.copy(isCompleted = true, progress = 1f) else it
-            }
+    fun clearLevelUpAnimation() {
+        _uiState.update { it.copy(showLevelUpAnimation = false, newLevel = null) }
+    }
 
-            val xpGained = (state.dailyChallenges + state.weeklyChallenges)
-                .find { it.id == challengeId }?.xpReward ?: 0
+    fun clearAchievementUnlock() {
+        _uiState.update { it.copy(showAchievementUnlock = false, newAchievement = null) }
+    }
 
-            state.copy(
-                dailyChallenges = updatedDaily,
-                weeklyChallenges = updatedWeekly,
-                totalXp = state.totalXp + xpGained
+    /**
+     * Check if user leveled up and trigger animation
+     */
+    fun checkForLevelUp(oldLevel: Int, newLevel: Int) {
+        if (newLevel > oldLevel) {
+            _uiState.update {
+                it.copy(
+                    showLevelUpAnimation = true,
+                    newLevel = newLevel
+                )
+            }
+        }
+    }
+
+    /**
+     * Show achievement unlock animation
+     */
+    fun showAchievementUnlock(achievement: Achievement) {
+        _uiState.update {
+            it.copy(
+                showAchievementUnlock = true,
+                newAchievement = achievement
             )
         }
     }

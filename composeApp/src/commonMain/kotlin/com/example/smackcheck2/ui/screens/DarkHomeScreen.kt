@@ -74,6 +74,8 @@ data class NavItem(
 @Composable
 fun DarkHomeScreen(
     currentLocation: String,
+    allRestaurants: List<com.example.smackcheck2.model.Restaurant> = emptyList(),
+    allDishes: List<com.example.smackcheck2.model.Dish> = emptyList(),
     onLocationClick: () -> Unit,
     onDishClick: (String) -> Unit,
     onRestaurantClick: (String) -> Unit,
@@ -95,11 +97,113 @@ fun DarkHomeScreen(
     val categories = listOf("Healthy", "Gourmet", "Chef's Special", "Quick Bites", "Desserts")
     val filters = listOf("Great Offers", "Nearest", "Rating 4.0+", "Pure Veg")
     var selectedFilters by remember { mutableStateOf(setOf<String>()) }
-    
-    // TODO: Load dishes and restaurants from database/API
-    val featuredDishes = remember { emptyList<DishInfo>() }
-    val tryThisOut = remember<TryDishInfo?> { null }
-    val restaurants = remember { emptyList<RestaurantInfo>() }
+
+    // Convert real data to UI models with category filtering
+    val featuredDishes = remember(allDishes, selectedCategory) {
+        allDishes
+            .filter { dish ->
+                // Filter by category using name and comment
+                val searchText = "${dish.name} ${dish.comment}".lowercase()
+                when (selectedCategory) {
+                    "Healthy" -> searchText.contains("healthy") || searchText.contains("salad") ||
+                                searchText.contains("grilled") || searchText.contains("steamed")
+                    "Gourmet" -> searchText.contains("gourmet") || searchText.contains("premium") ||
+                                searchText.contains("fine") || dish.rating >= 4.5f
+                    "Chef's Special" -> searchText.contains("special") || searchText.contains("signature") ||
+                                       searchText.contains("chef") || dish.rating >= 4.5f
+                    "Quick Bites" -> searchText.contains("quick") || searchText.contains("snack") ||
+                                    searchText.contains("bite") || searchText.contains("appetizer")
+                    "Desserts" -> searchText.contains("dessert") || searchText.contains("sweet") ||
+                                 searchText.contains("cake") || searchText.contains("ice cream") ||
+                                 searchText.contains("pastry")
+                    else -> true
+                }
+            }
+            .sortedByDescending { it.rating }
+            .take(10)
+            .map { dish ->
+                DishInfo(
+                    id = dish.id,
+                    name = dish.name,
+                    restaurant = dish.restaurantName,
+                    rating = dish.rating,
+                    calories = 0 // Default calories, not in model
+                )
+            }
+    }
+
+    val tryThisOut = remember<TryDishInfo?>(allDishes, selectedCategory) {
+        allDishes
+            .filter { dish ->
+                val searchText = "${dish.name} ${dish.comment}".lowercase()
+                when (selectedCategory) {
+                    "Healthy" -> searchText.contains("healthy") || searchText.contains("salad") ||
+                                searchText.contains("grilled") || searchText.contains("steamed")
+                    "Gourmet" -> searchText.contains("gourmet") || searchText.contains("premium") ||
+                                searchText.contains("fine") || dish.rating >= 4.5f
+                    "Chef's Special" -> searchText.contains("special") || searchText.contains("signature") ||
+                                       searchText.contains("chef") || dish.rating >= 4.5f
+                    "Quick Bites" -> searchText.contains("quick") || searchText.contains("snack") ||
+                                    searchText.contains("bite") || searchText.contains("appetizer")
+                    "Desserts" -> searchText.contains("dessert") || searchText.contains("sweet") ||
+                                 searchText.contains("cake") || searchText.contains("ice cream") ||
+                                 searchText.contains("pastry")
+                    else -> true
+                }
+            }
+            .maxByOrNull { it.rating }
+            ?.let { dish ->
+                TryDishInfo(
+                    name = dish.name,
+                    restaurant = dish.restaurantName,
+                    rating = dish.rating,
+                    reviewCount = 0, // Not in model
+                    calories = 0,
+                    isBestseller = true
+                )
+            }
+    }
+
+    val restaurants = remember(allRestaurants, selectedFilters) {
+        allRestaurants
+            .filter { restaurant ->
+                // Apply filters
+                val matchesRating = if (selectedFilters.contains("Rating 4.0+")) {
+                    restaurant.averageRating >= 4.0f
+                } else true
+
+                val matchesVeg = if (selectedFilters.contains("Pure Veg")) {
+                    restaurant.cuisine.contains("veg", ignoreCase = true) ||
+                    restaurant.name.contains("veg", ignoreCase = true)
+                } else true
+
+                val matchesOffers = if (selectedFilters.contains("Great Offers")) {
+                    // Show restaurants with good ratings (likely to have offers)
+                    restaurant.averageRating >= 3.5f
+                } else true
+
+                matchesRating && matchesVeg && matchesOffers
+            }
+            .let { filtered ->
+                // Apply "Nearest" sorting if selected
+                if (selectedFilters.contains("Nearest")) {
+                    // Sort by those with lat/long first (actual nearby restaurants)
+                    filtered.sortedByDescending { it.latitude != null && it.longitude != null }
+                } else {
+                    filtered
+                }
+            }
+            .map { restaurant ->
+                RestaurantInfo(
+                    id = restaurant.id,
+                    name = restaurant.name,
+                    cuisine = restaurant.cuisine,
+                    rating = restaurant.averageRating,
+                    reviewCount = restaurant.reviewCount,
+                    deliveryTime = "30-40 min" // Default delivery time
+                )
+            }
+    }
     
     val navItems = listOf(
         NavItem(
@@ -187,9 +291,12 @@ fun DarkHomeScreen(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
                     placeholder = "Search dishes, restaurants...",
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .fillMaxWidth()
+                    onClick = onSearchClick,
+                    onMicrophoneClick = {
+                        // TODO: Implement voice search
+                        onSearchClick()
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             
@@ -297,28 +404,14 @@ fun DarkHomeScreen(
             // All Restaurants Section Header
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "All Restaurants",
-                        color = themeColors.TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "See All >",
-                        color = themeColors.Primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable { onTopRestaurantsClick() }
-                    )
-                }
+
+                Text(
+                    text = "All Restaurants",
+                    color = themeColors.TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
             
             // Nearby Restaurants Banner

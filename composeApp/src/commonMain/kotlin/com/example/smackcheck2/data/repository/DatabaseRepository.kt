@@ -6,6 +6,8 @@ import com.example.smackcheck2.model.*
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.datetime.Instant
+import kotlinx.datetime.Clock
 
 /**
  * Repository for database operations using Supabase Postgrest
@@ -132,6 +134,67 @@ class DatabaseRepository {
     }
 
     // ==================== DISHES ====================
+
+    /**
+     * Get top-rated dishes across all restaurants
+     */
+    suspend fun getTopRatedDishes(limit: Int = 10): Result<List<Dish>> {
+        return try {
+            // Get all ratings with dish information
+            val ratings = postgrest["ratings"]
+                .select {
+                    order("rating", Order.DESCENDING)
+                    limit(100) // Get more ratings to filter unique dishes
+                }
+                .decodeList<RatingDto>()
+
+            // Group by dish ID and calculate average rating
+            val dishRatings = ratings
+                .groupBy { it.dishId }
+                .mapValues { (_, ratings) ->
+                    ratings.map { it.rating }.average().toFloat()
+                }
+                .entries
+                .sortedByDescending { it.value }
+                .take(limit)
+
+            // Fetch dish details for top dishes
+            val topDishes = dishRatings.mapNotNull { (dishId, avgRating) ->
+                try {
+                    val dish = postgrest["dishes"]
+                        .select {
+                            filter { eq("id", dishId) }
+                        }
+                        .decodeSingleOrNull<DishDto>()
+
+                    if (dish != null) {
+                        // Fetch restaurant name
+                        val restaurant = postgrest["restaurants"]
+                            .select {
+                                filter { eq("id", dish.restaurantId) }
+                            }
+                            .decodeSingleOrNull<RestaurantDto>()
+
+                        dish.toDish().copy(
+                            rating = avgRating,
+                            restaurantName = restaurant?.name ?: "Unknown Restaurant"
+                        )
+                    } else {
+                        null
+                    }
+                } catch (e: Exception) {
+                    println("DatabaseRepository: Error fetching dish $dishId: ${e.message}")
+                    null
+                }
+            }
+
+            Result.success(topDishes)
+        } catch (e: Exception) {
+            println("DatabaseRepository: Error fetching top rated dishes: ${e.message}")
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
 
     /**
      * Get dishes for a restaurant
@@ -457,7 +520,7 @@ class DatabaseRepository {
     }
 
     /**
-     * Update user streak
+     * Update user streak (legacy - simple update)
      */
     suspend fun updateStreak(userId: String, streakCount: Int): Result<Unit> {
         return try {
@@ -468,6 +531,97 @@ class DatabaseRepository {
                     }
                 }
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Update user's rating streak
+     * Increments streak if rating on consecutive days, resets if gap > 48 hours
+     */
+    suspend fun updateUserStreak(userId: String): Result<Int> {
+        return try {
+            // Get current profile
+            val profile = postgrest["profiles"]
+                .select { filter { eq("id", userId) } }
+                .decodeSingleOrNull<ProfileDto>()
+                ?: return Result.failure(Exception("Profile not found"))
+
+            // Get last 2 ratings to find previous rating time
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter { eq("user_id", userId) }
+                    order("created_at", Order.DESCENDING)
+                    limit(2)
+                }
+                .decodeList<RatingDto>()
+
+            val newStreak = if (ratings.size >= 2) {
+                val lastRatingTime = parseTimestamp(ratings[1].createdAt ?: "")
+                val currentTime = System.currentTimeMillis()
+                val hoursSinceLast = (currentTime - lastRatingTime) / (1000 * 60 * 60)
+
+                when {
+                    hoursSinceLast < 24 -> profile.streakCount // Same day
+                    hoursSinceLast < 48 -> profile.streakCount + 1 // Next day
+                    else -> 1 // Streak broken, restart
+                }
+            } else {
+                1 // First rating
+            }
+
+            // Update streak in database
+            postgrest["profiles"]
+                .update(mapOf("streak_count" to newStreak)) {
+                    filter { eq("id", userId) }
+                }
+
+            // Award streak bonus XP if maintaining/increasing streak
+            if (newStreak > profile.streakCount) {
+                addXpToUser(userId, 5)
+            }
+
+            Result.success(newStreak)
+        } catch (e: Exception) {
+            println("DatabaseRepository: Error updating streak: ${e.message}")
+            e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Parse ISO timestamp to milliseconds
+     * Handles Supabase/PostgreSQL timestamp formats: 2024-01-15T12:34:56.789Z
+     */
+    private fun parseTimestamp(timestamp: String): Long {
+        return try {
+            if (timestamp.isBlank()) return 0L
+
+            // Parse ISO 8601 timestamp using kotlinx-datetime
+            val instant = Instant.parse(timestamp)
+            instant.toEpochMilliseconds()
+        } catch (e: Exception) {
+            println("DatabaseRepository: Failed to parse timestamp '$timestamp': ${e.message}")
+            // Return 0 on parse failure (will be treated as very old timestamp)
+            0L
+        }
+    }
+
+    // ==================== LEADERBOARD ====================
+
+    /**
+     * Get leaderboard with top users by XP
+     */
+    suspend fun getLeaderboard(limit: Int = 50): Result<List<ProfileDto>> {
+        return try {
+            val profiles = postgrest["profiles"]
+                .select {
+                    order("xp", Order.DESCENDING)
+                    limit(limit.toLong())
+                }
+                .decodeList<ProfileDto>()
+            Result.success(profiles)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -530,6 +684,131 @@ class DatabaseRepository {
             )
             postgrest["user_badges"].insert(userBadge)
             Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Check if user has a specific badge
+     */
+    suspend fun hasUserBadge(userId: String, badgeId: String): Result<Boolean> {
+        return try {
+            val existing = postgrest["user_badges"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                        eq("badge_id", badgeId)
+                    }
+                }
+                .decodeSingleOrNull<UserBadgeDto>()
+            Result.success(existing != null)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==================== STATS TRACKING ====================
+
+    /**
+     * Get count of ratings submitted today
+     */
+    suspend fun getRatingsCountToday(userId: String): Result<Int> {
+        return try {
+            // Get ratings from last 24 hours
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<RatingDto>()
+
+            val todayCount = ratings.count { rating ->
+                val ratingTime = parseTimestamp(rating.createdAt ?: "")
+                val hoursSince = (System.currentTimeMillis() - ratingTime) / (1000 * 60 * 60)
+                hoursSince < 24
+            }
+
+            Result.success(todayCount)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get count of unique restaurants the user has rated
+     */
+    suspend fun getUniqueRestaurantsRated(userId: String): Result<Int> {
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<RatingDto>()
+
+            val uniqueRestaurants = ratings.map { it.restaurantId }.toSet()
+            Result.success(uniqueRestaurants.size)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get count of ratings with photos
+     */
+    suspend fun getRatingsWithPhotosCount(userId: String): Result<Int> {
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<RatingDto>()
+
+            val withPhotos = ratings.count { it.imageUrl != null }
+            Result.success(withPhotos)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get unique cuisines the user has tried
+     */
+    suspend fun getUniqueCuisinesTried(userId: String): Result<Set<String>> {
+        return try {
+            // Get all ratings by user
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                    }
+                }
+                .decodeList<RatingDto>()
+
+            // Get unique restaurant IDs
+            val restaurantIds = ratings.map { it.restaurantId }.toSet()
+
+            // Get cuisines for those restaurants
+            val cuisines = mutableSetOf<String>()
+            for (restaurantId in restaurantIds) {
+                val restaurant = postgrest["restaurants"]
+                    .select {
+                        filter {
+                            eq("id", restaurantId)
+                        }
+                    }
+                    .decodeSingleOrNull<RestaurantDto>()
+
+                restaurant?.cuisine?.let { cuisines.add(it) }
+            }
+
+            Result.success(cuisines)
         } catch (e: Exception) {
             Result.failure(e)
         }

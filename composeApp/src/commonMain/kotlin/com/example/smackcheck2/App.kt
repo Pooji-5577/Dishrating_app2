@@ -6,7 +6,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.navigation.SmackCheckNavHost
 import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.platform.LocalImagePicker
@@ -14,6 +16,7 @@ import com.example.smackcheck2.platform.LocalLocationService
 import com.example.smackcheck2.platform.LocalPlacesService
 import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.PlacesService
+import com.example.smackcheck2.platform.PreferencesManager
 import com.example.smackcheck2.ui.theme.DarkThemeColors
 import com.example.smackcheck2.ui.theme.LightThemeColors
 import com.example.smackcheck2.ui.theme.LocalThemeState
@@ -26,11 +29,20 @@ import com.example.smackcheck2.ui.theme.ThemeState
  */
 @Composable
 fun App(
+    preferencesManager: PreferencesManager,
     locationService: LocationService? = null,
     imagePicker: ImagePicker? = null,
     placesService: PlacesService? = null
 ) {
-    val themeState = remember { ThemeState(initialDarkMode = true) }
+    val preferencesRepository = remember { PreferencesRepository(preferencesManager) }
+    val scope = rememberCoroutineScope()
+    val themeState = remember {
+        ThemeState(
+            initialDarkMode = true,
+            preferencesRepository = preferencesRepository,
+            coroutineScope = scope
+        )
+    }
 
     CompositionLocalProvider(
         LocalThemeState provides themeState,
@@ -47,7 +59,7 @@ fun App(
                     .fillMaxSize()
                     .background(backgroundColor)
             ) {
-                SmackCheckNavHost()
+                SmackCheckNavHost(preferencesRepository = preferencesRepository)
             }
         }
     }

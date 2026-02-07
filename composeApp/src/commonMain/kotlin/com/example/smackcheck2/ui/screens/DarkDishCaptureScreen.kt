@@ -482,17 +482,6 @@ private fun ImagePreviewWithAI(
                         )
                     }
 
-                    // Show debug info when detection fails
-                    if (!isAIDetected && debugInfo != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Debug: $debugInfo",
-                            color = Color(0xFFFF6B6B),
-                            fontSize = 10.sp,
-                            maxLines = 3
-                        )
-                    }
-
                     Spacer(modifier = Modifier.height(16.dp))
 
                     // Dish name display or edit

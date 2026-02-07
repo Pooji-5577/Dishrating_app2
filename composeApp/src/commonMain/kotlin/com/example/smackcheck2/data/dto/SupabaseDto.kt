@@ -20,6 +20,7 @@ data class ProfileDto(
     val streakCount: Int = 0,
     @SerialName("last_location")
     val lastLocation: String? = null,
+    val bio: String? = null,
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("updated_at")

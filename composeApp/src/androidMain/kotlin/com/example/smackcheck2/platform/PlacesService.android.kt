@@ -81,21 +81,31 @@ actual class PlacesService(private val context: Context) {
      * @param latitude User's current latitude
      * @param longitude User's current longitude
      * @param radiusInMeters Search radius in meters (default: 2000m = 2km)
+     * @param keyword Optional keyword to search for (e.g., "Italian", "Japanese")
+     * @param minRating Optional minimum rating filter
      * @return List of nearby restaurants
      */
     actual suspend fun findNearbyRestaurants(
         latitude: Double,
         longitude: Double,
-        radiusInMeters: Int
+        radiusInMeters: Int,
+        keyword: String?,
+        minRating: Double?
     ): List<NearbyRestaurant> = withContext(Dispatchers.IO) {
-        Log.d(TAG, "Finding nearby restaurants at ($latitude, $longitude) within ${radiusInMeters}m")
+        Log.d(TAG, "Finding nearby restaurants at ($latitude, $longitude) within ${radiusInMeters}m, keyword: $keyword, minRating: $minRating")
 
         return@withContext try {
-            val url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json" +
+            var url = "https://maps.googleapis.com/maps/api/place/nearbysearch/json" +
                     "?location=$latitude,$longitude" +
                     "&radius=$radiusInMeters" +
-                    "&type=restaurant" +
-                    "&key=$apiKey"
+                    "&type=restaurant"
+
+            // Add keyword for cuisine search if provided
+            if (!keyword.isNullOrBlank()) {
+                url += "&keyword=$keyword"
+            }
+
+            url += "&key=$apiKey"
 
             Log.d(TAG, "Requesting: $url")
 
@@ -109,7 +119,18 @@ actual class PlacesService(private val context: Context) {
 
             Log.d(TAG, "Found ${response.results.size} restaurants")
 
-            response.results.map { place ->
+            // Filter by minimum rating if specified
+            val filteredResults = if (minRating != null) {
+                response.results.filter { place ->
+                    place.rating != null && place.rating >= minRating
+                }
+            } else {
+                response.results
+            }
+
+            Log.d(TAG, "After rating filter: ${filteredResults.size} restaurants")
+
+            filteredResults.map { place ->
                 NearbyRestaurant(
                     id = place.placeId,
                     name = place.name,

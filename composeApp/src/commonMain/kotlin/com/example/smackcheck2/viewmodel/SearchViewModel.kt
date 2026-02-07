@@ -11,6 +11,8 @@ import com.example.smackcheck2.model.ManualRestaurantUiState
 import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.PlacesService
 import com.example.smackcheck2.platform.NearbyRestaurant
+import com.example.smackcheck2.platform.LocationOperationResult
+import com.example.smackcheck2.platform.LocationErrorReason
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -71,7 +73,7 @@ class SearchViewModel(
 
     fun search() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, locationError = null) }
 
             try {
                 val currentState = _uiState.value
@@ -84,23 +86,61 @@ class SearchViewModel(
                     minRating = currentState.selectedRating
                 )
 
-                // Fetch nearby restaurants from Google Places API
+                // Fetch nearby restaurants from Google Places API with filters
                 val nearbyRestaurants = if (placesService != null && locationService != null) {
                     try {
-                        val currentLoc = locationService.getCurrentLocation()
+                        // Use geocoding for selected city, or GPS for current location
+                        val currentLoc = if (currentState.selectedCity != null) {
+                            // Use geocoding for selected city
+                            locationService.getCoordinatesForCity(currentState.selectedCity)
+                        } else {
+                            // Use GPS for current location with detailed error handling
+                            when (val locationResult = locationService.getCurrentLocationWithDetails()) {
+                                is LocationOperationResult.Success -> locationResult.location
+                                is LocationOperationResult.Error -> {
+                                    val errorMessage = getLocationErrorMessage(locationResult.reason, locationResult.isEmulator)
+                                    _uiState.update { it.copy(locationError = errorMessage) }
+                                    null
+                                }
+                            }
+                        }
+
                         if (currentLoc != null) {
-                            val nearby = placesService.findNearbyRestaurants(
-                                latitude = currentLoc.latitude,
-                                longitude = currentLoc.longitude,
-                                radiusInMeters = 5000
-                            )
+                            // If cuisines are selected, search for each cuisine separately
+                            val allNearby = if (currentState.selectedCuisines.isNotEmpty()) {
+                                // Make a separate API call for each selected cuisine
+                                currentState.selectedCuisines.flatMap { cuisine ->
+                                    try {
+                                        placesService.findNearbyRestaurants(
+                                            latitude = currentLoc.latitude,
+                                            longitude = currentLoc.longitude,
+                                            radiusInMeters = 5000,
+                                            keyword = cuisine,
+                                            minRating = currentState.selectedRating?.toDouble()
+                                        )
+                                    } catch (e: Exception) {
+                                        println("SearchViewModel: Failed to load $cuisine restaurants: ${e.message}")
+                                        emptyList()
+                                    }
+                                }.distinctBy { it.id }
+                            } else {
+                                // No cuisine filter, just get all nearby restaurants
+                                placesService.findNearbyRestaurants(
+                                    latitude = currentLoc.latitude,
+                                    longitude = currentLoc.longitude,
+                                    radiusInMeters = 5000,
+                                    keyword = currentState.query.takeIf { it.isNotBlank() },
+                                    minRating = currentState.selectedRating?.toDouble()
+                                )
+                            }
+
                             // Convert NearbyRestaurant to Restaurant
-                            nearby.map { nearbyRestaurant ->
+                            allNearby.map { nearbyRestaurant ->
                                 Restaurant(
                                     id = nearbyRestaurant.id,
                                     name = nearbyRestaurant.name,
                                     city = nearbyRestaurant.address ?: "Unknown",
-                                    cuisine = "Restaurant",
+                                    cuisine = "Restaurant", // Places API doesn't return cuisine type
                                     imageUrls = emptyList(),
                                     averageRating = nearbyRestaurant.rating?.toFloat() ?: 0f,
                                     reviewCount = nearbyRestaurant.userRatingsTotal ?: 0,
@@ -122,36 +162,10 @@ class SearchViewModel(
                 result.fold(
                     onSuccess = { databaseRestaurants ->
                         // Combine database and nearby restaurants
+                        // Database restaurants are already filtered by the database query
+                        // Nearby restaurants are already filtered by the Places API
                         val combinedRestaurants = (databaseRestaurants + nearbyRestaurants)
                             .distinctBy { it.id }
-                            // Apply filters to nearby restaurants as well
-                            .filter { restaurant ->
-                                // Apply query filter
-                                val matchesQuery = if (currentState.query.isNotBlank()) {
-                                    restaurant.name.contains(currentState.query, ignoreCase = true) ||
-                                    restaurant.cuisine.contains(currentState.query, ignoreCase = true)
-                                } else {
-                                    true
-                                }
-
-                                // Apply cuisine filter
-                                val matchesCuisine = if (currentState.selectedCuisines.isNotEmpty()) {
-                                    currentState.selectedCuisines.any { cuisine ->
-                                        restaurant.cuisine.contains(cuisine, ignoreCase = true)
-                                    }
-                                } else {
-                                    true
-                                }
-
-                                // Apply rating filter
-                                val matchesRating = if (currentState.selectedRating != null) {
-                                    restaurant.averageRating >= currentState.selectedRating
-                                } else {
-                                    true
-                                }
-
-                                matchesQuery && matchesCuisine && matchesRating
-                            }
 
                         _uiState.update {
                             it.copy(
@@ -162,27 +176,11 @@ class SearchViewModel(
                     },
                     onFailure = { error ->
                         // Even if database fails, show nearby restaurants if available
-                        val filteredNearby = nearbyRestaurants.filter { restaurant ->
-                            val matchesQuery = if (currentState.query.isNotBlank()) {
-                                restaurant.name.contains(currentState.query, ignoreCase = true)
-                            } else {
-                                true
-                            }
-
-                            val matchesRating = if (currentState.selectedRating != null) {
-                                restaurant.averageRating >= currentState.selectedRating
-                            } else {
-                                true
-                            }
-
-                            matchesQuery && matchesRating
-                        }
-
                         _uiState.update {
                             it.copy(
-                                results = filteredNearby,
+                                results = nearbyRestaurants,
                                 isLoading = false,
-                                errorMessage = if (filteredNearby.isEmpty())
+                                errorMessage = if (nearbyRestaurants.isEmpty())
                                     error.message ?: "Search failed"
                                 else null
                             )
@@ -210,44 +208,32 @@ class SearchViewModel(
         }
         search()
     }
-}
 
-/**
- * ViewModel for Restaurant Detail screen
- */
-class RestaurantDetailViewModel : ViewModel() {
+    fun clearLocationError() {
+        _uiState.update { it.copy(locationError = null) }
+    }
 
-    private val databaseRepository = DatabaseRepository()
+    private fun getLocationErrorMessage(reason: LocationErrorReason, isEmulator: Boolean): String {
+        return when (reason) {
+            LocationErrorReason.PERMISSION_DENIED ->
+                "Location permission denied. Please grant location access in Settings to see nearby restaurants."
 
-    private val _uiState = MutableStateFlow(RestaurantDetailUiState())
-    val uiState: StateFlow<RestaurantDetailUiState> = _uiState.asStateFlow()
+            LocationErrorReason.LOCATION_SERVICES_DISABLED ->
+                "Location services are disabled. Please enable GPS in Settings to see nearby restaurants."
 
-    fun loadRestaurant(restaurantId: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-
-            try {
-                val restaurantResult = databaseRepository.getRestaurantById(restaurantId)
-                val reviewsResult = databaseRepository.getRatingsForRestaurant(restaurantId)
-
-                val restaurant = restaurantResult.getOrNull()
-                val reviews = reviewsResult.getOrDefault(emptyList())
-
-                _uiState.update {
-                    it.copy(
-                        restaurant = restaurant,
-                        reviews = reviews,
-                        isLoading = false
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Failed to load restaurant"
-                    )
+            LocationErrorReason.NO_LOCATION_AVAILABLE -> {
+                if (isEmulator) {
+                    "No location available. On emulator, use Extended Controls > Location to set a simulated location."
+                } else {
+                    "Could not get location. Please ensure GPS is enabled and try again outdoors."
                 }
             }
+
+            LocationErrorReason.TIMEOUT ->
+                "Location request timed out. Please try again."
+
+            LocationErrorReason.UNKNOWN ->
+                "Failed to get location. Please try again or select a city manually."
         }
     }
 }

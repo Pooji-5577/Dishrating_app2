@@ -74,11 +74,14 @@ data class HomeFeedUiState(
 data class DishRatingUiState(
     val dishName: String = "",
     val imageUri: String = "",
+    val imageBytes: ByteArray? = null,
     val rating: Float = 0f,
     val comment: String = "",
     val isSubmitting: Boolean = false,
     val isSuccess: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val xpEarned: Int? = null,
+    val showXpNotification: Boolean = false
 )
 
 /**
@@ -91,7 +94,8 @@ data class SearchUiState(
     val selectedCity: String? = null,
     val results: List<Restaurant> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val locationError: String? = null
 )
 
 /**
@@ -99,6 +103,7 @@ data class SearchUiState(
  */
 data class RestaurantDetailUiState(
     val restaurant: Restaurant? = null,
+    val dishes: List<Dish> = emptyList(),
     val reviews: List<Review> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
@@ -129,7 +134,9 @@ data class UserProgressUiState(
     val streakCount: Int = 0,
     val badges: List<Badge> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val showLevelUpAnimation: Boolean = false,
+    val newLevel: Int? = null
 )
 
 /**
@@ -141,6 +148,53 @@ sealed class PermissionState {
     data object Denied : PermissionState()
     data object PermanentlyDenied : PermissionState()
 }
+
+/**
+ * Edit profile UI state
+ */
+data class EditProfileUiState(
+    val name: String = "",
+    val bio: String = "",
+    val profilePhotoUrl: String? = null,
+    val isUploadingPhoto: Boolean = false,
+    val isSaving: Boolean = false,
+    val isSuccess: Boolean = false,
+    val errorMessage: String? = null,
+    val nameError: String? = null
+)
+
+/**
+ * Notification settings UI state
+ */
+data class NotificationSettingsUiState(
+    val settings: NotificationSettings = NotificationSettings(),
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Account settings UI state
+ */
+data class AccountSettingsUiState(
+    val email: String = "",
+    val isChangingPassword: Boolean = false,
+    val isChangingEmail: Boolean = false,
+    val isDeletingAccount: Boolean = false,
+    val showDeleteConfirmation: Boolean = false,
+    val successMessage: String? = null,
+    val errorMessage: String? = null
+)
+
+/**
+ * Privacy settings UI state
+ */
+data class PrivacySettingsUiState(
+    val settings: PrivacySettings = PrivacySettings(),
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val errorMessage: String? = null
+)
 
 /**
  * Dish capture UI state for camera capture and AI detection

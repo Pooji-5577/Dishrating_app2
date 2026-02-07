@@ -116,6 +116,9 @@ class HomeViewModel : ViewModel() {
  */
 class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
 
+    // Add AuthRepository to query database directly for fresh data
+    private val authRepository = AuthRepository()
+
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
 
@@ -128,7 +131,9 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             try {
-                val user = authViewModel.getCurrentUser()
+                // Query database directly for fresh data instead of using cached AuthViewModel user
+                // This ensures XP, level, streak, and badges are always up-to-date
+                val user = authRepository.getCurrentUser()
 
                 _uiState.update {
                     it.copy(
@@ -145,6 +150,10 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
                 }
             }
         }
+    }
+
+    fun refresh() {
+        loadProfile()
     }
 }
 
@@ -179,17 +188,24 @@ class UserProgressViewModel : ViewModel() {
                     return@launch
                 }
 
+                val oldLevel = _uiState.value.level
                 val user = authRepository.getCurrentUser()
                 val badgesResult = databaseRepository.getUserBadges(userId)
+                val newLevel = user?.level ?: 1
+
+                // Check for level up
+                val showLevelUp = newLevel > oldLevel && oldLevel > 0
 
                 _uiState.update {
                     it.copy(
                         currentXp = user?.xp ?: 0,
                         maxXp = ((user?.level ?: 1) * 100),
-                        level = user?.level ?: 1,
+                        level = newLevel,
                         streakCount = user?.streakCount ?: 0,
                         badges = badgesResult.getOrDefault(emptyList()),
-                        isLoading = false
+                        isLoading = false,
+                        showLevelUpAnimation = showLevelUp,
+                        newLevel = if (showLevelUp) newLevel else null
                     )
                 }
             } catch (e: Exception) {
@@ -201,5 +217,9 @@ class UserProgressViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    fun clearLevelUpAnimation() {
+        _uiState.update { it.copy(showLevelUpAnimation = false, newLevel = null) }
     }
 }

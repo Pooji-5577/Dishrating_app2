@@ -74,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
+import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.theme.appColors
 
 /**
@@ -85,6 +86,7 @@ import com.example.smackcheck2.ui.theme.appColors
 fun DarkDishRatingScreen(
     dishName: String,
     imageUri: String,
+    imageBytes: ByteArray? = null,
     restaurants: List<Restaurant> = emptyList(),
     nearbyRestaurants: List<Restaurant> = emptyList(),
     isLoadingRestaurants: Boolean = false,
@@ -177,27 +179,38 @@ fun DarkDishRatingScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Dish image placeholder
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(
-                                    Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFF3D3D3D),
-                                            Color(0xFF252525)
-                                        )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Restaurant,
-                                contentDescription = null,
-                                tint = appColors().TextSecondary,
-                                modifier = Modifier.size(32.dp)
+                        // Dish image - shows captured photo
+                        if (imageBytes != null) {
+                            ByteArrayImage(
+                                imageBytes = imageBytes,
+                                contentDescription = dishName,
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(RoundedCornerShape(16.dp))
                             )
+                        } else {
+                            // Fallback to placeholder if no image
+                            Box(
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                Color(0xFF3D3D3D),
+                                                Color(0xFF252525)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Restaurant,
+                                    contentDescription = null,
+                                    tint = appColors().TextSecondary,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
                         }
 
                         Spacer(modifier = Modifier.width(16.dp))
@@ -566,21 +579,35 @@ fun DarkDishRatingScreen(
                         CircularProgressIndicator(color = appColors().Primary)
                     }
                 } else {
-                    // Filter nearby restaurants
-                    val filteredNearby = nearbyRestaurants.filter {
+                    // When nearby restaurants are available (location selected), show only those
+                    // Otherwise fall back to all restaurants
+                    val primaryRestaurants = if (nearbyRestaurants.isNotEmpty()) {
+                        nearbyRestaurants
+                    } else {
+                        restaurants
+                    }
+
+                    // Filter based on search query
+                    val filteredNearby = primaryRestaurants.filter {
                         restaurantSearchQuery.isEmpty() ||
                         it.name.contains(restaurantSearchQuery, ignoreCase = true) ||
                         it.cuisine.contains(restaurantSearchQuery, ignoreCase = true)
                     }
 
-                    // Filter other restaurants (excluding nearby ones)
+                    // Only show "All Restaurants" section if no location is selected
                     val nearbyIds = nearbyRestaurants.map { it.id }.toSet()
-                    val filteredOthers = restaurants.filter { restaurant ->
-                        restaurant.id !in nearbyIds && (
-                            restaurantSearchQuery.isEmpty() ||
-                            restaurant.name.contains(restaurantSearchQuery, ignoreCase = true) ||
-                            restaurant.cuisine.contains(restaurantSearchQuery, ignoreCase = true)
-                        )
+                    val filteredOthers = if (nearbyRestaurants.isEmpty()) {
+                        // No location selected, don't show separate "All" section
+                        emptyList()
+                    } else {
+                        // Location selected, show other restaurants from database as fallback
+                        restaurants.filter { restaurant ->
+                            restaurant.id !in nearbyIds && (
+                                restaurantSearchQuery.isEmpty() ||
+                                restaurant.name.contains(restaurantSearchQuery, ignoreCase = true) ||
+                                restaurant.cuisine.contains(restaurantSearchQuery, ignoreCase = true)
+                            )
+                        }
                     }
 
                     val hasAnyResults = filteredNearby.isNotEmpty() || filteredOthers.isNotEmpty()
@@ -647,14 +674,14 @@ fun DarkDishRatingScreen(
                                 }
                             }
 
-                            // All other restaurants section
+                            // All other restaurants section (only show if no nearby restaurants)
                             if (filteredOthers.isNotEmpty()) {
                                 item {
                                     if (filteredNearby.isNotEmpty()) {
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
                                     Text(
-                                        text = "All Restaurants",
+                                        text = if (nearbyRestaurants.isEmpty()) "All Restaurants" else "Other Nearby",
                                         color = appColors().TextSecondary,
                                         fontSize = 14.sp,
                                         fontWeight = FontWeight.SemiBold,
