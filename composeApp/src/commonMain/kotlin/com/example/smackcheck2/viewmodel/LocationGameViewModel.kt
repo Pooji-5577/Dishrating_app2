@@ -21,6 +21,8 @@ import com.example.smackcheck2.platform.LocationErrorReason
 import com.example.smackcheck2.platform.LocationOperationResult
 import com.example.smackcheck2.platform.LocationResult
 import com.example.smackcheck2.platform.LocationService
+import com.example.smackcheck2.platform.PlacesService
+import com.example.smackcheck2.platform.NearbyRestaurant
 import com.example.smackcheck2.ui.screens.Achievement
 import com.example.smackcheck2.ui.screens.Challenge
 import com.example.smackcheck2.ui.screens.LeaderboardEntry
@@ -37,9 +39,12 @@ data class LocationHomeUiState(
     val isLoading: Boolean = false,
     val isDetectingLocation: Boolean = false,
     val selectedLocation: String? = null,
+    val currentLatitude: Double? = null,
+    val currentLongitude: Double? = null,
     val topRestaurants: List<Restaurant> = emptyList(),
     val topDishes: List<Dish> = emptyList(),
     val allRestaurants: List<Restaurant> = emptyList(),
+    val nearbyRestaurants: List<NearbyRestaurant> = emptyList(),
     val searchResults: List<LocationResult> = emptyList(),
     val error: String? = null,
     val locationError: String? = null
@@ -53,6 +58,7 @@ class LocationHomeViewModel : ViewModel() {
     val uiState: StateFlow<LocationHomeUiState> = _uiState.asStateFlow()
 
     private var locationService: LocationService? = null
+    private var placesService: PlacesService? = null
     private val authRepository = AuthRepository()
 
     init {
@@ -86,6 +92,10 @@ class LocationHomeViewModel : ViewModel() {
 
     fun setLocationService(service: LocationService?) {
         locationService = service
+    }
+
+    fun setPlacesService(service: PlacesService?) {
+        placesService = service
     }
 
     fun selectLocation(location: String) {
@@ -127,7 +137,13 @@ class LocationHomeViewModel : ViewModel() {
                 is LocationOperationResult.Success -> {
                     val location = result.location
                     if (location.cityName != null) {
-                        _uiState.update { it.copy(isDetectingLocation = false) }
+                        _uiState.update {
+                            it.copy(
+                                isDetectingLocation = false,
+                                currentLatitude = location.latitude,
+                                currentLongitude = location.longitude
+                            )
+                        }
                         selectLocation(location.cityName)
                     } else {
                         _uiState.update {
@@ -202,9 +218,37 @@ class LocationHomeViewModel : ViewModel() {
                 // Fetch restaurants for the selected city from Supabase
                 val restaurantsResult = databaseRepository.getRestaurantsByCity(location)
 
+                // Fetch nearby restaurants from Google Places API if location is available
+                val nearbyRestaurants = if (placesService != null && locationService != null) {
+                    try {
+                        val currentLoc = locationService?.getCurrentLocation()
+                        if (currentLoc != null) {
+                            // Update GPS coordinates in state
+                            _uiState.update {
+                                it.copy(
+                                    currentLatitude = currentLoc.latitude,
+                                    currentLongitude = currentLoc.longitude
+                                )
+                            }
+                            placesService?.findNearbyRestaurants(
+                                latitude = currentLoc.latitude,
+                                longitude = currentLoc.longitude,
+                                radiusInMeters = 5000
+                            ) ?: emptyList()
+                        } else {
+                            emptyList()
+                        }
+                    } catch (e: Exception) {
+                        println("LocationHomeViewModel: Failed to load nearby restaurants: ${e.message}")
+                        emptyList()
+                    }
+                } else {
+                    emptyList()
+                }
+
                 restaurantsResult.fold(
                     onSuccess = { restaurants ->
-                        // Get top 5 restaurants by rating
+                        // Get top 5 restaurants by rating (from database)
                         val topRestaurants = restaurants
                             .sortedByDescending { it.averageRating }
                             .take(5)
@@ -224,18 +268,23 @@ class LocationHomeViewModel : ViewModel() {
                                 topRestaurants = topRestaurants,
                                 topDishes = topDishes,
                                 allRestaurants = restaurants,
+                                nearbyRestaurants = nearbyRestaurants,
                                 error = null
                             )
                         }
                     },
                     onFailure = { error ->
+                        // Even if database fails, show nearby restaurants if available
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
-                                error = "Failed to load restaurants: ${error.message}",
+                                error = if (nearbyRestaurants.isEmpty())
+                                    "Failed to load restaurants: ${error.message}"
+                                else null,
                                 topRestaurants = emptyList(),
                                 topDishes = emptyList(),
-                                allRestaurants = emptyList()
+                                allRestaurants = emptyList(),
+                                nearbyRestaurants = nearbyRestaurants
                             )
                         }
                     }
@@ -247,7 +296,8 @@ class LocationHomeViewModel : ViewModel() {
                         error = "Error loading data: ${e.message}",
                         topRestaurants = emptyList(),
                         topDishes = emptyList(),
-                        allRestaurants = emptyList()
+                        allRestaurants = emptyList(),
+                        nearbyRestaurants = emptyList()
                     )
                 }
             }

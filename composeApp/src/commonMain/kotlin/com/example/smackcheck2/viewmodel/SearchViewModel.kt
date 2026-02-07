@@ -8,6 +8,9 @@ import com.example.smackcheck2.model.Review
 import com.example.smackcheck2.model.RestaurantDetailUiState
 import com.example.smackcheck2.model.SearchUiState
 import com.example.smackcheck2.model.ManualRestaurantUiState
+import com.example.smackcheck2.platform.LocationService
+import com.example.smackcheck2.platform.PlacesService
+import com.example.smackcheck2.platform.NearbyRestaurant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,7 +20,10 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel for Search screen
  */
-class SearchViewModel : ViewModel() {
+class SearchViewModel(
+    private val locationService: LocationService? = null,
+    private val placesService: PlacesService? = null
+) : ViewModel() {
 
     private val databaseRepository = DatabaseRepository()
 
@@ -69,6 +75,8 @@ class SearchViewModel : ViewModel() {
 
             try {
                 val currentState = _uiState.value
+
+                // Fetch restaurants from database
                 val result = databaseRepository.searchRestaurants(
                     query = currentState.query.takeIf { it.isNotBlank() },
                     cuisines = currentState.selectedCuisines,
@@ -76,20 +84,107 @@ class SearchViewModel : ViewModel() {
                     minRating = currentState.selectedRating
                 )
 
+                // Fetch nearby restaurants from Google Places API
+                val nearbyRestaurants = if (placesService != null && locationService != null) {
+                    try {
+                        val currentLoc = locationService.getCurrentLocation()
+                        if (currentLoc != null) {
+                            val nearby = placesService.findNearbyRestaurants(
+                                latitude = currentLoc.latitude,
+                                longitude = currentLoc.longitude,
+                                radiusInMeters = 5000
+                            )
+                            // Convert NearbyRestaurant to Restaurant
+                            nearby.map { nearbyRestaurant ->
+                                Restaurant(
+                                    id = nearbyRestaurant.id,
+                                    name = nearbyRestaurant.name,
+                                    city = nearbyRestaurant.address ?: "Unknown",
+                                    cuisine = "Restaurant",
+                                    imageUrls = emptyList(),
+                                    averageRating = nearbyRestaurant.rating?.toFloat() ?: 0f,
+                                    reviewCount = nearbyRestaurant.userRatingsTotal ?: 0,
+                                    latitude = nearbyRestaurant.latitude,
+                                    longitude = nearbyRestaurant.longitude
+                                )
+                            }
+                        } else {
+                            emptyList()
+                        }
+                    } catch (e: Exception) {
+                        println("SearchViewModel: Failed to load nearby restaurants: ${e.message}")
+                        emptyList()
+                    }
+                } else {
+                    emptyList()
+                }
+
                 result.fold(
-                    onSuccess = { restaurants ->
+                    onSuccess = { databaseRestaurants ->
+                        // Combine database and nearby restaurants
+                        val combinedRestaurants = (databaseRestaurants + nearbyRestaurants)
+                            .distinctBy { it.id }
+                            // Apply filters to nearby restaurants as well
+                            .filter { restaurant ->
+                                // Apply query filter
+                                val matchesQuery = if (currentState.query.isNotBlank()) {
+                                    restaurant.name.contains(currentState.query, ignoreCase = true) ||
+                                    restaurant.cuisine.contains(currentState.query, ignoreCase = true)
+                                } else {
+                                    true
+                                }
+
+                                // Apply cuisine filter
+                                val matchesCuisine = if (currentState.selectedCuisines.isNotEmpty()) {
+                                    currentState.selectedCuisines.any { cuisine ->
+                                        restaurant.cuisine.contains(cuisine, ignoreCase = true)
+                                    }
+                                } else {
+                                    true
+                                }
+
+                                // Apply rating filter
+                                val matchesRating = if (currentState.selectedRating != null) {
+                                    restaurant.averageRating >= currentState.selectedRating
+                                } else {
+                                    true
+                                }
+
+                                matchesQuery && matchesCuisine && matchesRating
+                            }
+
                         _uiState.update {
                             it.copy(
-                                results = restaurants,
+                                results = combinedRestaurants,
                                 isLoading = false
                             )
                         }
                     },
                     onFailure = { error ->
+                        // Even if database fails, show nearby restaurants if available
+                        val filteredNearby = nearbyRestaurants.filter { restaurant ->
+                            val matchesQuery = if (currentState.query.isNotBlank()) {
+                                restaurant.name.contains(currentState.query, ignoreCase = true)
+                            } else {
+                                true
+                            }
+
+                            val matchesRating = if (currentState.selectedRating != null) {
+                                restaurant.averageRating >= currentState.selectedRating
+                            } else {
+                                true
+                            }
+
+                            matchesQuery && matchesRating
+                        }
+
                         _uiState.update {
                             it.copy(
+                                results = filteredNearby,
                                 isLoading = false,
-                                errorMessage = error.message ?: "Search failed"
+                                errorMessage = if (filteredNearby.isEmpty())
+                                    error.message ?: "Search failed"
+                                else null
                             )
                         }
                     }

@@ -78,6 +78,15 @@ import com.example.smackcheck2.viewmodel.RegisterViewModel
 import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
 import com.example.smackcheck2.viewmodel.SearchViewModel
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
+import com.example.smackcheck2.viewmodel.EditProfileViewModel
+import com.example.smackcheck2.viewmodel.NotificationSettingsViewModel
+import com.example.smackcheck2.viewmodel.AccountSettingsViewModel
+import com.example.smackcheck2.viewmodel.PrivacySettingsViewModel
+import com.example.smackcheck2.data.repository.PreferencesRepository
+import com.example.smackcheck2.ui.screens.EditProfileScreen
+import com.example.smackcheck2.ui.screens.NotificationSettingsScreen
+import com.example.smackcheck2.ui.screens.AccountSettingsScreen
+import com.example.smackcheck2.ui.screens.PrivacySettingsScreen
 
 /**
  * Navigation state holder for managing current screen with Compose state
@@ -152,7 +161,7 @@ class NavigationState {
  * Manages navigation between all screens
  */
 @Composable
-fun SmackCheckNavHost() {
+fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     val navigationState = remember { NavigationState() }
     val authViewModel: AuthViewModel = viewModel { AuthViewModel() }
     val authState by authViewModel.authState.collectAsState()
@@ -160,10 +169,12 @@ fun SmackCheckNavHost() {
     // Shared LocationHomeViewModel across all screens
     val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
     val locationService = LocalLocationService.current
+    val placesService = LocalPlacesService.current
 
-    // Set location service once at the top level
-    androidx.compose.runtime.LaunchedEffect(locationService) {
+    // Set location and places service once at the top level
+    androidx.compose.runtime.LaunchedEffect(locationService, placesService) {
         locationHomeViewModel.setLocationService(locationService)
+        locationHomeViewModel.setPlacesService(placesService)
     }
 
     // Handle system back button press
@@ -246,6 +257,12 @@ fun SmackCheckNavHost() {
         
         is Screen.Profile -> {
             val profileViewModel: ProfileViewModel = viewModel { ProfileViewModel(authViewModel) }
+
+            // Refresh profile data every time screen is shown (to show updated XP)
+            LaunchedEffect(Unit) {
+                profileViewModel.refresh()
+            }
+
             DarkProfileScreen(
                 viewModel = profileViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
@@ -263,31 +280,55 @@ fun SmackCheckNavHost() {
 
         // Edit Profile Screen
         is Screen.EditProfile -> {
-            EditProfilePlaceholderScreen(
+            val currentUser = when (val state = authState) {
+                is AuthState.Authenticated -> state.user
+                else -> null
+            }
+            val editProfileViewModel: EditProfileViewModel = viewModel {
+                EditProfileViewModel(initialUser = currentUser)
+            }
+
+            EditProfileScreen(
+                viewModel = editProfileViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
             )
         }
 
         // Notification Settings Screen
         is Screen.NotificationSettings -> {
-            SettingsPlaceholderScreen(
-                title = "Notifications",
+            val notificationSettingsViewModel: NotificationSettingsViewModel = viewModel {
+                NotificationSettingsViewModel(preferencesRepository)
+            }
+
+            NotificationSettingsScreen(
+                viewModel = notificationSettingsViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
             )
         }
 
         // Account Settings Screen
         is Screen.AccountSettings -> {
-            SettingsPlaceholderScreen(
-                title = "Account Settings",
-                onNavigateBack = { navigationState.navigateBack() }
+            val accountSettingsViewModel: AccountSettingsViewModel = viewModel {
+                AccountSettingsViewModel()
+            }
+
+            AccountSettingsScreen(
+                viewModel = accountSettingsViewModel,
+                onNavigateBack = { navigationState.navigateBack() },
+                onAccountDeleted = {
+                    navigationState.navigateTo(Screen.Login)
+                }
             )
         }
 
         // Privacy Settings Screen
         is Screen.PrivacySettings -> {
-            SettingsPlaceholderScreen(
-                title = "Privacy & Security",
+            val privacySettingsViewModel: PrivacySettingsViewModel = viewModel {
+                PrivacySettingsViewModel(preferencesRepository)
+            }
+
+            PrivacySettingsScreen(
+                viewModel = privacySettingsViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
             )
         }
@@ -347,7 +388,9 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.Search -> {
-            val searchViewModel: SearchViewModel = viewModel { SearchViewModel() }
+            val searchViewModel: SearchViewModel = viewModel {
+                SearchViewModel(locationService, placesService)
+            }
             DarkSearchScreen(
                 viewModel = searchViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
@@ -361,7 +404,10 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.RestaurantDetail -> {
-            val restaurantDetailViewModel: RestaurantDetailViewModel = viewModel { RestaurantDetailViewModel() }
+            val placesService = LocalPlacesService.current
+            val restaurantDetailViewModel: RestaurantDetailViewModel = viewModel {
+                RestaurantDetailViewModel(placesService = placesService)
+            }
             RestaurantDetailScreen(
                 viewModel = restaurantDetailViewModel,
                 restaurantId = navigationState.restaurantId,
@@ -448,9 +494,28 @@ fun SmackCheckNavHost() {
         
         is Screen.AllRestaurants -> {
             val uiState by locationHomeViewModel.uiState.collectAsState()
+
+            // Convert nearby restaurants to Restaurant format and combine with database restaurants
+            val nearbyAsRestaurants = uiState.nearbyRestaurants.map { nearby ->
+                Restaurant(
+                    id = nearby.id,
+                    name = nearby.name,
+                    city = uiState.selectedLocation ?: "Unknown",
+                    cuisine = "Restaurant", // Default cuisine for nearby restaurants
+                    imageUrls = emptyList(),
+                    averageRating = nearby.rating?.toFloat() ?: 0f,
+                    reviewCount = nearby.userRatingsTotal ?: 0,
+                    latitude = nearby.latitude,
+                    longitude = nearby.longitude
+                )
+            }
+
+            // Combine database restaurants and nearby restaurants
+            val combinedRestaurants = (uiState.allRestaurants + nearbyAsRestaurants).distinctBy { it.id }
+
             AllRestaurantsScreen(
                 location = uiState.selectedLocation ?: "Unknown",
-                restaurants = uiState.allRestaurants,
+                restaurants = combinedRestaurants,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
                     navigationState.navigateToWithArgs(
@@ -493,6 +558,12 @@ fun SmackCheckNavHost() {
         
         is Screen.Game -> {
             val gameViewModel: GameViewModel = viewModel { GameViewModel() }
+
+            // Refresh game data every time screen is shown (to show updated XP and leaderboard)
+            LaunchedEffect(Unit) {
+                gameViewModel.loadGameData()
+            }
+
             DarkGameScreen(
                 viewModel = gameViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
@@ -519,8 +590,29 @@ fun SmackCheckNavHost() {
 
         is Screen.DarkHome -> {
             val uiState by locationHomeViewModel.uiState.collectAsState()
+
+            // Convert nearby restaurants to Restaurant format
+            val nearbyAsRestaurants = uiState.nearbyRestaurants.map { nearby ->
+                Restaurant(
+                    id = nearby.id,
+                    name = nearby.name,
+                    city = uiState.selectedLocation ?: "Unknown",
+                    cuisine = "Restaurant",
+                    imageUrls = emptyList(),
+                    averageRating = nearby.rating?.toFloat() ?: 0f,
+                    reviewCount = nearby.userRatingsTotal ?: 0,
+                    latitude = nearby.latitude,
+                    longitude = nearby.longitude
+                )
+            }
+
+            // Combine database and nearby restaurants
+            val combinedRestaurants = (uiState.allRestaurants + nearbyAsRestaurants).distinctBy { it.id }
+
             DarkHomeScreen(
                 currentLocation = uiState.selectedLocation ?: "Select Location",
+                allRestaurants = combinedRestaurants,
+                allDishes = uiState.topDishes,
                 onLocationClick = { navigationState.navigateTo(Screen.LocationSelection) },
                 onDishClick = { dishId ->
                     navigationState.navigateToWithArgs(
@@ -633,9 +725,10 @@ fun SmackCheckNavHost() {
                 }
             }
 
-            // Navigate back to home on success
+            // Navigate back to home on success (after showing reward for 6 seconds)
             LaunchedEffect(ratingUiState.isSuccess) {
                 if (ratingUiState.isSuccess) {
+                    kotlinx.coroutines.delay(6000) // Show XP reward for 6 seconds
                     navigationState.popToRoot()
                 }
             }
@@ -643,6 +736,7 @@ fun SmackCheckNavHost() {
             DarkDishRatingScreen(
                 dishName = navigationState.dishName,
                 imageUri = navigationState.imageUri,
+                imageBytes = ratingUiState.imageBytes,
                 restaurants = allRestaurants,
                 nearbyRestaurants = nearbyRestaurants,
                 isLoadingRestaurants = isLoadingRestaurants,
