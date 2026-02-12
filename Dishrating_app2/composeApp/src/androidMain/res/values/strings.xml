@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Smackcheck2</string>
+
+    <!-- Facebook SDK Configuration -->
+    <!-- TODO: Replace with your actual Facebook App ID from developers.facebook.com -->
+    <string name="facebook_app_id">YOUR_FACEBOOK_APP_ID</string>
+
+    <!-- TODO: Replace with your actual Facebook Client Token from developers.facebook.com -->
+    <string name="facebook_client_token">YOUR_FACEBOOK_CLIENT_TOKEN</string>
+
+    <!-- Facebook Login Protocol Scheme (fb + your App ID) -->
+    <string name="fb_login_protocol_scheme">fbYOUR_FACEBOOK_APP_ID</string>
+</resources>
