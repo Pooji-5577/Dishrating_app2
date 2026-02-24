@@ -23,6 +23,7 @@ data class DishDetectionResult(
     val alternatives: List<String>,
     val cuisine: String?,
     val isAIDetected: Boolean,
+    val isFood: Boolean = true,
     val debugInfo: String? = null
 )
 
@@ -194,7 +195,8 @@ class AIDetectionRepository {
                 confidence = parsed.confidence.coerceIn(0f, 1f),
                 alternatives = parsed.alternatives.filter { it.isNotBlank() },
                 cuisine = parsed.cuisine?.takeIf { it.isNotBlank() },
-                isAIDetected = dishName != "Unknown Dish" && parsed.confidence > 0.1f
+                isAIDetected = dishName != "Unknown Dish" && dishName != "NOT_FOOD" && parsed.confidence > 0.1f,
+                isFood = parsed.is_food && parsed.dish_name != "NOT_FOOD"
             )
         } catch (e: Exception) {
             println("AIDetection: Parse error: ${e.message}")
@@ -252,7 +254,8 @@ class AIDetectionRepository {
             confidence = 0f,
             alternatives = emptyList(),
             cuisine = null,
-            isAIDetected = false
+            isAIDetected = false,
+            isFood = dishName != "NOT_FOOD"
         )
     }
 
@@ -270,8 +273,11 @@ Guidelines:
 3. confidence: A number between 0.0 and 1.0 indicating how certain you are
 4. alternatives: 1-3 other possible names for the dish if you're not 100% sure
 
-If the image doesn't clearly show food or you cannot identify it, respond with:
-{"dish_name":"Unknown Dish","cuisine":"Unknown","confidence":0.0,"alternatives":[]}
+If the image contains food but you genuinely cannot identify the specific dish:
+{"dish_name":"Unknown Dish","is_food":true,"cuisine":"Unknown","confidence":0.0,"alternatives":[]}
+
+If the image does NOT contain food (person, animal, vehicle, object, landscape, etc.):
+{"dish_name":"NOT_FOOD","is_food":false,"confidence":1.0,"cuisine":null,"alternatives":[]}
 
 Remember: Output ONLY the JSON, nothing else."""
     }
@@ -332,5 +338,6 @@ private data class DetectionResponse(
     val dish_name: String,
     val cuisine: String? = null,
     val confidence: Float = 0f,
-    val alternatives: List<String> = emptyList()
+    val alternatives: List<String> = emptyList(),
+    val is_food: Boolean = true
 )

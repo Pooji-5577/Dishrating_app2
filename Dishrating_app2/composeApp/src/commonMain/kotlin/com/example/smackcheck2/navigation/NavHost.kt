@@ -48,6 +48,7 @@ import com.example.smackcheck2.ui.screens.DishRatingScreen
 import com.example.smackcheck2.ui.screens.GameScreen
 import com.example.smackcheck2.ui.screens.LocationHomeScreen
 import com.example.smackcheck2.ui.screens.LocationPermissionScreen
+import com.example.smackcheck2.ui.screens.LocationReviewsScreen
 import com.example.smackcheck2.ui.screens.LocationSelectionScreen
 import com.example.smackcheck2.ui.screens.LoginScreen
 import com.example.smackcheck2.ui.screens.ManualRestaurantEntryScreen
@@ -572,7 +573,19 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 }
             )
         }
-        
+
+        is Screen.LocationReviews -> {
+            val uiState by locationHomeViewModel.uiState.collectAsState()
+            val locationReviewsViewModel: com.example.smackcheck2.viewmodel.LocationReviewsViewModel =
+                viewModel { com.example.smackcheck2.viewmodel.LocationReviewsViewModel() }
+
+            LocationReviewsScreen(
+                viewModel = locationReviewsViewModel,
+                location = uiState.selectedLocation,
+                onNavigateBack = { navigationState.navigateBack() }
+            )
+        }
+
         is Screen.Game -> {
             val gameViewModel: GameViewModel = viewModel { GameViewModel() }
 
@@ -650,7 +663,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     navigationState.clearRestaurantId()
                     navigationState.navigateTo(Screen.DarkDishCapture)
                 },
-                onTopDishesClick = { navigationState.navigateTo(Screen.TopDishes) },
+                onTopDishesClick = { navigationState.navigateTo(Screen.LocationReviews) },
                 onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
                 onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) }
             )

@@ -475,6 +475,89 @@ class DatabaseRepository {
         }
     }
 
+    /**
+     * Get all reviews filtered by location with full details
+     */
+    suspend fun getAllReviewsByLocation(location: String?, sortByRating: Boolean = true): Result<List<Review>> {
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<RatingDto>()
+
+            val reviews = ratings.mapNotNull { rating ->
+                try {
+                    val profile = postgrest["profiles"]
+                        .select {
+                            filter {
+                                eq("id", rating.userId)
+                            }
+                        }
+                        .decodeSingleOrNull<ProfileDto>()
+
+                    val dish = postgrest["dishes"]
+                        .select {
+                            filter {
+                                eq("id", rating.dishId)
+                            }
+                        }
+                        .decodeSingleOrNull<DishDto>()
+
+                    val restaurant = postgrest["restaurants"]
+                        .select {
+                            filter {
+                                eq("id", rating.restaurantId)
+                            }
+                        }
+                        .decodeSingleOrNull<RestaurantDto>()
+
+                    // Filter by location if provided
+                    if (location != null && restaurant?.city != location) {
+                        return@mapNotNull null
+                    }
+
+                    // Parse timestamp from ISO string
+                    val timestamp = try {
+                        rating.createdAt?.let { Instant.parse(it).toEpochMilliseconds() } ?: 0L
+                    } catch (e: Exception) {
+                        0L
+                    }
+
+                    Review(
+                        id = rating.id ?: return@mapNotNull null,
+                        userId = rating.userId,
+                        userName = profile?.name ?: "Unknown",
+                        userProfileUrl = profile?.profilePhotoUrl,
+                        dishId = rating.dishId,
+                        dishName = dish?.name ?: "Unknown Dish",
+                        dishImageUrl = rating.imageUrl ?: dish?.imageUrl,
+                        restaurantName = restaurant?.name ?: "Unknown Restaurant",
+                        rating = rating.rating,
+                        comment = rating.comment,
+                        likesCount = rating.likesCount,
+                        commentsCount = 0,
+                        isLiked = false,
+                        createdAt = timestamp
+                    )
+                } catch (e: Exception) {
+                    null
+                }
+            }
+
+            // Sort by rating or date
+            val sortedReviews = if (sortByRating) {
+                reviews.sortedByDescending { it.rating }
+            } else {
+                reviews.sortedByDescending { it.createdAt }
+            }
+
+            Result.success(sortedReviews)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ==================== LIKES ====================
 
     /**

@@ -55,7 +55,8 @@ class DishCaptureViewModel : ViewModel() {
                         isAIDetected = result.isAIDetected,
                         editedName = result.dishName,
                         debugInfo = result.debugInfo,
-                        showConfirmation = true
+                        showConfirmation = result.isFood,
+                        showNotFoodError = !result.isFood
                     )
                 }
             } catch (e: Exception) {

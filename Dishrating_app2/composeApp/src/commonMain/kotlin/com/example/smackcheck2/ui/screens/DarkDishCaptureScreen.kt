@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.platform.RequestCameraPermission
 import com.example.smackcheck2.ui.components.ByteArrayImage
+import com.example.smackcheck2.ui.components.NotADishErrorDialog
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishCaptureViewModel
 import kotlinx.coroutines.launch
@@ -162,6 +163,14 @@ fun DarkDishCaptureScreen(
                         )
                     }
                 )
+
+                // Show non-food error dialog
+                if (uiState.showNotFoodError) {
+                    NotADishErrorDialog(
+                        onRetry = { viewModel.retake() },
+                        onCancel = onNavigateBack
+                    )
+                }
             }
         }
     }
