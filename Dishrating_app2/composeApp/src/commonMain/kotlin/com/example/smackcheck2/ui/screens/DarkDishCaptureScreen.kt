@@ -83,9 +83,9 @@ fun DarkDishCaptureScreen(
             if (granted) {
                 // Permission granted, launch camera
                 coroutineScope.launch {
-                    imagePicker?.captureImage()?.let { result ->
-                        viewModel.onImageCaptured(result)
-                    }
+                    val result = imagePicker?.captureImage()
+                    println("DishCaptureScreen: camera captureImage returned - result=${if (result != null) "bytes=${result.bytes.size}, mimeType=${result.mimeType}" else "NULL"}")
+                    if (result != null) { viewModel.onImageCaptured(result) }
                 }
             }
         }
@@ -130,9 +130,9 @@ fun DarkDishCaptureScreen(
                         },
                         onGalleryClick = {
                             coroutineScope.launch {
-                                imagePicker?.pickFromGallery()?.let { result ->
-                                    viewModel.onImageCaptured(result)
-                                }
+                                val result = imagePicker?.pickFromGallery()
+                                println("DishCaptureScreen: gallery pickFromGallery returned - result=${if (result != null) "bytes=${result.bytes.size}, mimeType=${result.mimeType}" else "NULL"}")
+                                if (result != null) { viewModel.onImageCaptured(result) }
                             }
                         },
                         imagePickerAvailable = imagePicker != null
@@ -561,6 +561,16 @@ private fun ImagePreviewWithAI(
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
+
+                    if (debugInfo != null) {
+                        Text(
+                            text = debugInfo,
+                            color = Color.Gray,
+                            fontSize = 10.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        )
+                    }
 
                     // Action buttons
                     Row(

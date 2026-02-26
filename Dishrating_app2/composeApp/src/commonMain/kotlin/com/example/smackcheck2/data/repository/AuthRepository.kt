@@ -174,25 +174,37 @@ class AuthRepository {
                     val firebaseUser = result.user
 
                     // Get or create user profile in Supabase
-                    var profile = supabaseClient.postgrest["profiles"]
-                        .select {
-                            filter {
-                                eq("id", firebaseUser.uid)
+                    val profile = try {
+                        var p = supabaseClient.postgrest["profiles"]
+                            .select {
+                                filter {
+                                    eq("id", firebaseUser.uid)
+                                }
                             }
-                        }
-                        .decodeSingleOrNull<ProfileDto>()
+                            .decodeSingleOrNull<ProfileDto>()
 
-                    if (profile == null) {
-                        // Create profile for new Google user
-                        val newProfile = ProfileDto(
+                        if (p == null) {
+                            // Create profile for new Google user
+                            val newProfile = ProfileDto(
+                                id = firebaseUser.uid,
+                                name = firebaseUser.displayName
+                                    ?: firebaseUser.email?.substringBefore("@")
+                                    ?: "User",
+                                email = firebaseUser.email ?: ""
+                            )
+                            try { supabaseClient.postgrest["profiles"].insert(newProfile) } catch (_: Exception) {}
+                            p = newProfile
+                        }
+                        p
+                    } catch (e: Exception) {
+                        println("AuthRepository: Supabase profile fetch failed (${e.message}), using Firebase data")
+                        ProfileDto(
                             id = firebaseUser.uid,
                             name = firebaseUser.displayName
                                 ?: firebaseUser.email?.substringBefore("@")
                                 ?: "User",
                             email = firebaseUser.email ?: ""
                         )
-                        supabaseClient.postgrest["profiles"].insert(newProfile)
-                        profile = newProfile
                     }
 
                     Result.success(profile.toUser())

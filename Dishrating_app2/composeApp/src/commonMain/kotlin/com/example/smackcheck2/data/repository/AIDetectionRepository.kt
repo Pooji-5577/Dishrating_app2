@@ -3,6 +3,7 @@ package com.example.smackcheck2.data.repository
 import com.example.smackcheck2.data.SupabaseConfig
 import io.ktor.client.*
 import io.ktor.client.call.*
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
@@ -42,6 +43,11 @@ class AIDetectionRepository {
     private val httpClient = HttpClient {
         install(ContentNegotiation) {
             json(json)
+        }
+        install(HttpTimeout) {
+            requestTimeoutMillis = 60_000L
+            connectTimeoutMillis = 30_000L
+            socketTimeoutMillis = 60_000L
         }
     }
 
@@ -106,7 +112,7 @@ class AIDetectionRepository {
                 )
             )
 
-            // Use gemini-3-flash-preview for image analysis (newer model)
+            // Use gemini-3-flash-preview for image analysis
             val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=$apiKey"
 
             println("AIDetection: Sending request to Gemini API (gemini-3-flash-preview)...")

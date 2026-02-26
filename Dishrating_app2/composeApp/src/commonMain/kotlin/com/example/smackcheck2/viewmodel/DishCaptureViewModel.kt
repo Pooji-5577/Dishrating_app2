@@ -26,6 +26,7 @@ class DishCaptureViewModel : ViewModel() {
      * Triggers AI detection automatically
      */
     fun onImageCaptured(imageResult: ImageResult) {
+        println("DishCaptureViewModel: onImageCaptured called - bytes=${imageResult.bytes.size}, mimeType=${imageResult.mimeType}")
         _uiState.update {
             it.copy(
                 imageUri = imageResult.uri,
@@ -38,6 +39,7 @@ class DishCaptureViewModel : ViewModel() {
         }
 
         // Start AI detection
+        println("DishCaptureViewModel: Starting AI detection coroutine")
         viewModelScope.launch {
             try {
                 val result = aiDetectionRepository.detectDish(
@@ -45,6 +47,8 @@ class DishCaptureViewModel : ViewModel() {
                     mimeType = imageResult.mimeType
                 )
 
+                println("DishCaptureViewModel: AI detection complete - dishName=${result.dishName}, isFood=${result.isFood}, confidence=${result.confidence}, isAIDetected=${result.isAIDetected}, debugInfo=${result.debugInfo}")
+                println("DishCaptureViewModel: Setting UI state - showConfirmation=${result.isFood}, showNotFoodError=${!result.isFood}")
                 _uiState.update {
                     it.copy(
                         isAnalyzing = false,
@@ -60,6 +64,7 @@ class DishCaptureViewModel : ViewModel() {
                     )
                 }
             } catch (e: Exception) {
+                println("DishCaptureViewModel: EXCEPTION caught - ${e::class.simpleName}: ${e.message}")
                 _uiState.update {
                     it.copy(
                         isAnalyzing = false,
