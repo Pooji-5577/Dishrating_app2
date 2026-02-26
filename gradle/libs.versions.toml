@@ -43,6 +43,7 @@ supabase-gotrue = { module = "io.github.jan-tennert.supabase:auth-kt", version.r
 supabase-postgrest = { module = "io.github.jan-tennert.supabase:postgrest-kt", version.ref = "supabase" }
 supabase-storage = { module = "io.github.jan-tennert.supabase:storage-kt", version.ref = "supabase" }
 supabase-realtime = { module = "io.github.jan-tennert.supabase:realtime-kt", version.ref = "supabase" }
+supabase-functions = { module = "io.github.jan-tennert.supabase:functions-kt", version.ref = "supabase" }
 supabase-ktor-android = { module = "io.ktor:ktor-client-android", version.ref = "ktor" }
 supabase-ktor-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 # Google Maps & Location

@@ -70,6 +70,7 @@ kotlin {
             implementation(libs.supabase.postgrest)
             implementation(libs.supabase.storage)
             implementation(libs.supabase.realtime)
+            implementation(libs.supabase.functions)
             // Serialization
             implementation(libs.kotlinx.serialization.json)
         }
@@ -115,8 +116,8 @@ android {
         buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"${getConfigProperty("GOOGLE_MAPS_API_KEY")}\"")
         manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = getConfigProperty("GOOGLE_MAPS_API_KEY")
 
-        // Gemini API key for dish detection
-        buildConfigField("String", "GEMINI_API_KEY", "\"${getConfigProperty("GEMINI_API_KEY")}\"")
+        // Note: GEMINI_API_KEY is no longer needed client-side
+        // AI dish detection now uses Supabase Edge Functions with the key stored server-side
     }
     packaging {
         resources {
