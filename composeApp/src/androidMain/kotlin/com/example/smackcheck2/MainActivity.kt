@@ -1,5 +1,6 @@
 package com.example.smackcheck2
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
@@ -10,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.smackcheck2.data.SupabaseClientProvider
+import io.github.jan.supabase.auth.handleDeeplinks
 import com.example.smackcheck2.platform.GeofencingService
 import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.platform.LocationService
@@ -21,9 +23,16 @@ class MainActivity : ComponentActivity() {
     // ImagePicker must be created at Activity level for ActivityResult APIs
     private lateinit var imagePicker: ImagePicker
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        SupabaseClientProvider.client.handleDeeplinks(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Initialize Supabase session early for session restoration
         SupabaseClientProvider.initializeSession()
+        // Handle deep link if app was launched via OAuth redirect
+        SupabaseClientProvider.client.handleDeeplinks(intent)
 
         // ImagePicker must be created before setContent for ActivityResult registration
         imagePicker = ImagePicker(this)

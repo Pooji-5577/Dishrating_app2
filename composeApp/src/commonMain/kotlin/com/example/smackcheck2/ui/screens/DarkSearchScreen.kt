@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Search
@@ -53,7 +54,8 @@ import com.example.smackcheck2.viewmodel.SearchViewModel
 fun DarkSearchScreen(
     viewModel: SearchViewModel,
     onNavigateBack: () -> Unit,
-    onRestaurantClick: (String) -> Unit
+    onRestaurantClick: (String) -> Unit,
+    onAddRestaurantClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val themeColors = appColors()
@@ -74,6 +76,15 @@ fun DarkSearchScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = themeColors.TextPrimary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onAddRestaurantClick) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add Restaurant",
+                            tint = themeColors.Primary
                         )
                     }
                 },

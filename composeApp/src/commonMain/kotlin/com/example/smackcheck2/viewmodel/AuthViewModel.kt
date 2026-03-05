@@ -6,7 +6,8 @@ import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.model.User
-import kotlinx.coroutines.delay
+import io.github.jan.supabase.auth.SessionStatus
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,27 +24,40 @@ class AuthViewModel : ViewModel() {
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
 
     init {
-        // Initialize session from storage
-        SupabaseClientProvider.initializeSession()
-        checkAuthState()
+        observeSessionStatus()
     }
 
-    private fun checkAuthState() {
+    private fun observeSessionStatus() {
         viewModelScope.launch {
-            try {
-                // Small delay to allow session to load from storage
-                delay(500)
-                val user = authRepository.getCurrentUser()
-                _authState.value = if (user != null) {
-                    println("AuthViewModel: User restored from session: ${user.email}")
-                    AuthState.Authenticated(user)
-                } else {
-                    println("AuthViewModel: No saved session found")
-                    AuthState.Unauthenticated
+            SupabaseClientProvider.client.auth.sessionStatus.collect { status ->
+                when (status) {
+                    is SessionStatus.Authenticated -> {
+                        try {
+                            val user = authRepository.getCurrentUser()
+                            if (user != null) {
+                                println("AuthViewModel: Session authenticated, user: ${user.email}")
+                                _authState.value = AuthState.Authenticated(user)
+                            } else {
+                                _authState.value = AuthState.Unauthenticated
+                            }
+                        } catch (e: Exception) {
+                            println("AuthViewModel: Error getting user after auth: ${e.message}")
+                            _authState.value = AuthState.Unauthenticated
+                        }
+                    }
+                    is SessionStatus.NotAuthenticated -> {
+                        println("AuthViewModel: Not authenticated")
+                        _authState.value = AuthState.Unauthenticated
+                    }
+                    is SessionStatus.LoadingFromStorage -> {
+                        println("AuthViewModel: Loading session from storage")
+                        // Keep Unknown state while loading
+                    }
+                    is SessionStatus.NetworkError -> {
+                        println("AuthViewModel: Network error loading session")
+                        _authState.value = AuthState.Unauthenticated
+                    }
                 }
-            } catch (e: Exception) {
-                println("AuthViewModel: Error checking auth state: ${e.message}")
-                _authState.value = AuthState.Unauthenticated
             }
         }
     }

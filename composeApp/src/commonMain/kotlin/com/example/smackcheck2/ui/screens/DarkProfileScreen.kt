@@ -48,6 +48,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +68,8 @@ fun DarkProfileScreen(
     onNavigateToGames: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToAccount: () -> Unit = {},
-    onNavigateToPrivacy: () -> Unit = {}
+    onNavigateToPrivacy: () -> Unit = {},
+    onNavigateToProgress: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val themeState = LocalThemeState.current
@@ -149,7 +151,11 @@ fun DarkProfileScreen(
 
             // Stats row
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onNavigateToProgress() }
+                    .padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 ProfileStatItemThemed(value = "${user?.followersCount ?: 0}", label = "Followers")

@@ -296,7 +296,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onNavigateToGames = { navigationState.navigateTo(Screen.Game) },
                 onNavigateToNotifications = { navigationState.navigateTo(Screen.NotificationSettings) },
                 onNavigateToAccount = { navigationState.navigateTo(Screen.AccountSettings) },
-                onNavigateToPrivacy = { navigationState.navigateTo(Screen.PrivacySettings) }
+                onNavigateToPrivacy = { navigationState.navigateTo(Screen.PrivacySettings) },
+                onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) }
             )
         }
 
@@ -450,7 +451,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         Screen.RestaurantDetail,
                         "restaurantId" to restaurantId
                     )
-                }
+                },
+                onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) }
             )
         }
         
@@ -683,7 +685,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
                 onTopDishesClick = { navigationState.navigateTo(Screen.TopDishes) },
                 onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
-                onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) }
+                onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) },
+                onSocialFeedClick = { navigationState.navigateTo(Screen.SocialFeed) },
+                onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) }
             )
         }
         

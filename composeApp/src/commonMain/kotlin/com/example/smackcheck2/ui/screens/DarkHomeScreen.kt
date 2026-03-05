@@ -27,15 +27,20 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -86,6 +91,8 @@ fun DarkHomeScreen(
     onTopDishesClick: () -> Unit = {},
     onTopRestaurantsClick: () -> Unit = {},
     onNearbyRestaurantsClick: () -> Unit = {},
+    onSocialFeedClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = appColors()
@@ -222,6 +229,11 @@ fun DarkHomeScreen(
             { Icon(Icons.Outlined.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) }
         ),
         NavItem(
+            "Feed",
+            { Icon(Icons.Filled.People, contentDescription = null, modifier = Modifier.size(24.dp)) },
+            { Icon(Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(24.dp)) }
+        ),
+        NavItem(
             "Profile",
             { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) },
             { Icon(Icons.Outlined.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) }
@@ -243,7 +255,8 @@ fun DarkHomeScreen(
                             when (index) {
                                 1 -> onSearchClick()
                                 2 -> onCameraClick()
-                                3 -> onProfileClick()
+                                3 -> onSocialFeedClick()
+                                4 -> onProfileClick()
                             }
                         },
                         icon = {
@@ -275,14 +288,31 @@ fun DarkHomeScreen(
                 .background(themeColors.Background),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            // Location Header
+            // Location Header + Notifications Bell
             item {
-                LocationHeader(
-                    locationType = "Location",
-                    address = currentLocation,
-                    onLocationClick = onLocationClick,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LocationHeader(
+                        locationType = "Location",
+                        address = currentLocation,
+                        onLocationClick = onLocationClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                    IconButton(onClick = onNotificationsClick) {
+                        Icon(
+                            imageVector = Icons.Outlined.Notifications,
+                            contentDescription = "Notifications",
+                            tint = themeColors.TextPrimary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
             }
             
             // Search Bar
