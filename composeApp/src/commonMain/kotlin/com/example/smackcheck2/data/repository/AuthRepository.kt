@@ -30,6 +30,39 @@ class AuthRepository {
     private val auth = client.auth
 
     /**
+     * Create or update a profile row, handling both id and email conflicts.
+     * Uses upsert on id first; if that hits an email conflict, updates the
+     * existing row by email instead.
+     */
+    private suspend fun upsertProfile(profile: ProfileDto): ProfileDto {
+        try {
+            // Try upsert on primary key (id)
+            client.postgrest["profiles"].upsert(profile) {
+                onConflict = "id"
+            }
+            return profile
+        } catch (e: Exception) {
+            if (e.message?.contains("profiles_email_key", ignoreCase = true) == true ||
+                e.message?.contains("duplicate key", ignoreCase = true) == true
+            ) {
+                // A row with the same email but a different id exists.
+                // Update that row to use the current auth id.
+                client.postgrest["profiles"]
+                    .update(
+                        mapOf(
+                            "id" to profile.id,
+                            "name" to profile.name
+                        )
+                    ) {
+                        filter { eq("email", profile.email) }
+                    }
+                return profile
+            }
+            throw e
+        }
+    }
+
+    /**
      * Sign up a new user with email and password
      */
     suspend fun signUp(name: String, email: String, password: String): Result<User> {
@@ -43,16 +76,17 @@ class AuthRepository {
             val userId = auth.currentUserOrNull()?.id
 
             if (userId != null) {
-                // User is logged in, create profile
+                // User is logged in, create or update profile
                 try {
                     val profile = ProfileDto(
                         id = userId,
                         name = name,
                         email = email
                     )
-                    client.postgrest["profiles"].insert(profile)
+                    upsertProfile(profile)
                 } catch (e: Exception) {
                     // Profile might already exist from trigger, ignore error
+                    println("AuthRepository: Profile upsert note: ${e.message}")
                 }
 
                 Result.success(
@@ -78,7 +112,7 @@ class AuthRepository {
                     "Invalid email or password format"
                 e.message?.contains("weak password", ignoreCase = true) == true ->
                     "Password is too weak"
-                else -> e.message ?: "Registration failed"
+                else -> sanitizeErrorMessage(e.message ?: "Registration failed")
             }
             Result.failure(Exception(message))
         }
@@ -115,11 +149,11 @@ class AuthRepository {
                     name = email.substringBefore("@"),
                     email = email
                 )
-                client.postgrest["profiles"].insert(newProfile)
+                upsertProfile(newProfile)
                 Result.success(newProfile.toUser())
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            Result.failure(Exception(sanitizeErrorMessage(e.message ?: "Sign in failed")))
         }
     }
 
@@ -136,6 +170,9 @@ class AuthRepository {
             val userId = auth.currentUserOrNull()?.id
                 ?: return Result.failure(Exception("Google sign in failed - no user"))
 
+            val userInfo = auth.currentUserOrNull()
+            val userEmail = userInfo?.email ?: ""
+
             // Get or create user profile
             var profile = client.postgrest["profiles"]
                 .select {
@@ -146,29 +183,27 @@ class AuthRepository {
                 .decodeSingleOrNull<ProfileDto>()
 
             if (profile == null) {
-                // Create profile for new Google user
-                val userInfo = auth.currentUserOrNull()
+                // Create profile for new Google user (handles email conflict gracefully)
                 val newProfile = ProfileDto(
                     id = userId,
                     name = userInfo?.userMetadata?.get("full_name")?.toString()
                         ?: userInfo?.email?.substringBefore("@")
                         ?: "User",
-                    email = userInfo?.email ?: ""
+                    email = userEmail
                 )
-                client.postgrest["profiles"].insert(newProfile)
+                upsertProfile(newProfile)
                 profile = newProfile
             }
 
             Result.success(profile.toUser())
         } catch (e: Exception) {
             println("AuthRepository: Google sign-in error: ${e.message}")
-            // Provide helpful error message based on the exception
             val message = when {
                 e.message?.contains("OAuth", ignoreCase = true) == true ->
                     "Google Sign-In is not configured. Please set up Google OAuth in Supabase dashboard."
                 e.message?.contains("network", ignoreCase = true) == true ->
                     "Network error. Please check your connection."
-                else -> e.message ?: "Google Sign-In failed"
+                else -> sanitizeErrorMessage(e.message ?: "Google Sign-In failed")
             }
             Result.failure(Exception(message))
         }
@@ -187,6 +222,9 @@ class AuthRepository {
             val userId = auth.currentUserOrNull()?.id
                 ?: return Result.failure(Exception("Facebook sign in failed - no user"))
 
+            val userInfo = auth.currentUserOrNull()
+            val userEmail = userInfo?.email ?: ""
+
             // Get or create user profile
             var profile = client.postgrest["profiles"]
                 .select {
@@ -197,17 +235,16 @@ class AuthRepository {
                 .decodeSingleOrNull<ProfileDto>()
 
             if (profile == null) {
-                // Create profile for new Facebook user
-                val userInfo = auth.currentUserOrNull()
+                // Create profile for new Facebook user (handles email conflict gracefully)
                 val newProfile = ProfileDto(
                     id = userId,
                     name = userInfo?.userMetadata?.get("full_name")?.toString()
                         ?: userInfo?.userMetadata?.get("name")?.toString()
                         ?: userInfo?.email?.substringBefore("@")
                         ?: "User",
-                    email = userInfo?.email ?: ""
+                    email = userEmail
                 )
-                client.postgrest["profiles"].insert(newProfile)
+                upsertProfile(newProfile)
                 profile = newProfile
             }
 
@@ -219,7 +256,7 @@ class AuthRepository {
                     "Facebook Sign-In is not configured. Please set up Facebook OAuth in Supabase dashboard."
                 e.message?.contains("network", ignoreCase = true) == true ->
                     "Network error. Please check your connection."
-                else -> e.message ?: "Facebook Sign-In failed"
+                else -> sanitizeErrorMessage(e.message ?: "Facebook Sign-In failed")
             }
             Result.failure(Exception(message))
         }
@@ -238,6 +275,9 @@ class AuthRepository {
             val userId = auth.currentUserOrNull()?.id
                 ?: return Result.failure(Exception("Apple sign in failed - no user"))
 
+            val userInfo = auth.currentUserOrNull()
+            val userEmail = userInfo?.email ?: ""
+
             // Get or create user profile
             var profile = client.postgrest["profiles"]
                 .select {
@@ -248,17 +288,16 @@ class AuthRepository {
                 .decodeSingleOrNull<ProfileDto>()
 
             if (profile == null) {
-                // Create profile for new Apple user
-                val userInfo = auth.currentUserOrNull()
+                // Create profile for new Apple user (handles email conflict gracefully)
                 val newProfile = ProfileDto(
                     id = userId,
                     name = userInfo?.userMetadata?.get("full_name")?.toString()
                         ?: userInfo?.userMetadata?.get("name")?.toString()
                         ?: userInfo?.email?.substringBefore("@")
                         ?: "User",
-                    email = userInfo?.email ?: ""
+                    email = userEmail
                 )
-                client.postgrest["profiles"].insert(newProfile)
+                upsertProfile(newProfile)
                 profile = newProfile
             }
 
@@ -270,7 +309,7 @@ class AuthRepository {
                     "Apple Sign-In is not configured. Please set up Apple OAuth in Supabase dashboard."
                 e.message?.contains("network", ignoreCase = true) == true ->
                     "Network error. Please check your connection."
-                else -> e.message ?: "Apple Sign-In failed"
+                else -> sanitizeErrorMessage(e.message ?: "Apple Sign-In failed")
             }
             Result.failure(Exception(message))
         }
@@ -553,5 +592,28 @@ class AuthRepository {
         } catch (e: Exception) {
             null
         }
+    }
+
+    /**
+     * Strip sensitive data (tokens, headers, URLs with query params) from error messages
+     * so they are safe to display in the UI.
+     */
+    private fun sanitizeErrorMessage(message: String): String {
+        // If the message contains Authorization headers or JWT tokens, return a generic message
+        if (message.contains("Authorization", ignoreCase = true) ||
+            message.contains("Bearer ", ignoreCase = true) ||
+            message.contains("eyJ", ignoreCase = true) ||  // JWT prefix
+            message.contains("apikey=", ignoreCase = true) ||
+            message.contains("Headers:", ignoreCase = true)
+        ) {
+            // Try to extract just the meaningful part before the URL/header dump
+            val meaningfulPart = message.substringBefore("URL:").substringBefore("Headers:").trim()
+            return if (meaningfulPart.isNotBlank() && meaningfulPart.length > 10) {
+                meaningfulPart
+            } else {
+                "An unexpected error occurred. Please try again."
+            }
+        }
+        return message
     }
 }
