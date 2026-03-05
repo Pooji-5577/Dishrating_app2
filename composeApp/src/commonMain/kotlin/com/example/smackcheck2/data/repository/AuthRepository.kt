@@ -331,7 +331,8 @@ class AuthRepository {
      * Get the current signed-in user
      */
     suspend fun getCurrentUser(): User? {
-        val userId = auth.currentUserOrNull()?.id ?: return null
+        val authUser = auth.currentUserOrNull() ?: return null
+        val userId = authUser.id
 
         return try {
             val profile = client.postgrest["profiles"]
@@ -342,7 +343,22 @@ class AuthRepository {
                 }
                 .decodeSingleOrNull<ProfileDto>()
 
-            profile?.toUser()
+            if (profile != null) {
+                profile.toUser()
+            } else {
+                // Profile missing (e.g. email-confirmation signup, OAuth race) — create it now
+                val email = authUser.email ?: ""
+                val name = authUser.userMetadata?.get("full_name")?.toString()
+                    ?: authUser.userMetadata?.get("name")?.toString()
+                    ?: email.substringBefore("@").ifEmpty { "User" }
+                val newProfile = ProfileDto(id = userId, name = name, email = email)
+                try {
+                    upsertProfile(newProfile)
+                } catch (e: Exception) {
+                    println("AuthRepository: auto-profile creation failed: ${e.message}")
+                }
+                newProfile.toUser()
+            }
         } catch (e: Exception) {
             null
         }
