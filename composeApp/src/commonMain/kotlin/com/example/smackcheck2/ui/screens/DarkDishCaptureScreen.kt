@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -75,6 +77,53 @@ fun DarkDishCaptureScreen(
     val themeColors = appColors()
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+
+    // "Not a Dish" error modal
+    if (uiState.showNotDishError) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissNotDishError() },
+            containerColor = themeColors.Surface,
+            iconContentColor = Color(0xFFE53935),
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = Color(0xFFE53935)
+                )
+            },
+            title = {
+                Text(
+                    text = "Not a Dish",
+                    color = themeColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Text(
+                    text = "This image doesn't appear to be a food dish. Please take or select a photo of a dish to rate.",
+                    color = themeColors.TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.dismissNotDishError() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = themeColors.Primary,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Try Again", modifier = Modifier.padding(vertical = 4.dp))
+                }
+            }
+        )
+    }
 
     // Wrap with camera permission request
     RequestCameraPermission(
@@ -573,9 +622,12 @@ private fun ImagePreviewWithAI(
                         Button(
                             onClick = onConfirm,
                             modifier = Modifier.weight(1f),
+                            enabled = !(detectedDishName == "Unknown Dish" && !isAIDetected),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = themeColors.Primary,
-                                contentColor = Color.White
+                                contentColor = Color.White,
+                                disabledContainerColor = themeColors.Primary.copy(alpha = 0.4f),
+                                disabledContentColor = Color.White.copy(alpha = 0.5f)
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {

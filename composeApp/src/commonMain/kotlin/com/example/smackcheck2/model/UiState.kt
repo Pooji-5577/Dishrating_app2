@@ -267,7 +267,8 @@ data class DishCaptureUiState(
     val editedName: String = "",
     val errorMessage: String? = null,
     val debugInfo: String? = null,
-    val showConfirmation: Boolean = false
+    val showConfirmation: Boolean = false,
+    val showNotDishError: Boolean = false
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -291,6 +292,7 @@ data class DishCaptureUiState(
         if (errorMessage != other.errorMessage) return false
         if (debugInfo != other.debugInfo) return false
         if (showConfirmation != other.showConfirmation) return false
+        if (showNotDishError != other.showNotDishError) return false
 
         return true
     }
@@ -309,6 +311,7 @@ data class DishCaptureUiState(
         result = 31 * result + (errorMessage?.hashCode() ?: 0)
         result = 31 * result + (debugInfo?.hashCode() ?: 0)
         result = 31 * result + showConfirmation.hashCode()
+        result = 31 * result + showNotDishError.hashCode()
         return result
     }
 }

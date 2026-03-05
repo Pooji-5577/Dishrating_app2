@@ -55,7 +55,8 @@ class DishCaptureViewModel : ViewModel() {
                         isAIDetected = result.isAIDetected,
                         editedName = result.dishName,
                         debugInfo = result.debugInfo,
-                        showConfirmation = true
+                        showConfirmation = true,
+                        showNotDishError = !result.isAIDetected && (result.dishName == "Unknown Dish" || result.dishName == "Unknown")
                     )
                 }
             } catch (e: Exception) {
@@ -66,6 +67,7 @@ class DishCaptureViewModel : ViewModel() {
                         isAIDetected = false,
                         editedName = "Unknown Dish",
                         showConfirmation = true,
+                        showNotDishError = true,
                         errorMessage = "AI detection failed. Please enter dish name manually.",
                         debugInfo = "ViewModel Exception: ${e.message}"
                     )
@@ -141,6 +143,14 @@ class DishCaptureViewModel : ViewModel() {
      */
     fun getImageUri(): String? {
         return _uiState.value.imageUri
+    }
+
+    /**
+     * Called when user dismisses the "not a dish" error modal.
+     * Resets state so the user can retake/pick a new photo.
+     */
+    fun dismissNotDishError() {
+        _uiState.update { DishCaptureUiState() }
     }
 
     /**
