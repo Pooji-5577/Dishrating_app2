@@ -21,6 +21,10 @@ data class ProfileDto(
     @SerialName("last_location")
     val lastLocation: String? = null,
     val bio: String? = null,
+    @SerialName("followers_count")
+    val followersCount: Int = 0,
+    @SerialName("following_count")
+    val followingCount: Int = 0,
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("updated_at")
@@ -36,6 +40,9 @@ data class BadgeDto(
     val id: String,
     val name: String,
     val description: String,
+    // Legacy columns — kept nullable so deserialization doesn't fail
+    val icon: String? = null,
+    val category: String? = null,
     @SerialName("icon_url")
     val iconUrl: String? = null
 )
@@ -155,6 +162,98 @@ data class FeedItemDto(
     @SerialName("comments_count")
     val commentsCount: Int = 0,
     val comment: String = "",
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
+
+/**
+ * Follower relationship DTO
+ * Maps to 'followers' table
+ */
+@Serializable
+data class FollowerDto(
+    val id: String? = null,
+    @SerialName("follower_id")
+    val followerId: String,
+    @SerialName("following_id")
+    val followingId: String,
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
+
+/**
+ * Comment DTO for Supabase
+ * Maps to 'comments' table
+ */
+@Serializable
+data class CommentDto(
+    val id: String? = null,
+    @SerialName("rating_id")
+    val ratingId: String,
+    @SerialName("user_id")
+    val userId: String,
+    @SerialName("parent_comment_id")
+    val parentCommentId: String? = null,
+    val content: String,
+    @SerialName("created_at")
+    val createdAt: String? = null,
+    @SerialName("updated_at")
+    val updatedAt: String? = null
+)
+
+/**
+ * Notification DTO for Supabase
+ * Maps to 'notifications' table
+ */
+@Serializable
+data class NotificationDto(
+    val id: String? = null,
+    @SerialName("user_id")
+    val userId: String,
+    val type: String,
+    val title: String,
+    val body: String,
+    val data: String = "{}",
+    @SerialName("is_read")
+    val isRead: Boolean = false,
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
+
+/**
+ * Restaurant visit DTO for geofencing
+ * Maps to 'restaurant_visits' table
+ */
+@Serializable
+data class RestaurantVisitDto(
+    val id: String? = null,
+    @SerialName("user_id")
+    val userId: String,
+    @SerialName("restaurant_id")
+    val restaurantId: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @SerialName("entered_at")
+    val enteredAt: String? = null,
+    @SerialName("exited_at")
+    val exitedAt: String? = null,
+    @SerialName("duration_minutes")
+    val durationMinutes: Int? = null
+)
+
+/**
+ * Rating image DTO for multiple photos per dish
+ * Maps to 'rating_images' table
+ */
+@Serializable
+data class RatingImageDto(
+    val id: String? = null,
+    @SerialName("rating_id")
+    val ratingId: String,
+    @SerialName("image_url")
+    val imageUrl: String,
+    @SerialName("sort_order")
+    val sortOrder: Int = 0,
     @SerialName("created_at")
     val createdAt: String? = null
 )

@@ -152,10 +152,11 @@ fun DarkProfileScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
+                ProfileStatItemThemed(value = "${user?.followersCount ?: 0}", label = "Followers")
+                ProfileStatItemThemed(value = "${user?.followingCount ?: 0}", label = "Following")
                 ProfileStatItemThemed(value = "${user?.level ?: 0}", label = "Level")
                 ProfileStatItemThemed(value = "${user?.xp ?: 0}", label = "XP")
                 ProfileStatItemThemed(value = "${user?.streakCount ?: 0}", label = "Streak")
-                ProfileStatItemThemed(value = "${user?.badges?.size ?: 0}", label = "Badges")
             }
             
             Spacer(modifier = Modifier.height(32.dp))

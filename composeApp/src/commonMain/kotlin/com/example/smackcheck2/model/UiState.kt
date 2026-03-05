@@ -197,6 +197,61 @@ data class PrivacySettingsUiState(
 )
 
 /**
+ * Social feed UI state with filtering
+ */
+data class SocialFeedUiState(
+    val feedItems: List<FeedItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val filter: FeedFilter = FeedFilter.ALL,
+    val errorMessage: String? = null
+)
+
+enum class FeedFilter { ALL, FOLLOWING, NEARBY }
+
+/**
+ * Comments UI state
+ */
+data class CommentsUiState(
+    val comments: List<Comment> = emptyList(),
+    val isLoading: Boolean = false,
+    val isSubmitting: Boolean = false,
+    val replyingTo: Comment? = null,
+    val errorMessage: String? = null
+)
+
+/**
+ * Notifications UI state
+ */
+data class NotificationsUiState(
+    val notifications: List<Notification> = emptyList(),
+    val unreadCount: Int = 0,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * User profile (other user) UI state
+ */
+data class UserProfileUiState(
+    val user: User? = null,
+    val ratings: List<FeedItem> = emptyList(),
+    val isFollowing: Boolean = false,
+    val isLoading: Boolean = false,
+    val isFollowLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Followers/Following list UI state
+ */
+data class FollowListUiState(
+    val users: List<UserSummary> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
  * Dish capture UI state for camera capture and AI detection
  */
 data class DishCaptureUiState(

@@ -6,6 +6,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.auth.FlowType
 import kotlinx.coroutines.CoroutineScope
@@ -35,6 +36,7 @@ object SupabaseClientProvider {
             install(Postgrest)
             install(Storage)
             install(Functions)
+            install(Realtime)
         }
     }
 

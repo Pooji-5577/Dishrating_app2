@@ -13,7 +13,9 @@ data class User(
     val streakCount: Int = 0,
     val lastLocation: String? = null,
     val bio: String? = null,
-    val badges: List<Badge> = emptyList()
+    val badges: List<Badge> = emptyList(),
+    val followersCount: Int = 0,
+    val followingCount: Int = 0
 )
 
 /**
@@ -83,6 +85,7 @@ data class Review(
  */
 data class FeedItem(
     val id: String,
+    val userId: String = "",
     val userProfileImageUrl: String?,
     val userName: String,
     val dishImageUrl: String?,
@@ -92,5 +95,59 @@ data class FeedItem(
     val likesCount: Int,
     val commentsCount: Int,
     val isLiked: Boolean,
-    val timestamp: Long
+    val timestamp: Long,
+    val comment: String = "",
+    val imageUrls: List<String> = emptyList()
+)
+
+/**
+ * Comment data model for rating comments
+ */
+data class Comment(
+    val id: String = "",
+    val ratingId: String = "",
+    val userId: String = "",
+    val userName: String = "",
+    val userProfileUrl: String? = null,
+    val parentCommentId: String? = null,
+    val content: String = "",
+    val replies: List<Comment> = emptyList(),
+    val createdAt: Long = 0L
+)
+
+/**
+ * Notification data model
+ */
+data class Notification(
+    val id: String = "",
+    val type: String = "",
+    val title: String = "",
+    val body: String = "",
+    val isRead: Boolean = false,
+    val createdAt: Long = 0L,
+    val data: Map<String, String> = emptyMap()
+)
+
+/**
+ * Restaurant visit data model for geofencing
+ */
+data class RestaurantVisit(
+    val id: String = "",
+    val restaurantId: String = "",
+    val restaurantName: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val enteredAt: Long = 0L,
+    val exitedAt: Long? = null,
+    val durationMinutes: Int? = null
+)
+
+/**
+ * Simple user info for followers/following lists
+ */
+data class UserSummary(
+    val id: String = "",
+    val name: String = "",
+    val profilePhotoUrl: String? = null,
+    val isFollowing: Boolean = false
 )

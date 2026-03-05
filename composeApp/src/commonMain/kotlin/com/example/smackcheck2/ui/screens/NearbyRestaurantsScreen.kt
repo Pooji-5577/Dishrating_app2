@@ -16,7 +16,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.smackcheck2.platform.MapMarker
 import com.example.smackcheck2.platform.NearbyRestaurant
+import com.example.smackcheck2.platform.PlatformMapView
 import com.example.smackcheck2.ui.components.EmptyState
 import com.example.smackcheck2.ui.components.LoadingState
 import com.example.smackcheck2.viewmodel.NearbyRestaurantsUiState
@@ -102,10 +104,27 @@ fun NearbyRestaurantsScreen(
                         )
                     } else {
                         if (showMapView) {
-                            // Map view (placeholder for now, will implement with Google Maps Compose)
-                            MapViewPlaceholder(
-                                restaurants = state.restaurants,
-                                currentLocation = state.currentLocation
+                            val markers = state.restaurants.map { r ->
+                                MapMarker(
+                                    id = r.id,
+                                    latitude = r.latitude,
+                                    longitude = r.longitude,
+                                    title = r.name,
+                                    snippet = r.address,
+                                    rating = r.rating?.toFloat()
+                                )
+                            }
+                            val centerLat = state.currentLocation?.latitude ?: state.restaurants.firstOrNull()?.latitude ?: 0.0
+                            val centerLng = state.currentLocation?.longitude ?: state.restaurants.firstOrNull()?.longitude ?: 0.0
+                            PlatformMapView(
+                                latitude = centerLat,
+                                longitude = centerLng,
+                                zoom = 14f,
+                                markers = markers,
+                                onMarkerClick = { id ->
+                                    state.restaurants.find { it.id == id }?.let { onRestaurantClick(it) }
+                                },
+                                modifier = Modifier.fillMaxSize()
                             )
                         } else {
                             // List view
@@ -303,51 +322,6 @@ private fun RestaurantCard(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
-        }
-    }
-}
-
-/**
- * Map view placeholder - will be implemented with Google Maps Compose
- */
-@Composable
-private fun MapViewPlaceholder(
-    restaurants: List<NearbyRestaurant>,
-    currentLocation: com.example.smackcheck2.platform.LocationResult?
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Map,
-                contentDescription = null,
-                modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Map view",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Text(
-                text = "${restaurants.size} restaurants found",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            currentLocation?.let {
-                Text(
-                    text = "Near ${it.cityName ?: "your location"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
         }
     }
 }

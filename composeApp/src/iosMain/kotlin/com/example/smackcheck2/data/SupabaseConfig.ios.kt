@@ -11,5 +11,5 @@ package com.example.smackcheck2.data
  */
 actual object SupabaseConfig {
     actual val SUPABASE_URL: String = "https://ayopmvhtfuwbsjxhpfgd.supabase.co"
-    actual val SUPABASE_ANON_KEY: String = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5b3Btdmh0ZnV3YnNqeGhwZmdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjAyMTksImV4cCI6MjA4NDgzNjIxOX0.2siGUJfE3iLoaEKae5gycw_6mo748KKyi5C7YEHuUlQ"
+    actual val SUPABASE_ANON_KEY: String = "sb_publishable_CJpnMmcaNQPTqdMOh7FPTg_voJE6QPN"
 }

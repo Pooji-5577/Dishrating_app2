@@ -4,5 +4,30 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+
+	<!-- Privacy usage descriptions — required or iOS will crash on permission request -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>SmackCheck uses your location to find nearby restaurants and detect when you visit them.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>SmackCheck uses your location in the background to automatically detect restaurant visits.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>SmackCheck uses your camera to photograph dishes for rating.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>SmackCheck accesses your photo library to upload dish photos.</string>
+
+	<!-- Google Maps API Key for iOS -->
+	<key>GOOGLE_MAPS_API_KEY</key>
+	<string>AIzaSyBDFsGAGgmK1O1d7hjYmHxmxsWTpiOXf0A</string>
+
+	<!-- OAuth redirect URL scheme for Supabase (Google, Facebook, Apple sign-in) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>smackcheck</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

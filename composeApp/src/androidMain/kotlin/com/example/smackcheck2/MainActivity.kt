@@ -10,10 +10,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.smackcheck2.data.SupabaseClientProvider
+import com.example.smackcheck2.platform.GeofencingService
 import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.PlacesService
 import com.example.smackcheck2.platform.PreferencesManager
+import com.example.smackcheck2.platform.ShareService
 
 class MainActivity : ComponentActivity() {
     // ImagePicker must be created at Activity level for ActivityResult APIs
@@ -34,11 +36,15 @@ class MainActivity : ComponentActivity() {
             val preferencesManager = remember { PreferencesManager(context) }
             val locationService = remember { LocationService(context) }
             val placesService = remember { PlacesService(context) }
+            val shareService = remember { ShareService(context) }
+            val geofencingService = remember { GeofencingService(context) }
             App(
                 preferencesManager = preferencesManager,
                 locationService = locationService,
                 imagePicker = imagePicker,
-                placesService = placesService
+                placesService = placesService,
+                shareService = shareService,
+                geofencingService = geofencingService
             )
         }
     }

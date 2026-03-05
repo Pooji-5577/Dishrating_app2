@@ -83,10 +83,24 @@ import com.example.smackcheck2.viewmodel.NotificationSettingsViewModel
 import com.example.smackcheck2.viewmodel.AccountSettingsViewModel
 import com.example.smackcheck2.viewmodel.PrivacySettingsViewModel
 import com.example.smackcheck2.data.repository.PreferencesRepository
+import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.ui.screens.EditProfileScreen
 import com.example.smackcheck2.ui.screens.NotificationSettingsScreen
 import com.example.smackcheck2.ui.screens.AccountSettingsScreen
 import com.example.smackcheck2.ui.screens.PrivacySettingsScreen
+import com.example.smackcheck2.ui.screens.UserProfileScreen
+import com.example.smackcheck2.ui.screens.FollowersListScreen
+import com.example.smackcheck2.ui.screens.CommentsScreen
+import com.example.smackcheck2.ui.screens.NotificationsListScreen
+import com.example.smackcheck2.viewmodel.SocialFeedViewModel
+import com.example.smackcheck2.viewmodel.CommentsViewModel
+import com.example.smackcheck2.viewmodel.NotificationsViewModel
+import com.example.smackcheck2.platform.LocalShareService
+import com.example.smackcheck2.model.FeedFilter
+import com.example.smackcheck2.model.FollowListUiState
+import com.example.smackcheck2.model.UserProfileUiState
+import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.launch
 
 /**
  * Navigation state holder for managing current screen with Compose state
@@ -116,6 +130,12 @@ class NavigationState {
     var dishId by mutableStateOf("")
         private set
 
+    var userId by mutableStateOf("")
+        private set
+
+    var ratingId by mutableStateOf("")
+        private set
+
     var imageBytes by mutableStateOf<ByteArray?>(null)
         private set
 
@@ -132,6 +152,8 @@ class NavigationState {
                 "dishName" -> dishName = value
                 "restaurantId" -> restaurantId = value
                 "dishId" -> dishId = value
+                "userId" -> userId = value
+                "ratingId" -> ratingId = value
             }
         }
         currentScreen = screen
@@ -381,9 +403,38 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         }
         
         is Screen.SocialFeed -> {
+            val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel() }
+            val socialFeedState by socialFeedViewModel.uiState.collectAsState()
+            val shareService = LocalShareService.current
+
+            LaunchedEffect(Unit) {
+                socialFeedViewModel.loadFeed()
+            }
+
             SocialFeedScreen(
+                uiState = socialFeedState,
                 onNavigateBack = { navigationState.navigateBack() },
-                onShareClick = { /* Show share bottom sheet */ }
+                onFilterSelected = { filter -> socialFeedViewModel.setFilter(filter) },
+                onLikeClick = { ratingId -> socialFeedViewModel.toggleLike(ratingId) },
+                onCommentClick = { ratingId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.Comments,
+                        "ratingId" to ratingId
+                    )
+                },
+                onShareClick = { item ->
+                    shareService?.shareText(
+                        text = "Check out ${item.dishName} at ${item.restaurantName} - rated ${item.rating}/5 on SmackCheck!",
+                        title = "Share Dish Rating"
+                    )
+                },
+                onUserClick = { userId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to userId
+                    )
+                },
+                onRefresh = { socialFeedViewModel.refresh() }
             )
         }
         
@@ -769,6 +820,217 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         "dishId" to dishId
                     )
                 }
+            )
+        }
+
+        is Screen.UserProfile -> {
+            val targetUserId = navigationState.userId
+            val socialRepository = remember { SocialRepository() }
+            val currentUserId = remember { mutableStateOf<String?>(null) }
+            val userProfileState = remember { mutableStateOf(com.example.smackcheck2.model.UserProfileUiState()) }
+            val shareService = LocalShareService.current
+
+            LaunchedEffect(targetUserId) {
+                val me = com.example.smackcheck2.data.SupabaseClientProvider.client.auth.currentUserOrNull()
+                currentUserId.value = me?.id
+                try {
+                    val profile = socialRepository.getUserProfile(targetUserId).getOrThrow()
+                    val ratings = socialRepository.getUserRatings(targetUserId).getOrThrow()
+                    val following = if (me != null) socialRepository.isFollowing(me.id, targetUserId) else false
+                    userProfileState.value = userProfileState.value.copy(
+                        user = profile,
+                        ratings = ratings,
+                        isFollowing = following,
+                        isLoading = false
+                    )
+                } catch (e: Exception) {
+                    userProfileState.value = userProfileState.value.copy(
+                        isLoading = false,
+                        errorMessage = e.message
+                    )
+                }
+            }
+
+            UserProfileScreen(
+                uiState = userProfileState.value,
+                onNavigateBack = { navigationState.navigateBack() },
+                onFollowClick = {
+                    userProfileState.value = userProfileState.value.copy(isFollowLoading = true)
+                    kotlinx.coroutines.MainScope().launch {
+                        try {
+                            val me = currentUserId.value ?: return@launch
+                            if (userProfileState.value.isFollowing) {
+                                socialRepository.unfollowUser(me, targetUserId).getOrThrow()
+                            } else {
+                                socialRepository.followUser(me, targetUserId).getOrThrow()
+                            }
+                            userProfileState.value = userProfileState.value.copy(
+                                isFollowing = !userProfileState.value.isFollowing,
+                                isFollowLoading = false
+                            )
+                        } catch (_: Exception) {
+                            userProfileState.value = userProfileState.value.copy(isFollowLoading = false)
+                        }
+                    }
+                },
+                onFollowersClick = {
+                    navigationState.navigateToWithArgs(
+                        Screen.FollowersList,
+                        "userId" to targetUserId
+                    )
+                },
+                onFollowingClick = {
+                    navigationState.navigateToWithArgs(
+                        Screen.FollowingList,
+                        "userId" to targetUserId
+                    )
+                },
+                onLikeClick = { /* TODO */ },
+                onCommentClick = { item ->
+                    navigationState.navigateToWithArgs(
+                        Screen.Comments,
+                        "ratingId" to item.id
+                    )
+                },
+                onShareClick = { item ->
+                    shareService?.shareText(
+                        text = "Check out ${item.dishName} at ${item.restaurantName} - rated ${item.rating}/5 on SmackCheck!",
+                        title = "Share Dish Rating"
+                    )
+                }
+            )
+        }
+
+        is Screen.FollowersList -> {
+            val targetUserId = navigationState.userId
+            val socialRepository = remember { SocialRepository() }
+            val currentUserId = remember { mutableStateOf<String?>(null) }
+            val followListState = remember { mutableStateOf(com.example.smackcheck2.model.FollowListUiState()) }
+
+            LaunchedEffect(targetUserId) {
+                val me = com.example.smackcheck2.data.SupabaseClientProvider.client.auth.currentUserOrNull()
+                currentUserId.value = me?.id
+                try {
+                    val followers = socialRepository.getFollowers(targetUserId).getOrThrow()
+                    followListState.value = followListState.value.copy(
+                        users = followers,
+                        isLoading = false
+                    )
+                } catch (e: Exception) {
+                    followListState.value = followListState.value.copy(
+                        isLoading = false,
+                        errorMessage = e.message
+                    )
+                }
+            }
+
+            FollowersListScreen(
+                title = "Followers",
+                uiState = followListState.value,
+                onNavigateBack = { navigationState.navigateBack() },
+                onUserClick = { userSummary ->
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to userSummary.id
+                    )
+                },
+                onFollowToggle = { userSummary ->
+                    kotlinx.coroutines.MainScope().launch {
+                        try {
+                            val me = currentUserId.value ?: return@launch
+                            val following = socialRepository.isFollowing(me, userSummary.id)
+                            if (following) socialRepository.unfollowUser(me, userSummary.id).getOrThrow()
+                            else socialRepository.followUser(me, userSummary.id).getOrThrow()
+                        } catch (_: Exception) {}
+                    }
+                }
+            )
+        }
+
+        is Screen.FollowingList -> {
+            val targetUserId = navigationState.userId
+            val socialRepository = remember { SocialRepository() }
+            val currentUserId = remember { mutableStateOf<String?>(null) }
+            val followListState = remember { mutableStateOf(com.example.smackcheck2.model.FollowListUiState()) }
+
+            LaunchedEffect(targetUserId) {
+                val me = com.example.smackcheck2.data.SupabaseClientProvider.client.auth.currentUserOrNull()
+                currentUserId.value = me?.id
+                try {
+                    val following = socialRepository.getFollowing(targetUserId).getOrThrow()
+                    followListState.value = followListState.value.copy(
+                        users = following,
+                        isLoading = false
+                    )
+                } catch (e: Exception) {
+                    followListState.value = followListState.value.copy(
+                        isLoading = false,
+                        errorMessage = e.message
+                    )
+                }
+            }
+
+            FollowersListScreen(
+                title = "Following",
+                uiState = followListState.value,
+                onNavigateBack = { navigationState.navigateBack() },
+                onUserClick = { userSummary ->
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to userSummary.id
+                    )
+                },
+                onFollowToggle = { userSummary ->
+                    kotlinx.coroutines.MainScope().launch {
+                        try {
+                            val me = currentUserId.value ?: return@launch
+                            val following = socialRepository.isFollowing(me, userSummary.id)
+                            if (following) socialRepository.unfollowUser(me, userSummary.id).getOrThrow()
+                            else socialRepository.followUser(me, userSummary.id).getOrThrow()
+                        } catch (_: Exception) {}
+                    }
+                }
+            )
+        }
+
+        is Screen.Comments -> {
+            val ratingId = navigationState.ratingId
+            val commentsViewModel: CommentsViewModel = viewModel { CommentsViewModel(ratingId) }
+            val commentsState by commentsViewModel.uiState.collectAsState()
+            val currentUserId = remember { mutableStateOf("") }
+
+            LaunchedEffect(Unit) {
+                val me = com.example.smackcheck2.data.SupabaseClientProvider.client.auth.currentUserOrNull()
+                currentUserId.value = me?.id ?: ""
+                commentsViewModel.loadComments()
+            }
+
+            CommentsScreen(
+                uiState = commentsState,
+                currentUserId = currentUserId.value,
+                onNavigateBack = { navigationState.navigateBack() },
+                onSubmitComment = { content, _ -> commentsViewModel.addComment(content) },
+                onDeleteComment = { commentId -> commentsViewModel.deleteComment(commentId) },
+                onReplyClick = { comment -> commentsViewModel.setReplyingTo(comment) },
+                onCancelReply = { commentsViewModel.setReplyingTo(null) }
+            )
+        }
+
+        is Screen.NotificationsList -> {
+            val notificationsViewModel: NotificationsViewModel = viewModel { NotificationsViewModel() }
+            val notificationsState by notificationsViewModel.uiState.collectAsState()
+
+            LaunchedEffect(Unit) {
+                notificationsViewModel.loadNotifications()
+            }
+
+            NotificationsListScreen(
+                uiState = notificationsState,
+                onNavigateBack = { navigationState.navigateBack() },
+                onNotificationClick = { notification ->
+                    notificationsViewModel.markAsRead(notification.id)
+                },
+                onMarkAllRead = { notificationsViewModel.markAllAsRead() }
             )
         }
     }

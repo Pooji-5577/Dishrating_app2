@@ -509,7 +509,9 @@ class AuthRepository {
             xp = xp,
             streakCount = streakCount,
             lastLocation = lastLocation,
-            bio = bio
+            bio = bio,
+            followersCount = followersCount,
+            followingCount = followingCount
         )
     }
 

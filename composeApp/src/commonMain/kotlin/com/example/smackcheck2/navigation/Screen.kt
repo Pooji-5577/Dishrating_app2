@@ -47,4 +47,19 @@ sealed class Screen(val route: String) {
     data object NotificationSettings : Screen("notification_settings")
     data object AccountSettings : Screen("account_settings")
     data object PrivacySettings : Screen("privacy_settings")
+
+    // Social screens
+    data object UserProfile : Screen("user_profile/{userId}") {
+        fun createRoute(userId: String) = "user_profile/$userId"
+    }
+    data object FollowersList : Screen("followers_list/{userId}") {
+        fun createRoute(userId: String) = "followers_list/$userId"
+    }
+    data object FollowingList : Screen("following_list/{userId}") {
+        fun createRoute(userId: String) = "following_list/$userId"
+    }
+    data object Comments : Screen("comments/{ratingId}") {
+        fun createRoute(ratingId: String) = "comments/$ratingId"
+    }
+    data object NotificationsList : Screen("notifications_list")
 }
