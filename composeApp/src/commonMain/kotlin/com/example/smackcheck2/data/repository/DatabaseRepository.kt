@@ -559,7 +559,7 @@ class DatabaseRepository {
 
             val newStreak = if (ratings.size >= 2) {
                 val lastRatingTime = parseTimestamp(ratings[1].createdAt ?: "")
-                val currentTime = System.currentTimeMillis()
+                val currentTime = Clock.System.now().toEpochMilliseconds()
                 val hoursSinceLast = (currentTime - lastRatingTime) / (1000 * 60 * 60)
 
                 when {
@@ -727,7 +727,7 @@ class DatabaseRepository {
 
             val todayCount = ratings.count { rating ->
                 val ratingTime = parseTimestamp(rating.createdAt ?: "")
-                val hoursSince = (System.currentTimeMillis() - ratingTime) / (1000 * 60 * 60)
+                val hoursSince = (Clock.System.now().toEpochMilliseconds() - ratingTime) / (1000 * 60 * 60)
                 hoursSince < 24
             }
 

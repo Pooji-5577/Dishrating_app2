@@ -1,6 +1,8 @@
 package com.example.smackcheck2.navigation
 
-import androidx.activity.compose.BackHandler
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -182,6 +184,7 @@ class NavigationState {
  * Main Navigation Host composable
  * Manages navigation between all screens
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     val navigationState = remember { NavigationState() }

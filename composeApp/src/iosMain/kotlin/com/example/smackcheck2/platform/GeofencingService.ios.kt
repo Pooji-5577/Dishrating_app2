@@ -3,7 +3,9 @@ package com.example.smackcheck2.platform
 import platform.CoreLocation.CLCircularRegion
 import platform.CoreLocation.CLLocationCoordinate2DMake
 import platform.CoreLocation.CLLocationManager
+import kotlinx.cinterop.ExperimentalForeignApi
 
+@OptIn(ExperimentalForeignApi::class)
 actual class GeofencingService {
     private val locationManager = CLLocationManager()
 

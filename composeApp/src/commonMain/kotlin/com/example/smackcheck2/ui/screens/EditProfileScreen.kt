@@ -24,6 +24,7 @@ import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.EditProfileViewModel
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -113,7 +114,7 @@ fun EditProfileScreen(
                     .clickable {
                         scope.launch {
                             imagePicker?.pickFromGallery()?.let { result ->
-                                val fileName = "profile_${System.currentTimeMillis()}.jpg"
+                                val fileName = "profile_${Clock.System.now().toEpochMilliseconds()}.jpg"
                                 viewModel.uploadProfilePhoto(result.bytes, fileName)
                             }
                         }

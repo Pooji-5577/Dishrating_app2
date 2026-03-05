@@ -11,6 +11,8 @@ import platform.AVFoundation.AVAuthorizationStatusAuthorized
 import platform.AVFoundation.AVAuthorizationStatusNotDetermined
 import platform.AVFoundation.AVCaptureDevice
 import platform.AVFoundation.AVMediaTypeVideo
+import platform.AVFoundation.authorizationStatusForMediaType
+import platform.AVFoundation.requestAccessForMediaType
 import platform.CoreLocation.CLAuthorizationStatus
 import platform.CoreLocation.CLLocationManager
 import platform.CoreLocation.CLLocationManagerDelegateProtocol
@@ -96,6 +98,7 @@ actual fun RequestLocationPermission(
  *
  * Uses AVCaptureDevice.requestAccessForMediaType to prompt the user.
  */
+@OptIn(ExperimentalForeignApi::class)
 @Composable
 actual fun RequestCameraPermission(
     onPermissionResult: (Boolean) -> Unit,

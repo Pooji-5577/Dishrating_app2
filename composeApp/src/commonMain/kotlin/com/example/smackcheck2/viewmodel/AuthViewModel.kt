@@ -6,7 +6,7 @@ import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.model.User
-import io.github.jan.supabase.auth.SessionStatus
+import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -49,12 +49,12 @@ class AuthViewModel : ViewModel() {
                         println("AuthViewModel: Not authenticated")
                         _authState.value = AuthState.Unauthenticated
                     }
-                    is SessionStatus.LoadingFromStorage -> {
+                    SessionStatus.Initializing -> {
                         println("AuthViewModel: Loading session from storage")
                         // Keep Unknown state while loading
                     }
-                    is SessionStatus.NetworkError -> {
-                        println("AuthViewModel: Network error loading session")
+                    is SessionStatus.RefreshFailure -> {
+                        println("AuthViewModel: Network error loading session: ${status.cause}")
                         _authState.value = AuthState.Unauthenticated
                     }
                 }

@@ -11,7 +11,7 @@ class InMemoryCache<K, V>(
         val timestamp: Long
     )
 
-    private val cache = LinkedHashMap<K, CacheEntry<V>>(maxSize, 0.75f, true)
+    private val cache = LinkedHashMap<K, CacheEntry<V>>()
 
     fun get(key: K): V? {
         val entry = cache[key] ?: return null

@@ -280,7 +280,7 @@ private fun RestaurantCard(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = String.format("%.1f", restaurant.rating),
+                            text = "${(restaurant.rating * 10).toInt() / 10.0}",
                             style = MaterialTheme.typography.bodySmall,
                             fontWeight = FontWeight.Bold
                         )

@@ -7,6 +7,7 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 import platform.AVFoundation.AVAuthorizationStatusAuthorized
 import platform.AVFoundation.AVCaptureDevice
 import platform.AVFoundation.AVMediaTypeVideo
+import platform.AVFoundation.authorizationStatusForMediaType
 import platform.Foundation.NSData
 import platform.PhotosUI.PHPickerConfiguration
 import platform.PhotosUI.PHPickerFilter

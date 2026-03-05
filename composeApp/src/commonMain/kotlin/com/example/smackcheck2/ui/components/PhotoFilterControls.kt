@@ -140,7 +140,7 @@ private fun FilterSlider(
         )
 
         Text(
-            text = String.format("%.1f", value),
+            text = "${(value * 10).toInt() / 10.0}",
             fontSize = 12.sp,
             color = colors.TextSecondary,
             modifier = Modifier.width(36.dp)
