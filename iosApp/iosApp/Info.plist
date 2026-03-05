@@ -15,9 +15,17 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SmackCheck accesses your photo library to upload dish photos.</string>
 
-	<!-- Google Maps API Key for iOS -->
+	<!-- Google Maps SDK API Key for iOS map rendering -->
+	<!-- For production, use $(GOOGLE_MAPS_API_KEY) from .xcconfig instead of hardcoding -->
 	<key>GOOGLE_MAPS_API_KEY</key>
-	<string>AIzaSyBDFsGAGgmK1O1d7hjYmHxmxsWTpiOXf0A</string>
+	<string>$(GOOGLE_MAPS_API_KEY)</string>
+
+	<!-- Supabase configuration — read by SupabaseConfig.ios.kt at runtime -->
+	<!-- For production, use $(SUPABASE_URL) and $(SUPABASE_ANON_KEY) from .xcconfig -->
+	<key>SUPABASE_URL</key>
+	<string>$(SUPABASE_URL)</string>
+	<key>SUPABASE_ANON_KEY</key>
+	<string>$(SUPABASE_ANON_KEY)</string>
 
 	<!-- OAuth redirect URL scheme for Supabase (Google, Facebook, Apple sign-in) -->
 	<key>CFBundleURLTypes</key>

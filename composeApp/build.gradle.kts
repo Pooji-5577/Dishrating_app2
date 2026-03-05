@@ -112,8 +112,8 @@ android {
         buildConfigField("String", "SUPABASE_URL", "\"${getConfigProperty("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getConfigProperty("SUPABASE_ANON_KEY")}\"")
 
-        // Google Maps configuration
-        buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"${getConfigProperty("GOOGLE_MAPS_API_KEY")}\"")
+        // Google Maps SDK needs the key in AndroidManifest.xml for map rendering.
+        // The Places API key is now handled server-side via Supabase Edge Function.
         manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = getConfigProperty("GOOGLE_MAPS_API_KEY")
 
         // Note: GEMINI_API_KEY is no longer needed client-side

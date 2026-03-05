@@ -35,7 +35,7 @@ class MainActivity : ComponentActivity() {
             val context = LocalContext.current
             val preferencesManager = remember { PreferencesManager(context) }
             val locationService = remember { LocationService(context) }
-            val placesService = remember { PlacesService(context) }
+            val placesService = remember { PlacesService() }
             val shareService = remember { ShareService(context) }
             val geofencingService = remember { GeofencingService(context) }
             App(
