@@ -63,9 +63,9 @@ Deno.serve(async (req) => {
 
     console.log(`Analyzing dish image: ${imageBase64.length} chars, mimeType: ${mimeType}`)
 
-    // Call Gemini API with vision capabilities (using gemini-2.0-flash for best results)
+    // Call Gemini API with vision capabilities (using gemini-3.1-flash-lite-preview for best results)
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: {
