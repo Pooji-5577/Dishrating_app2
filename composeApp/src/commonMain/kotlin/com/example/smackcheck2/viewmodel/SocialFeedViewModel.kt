@@ -82,6 +82,8 @@ class SocialFeedViewModel : ViewModel() {
 
     fun toggleLike(itemId: String) {
         val userId = authRepository.getCurrentUserId() ?: return
+        // Capture pre-toggle state so we can revert on failure
+        val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
 
         viewModelScope.launch {
             val result = databaseRepository.toggleLike(userId, itemId)
@@ -101,7 +103,16 @@ class SocialFeedViewModel : ViewModel() {
                         state.copy(feedItems = updatedItems)
                     }
                 },
-                onFailure = { /* silently fail */ }
+                onFailure = { e ->
+                    println("SocialFeedViewModel: toggleLike failed for $itemId: ${e.message}")
+                    // Revert optimistic UI toggle in the Composable by restoring the original state
+                    _uiState.update { state ->
+                        val revertedItems = state.feedItems.map { item ->
+                            if (item.id == itemId) item.copy(isLiked = wasLiked) else item
+                        }
+                        state.copy(feedItems = revertedItems)
+                    }
+                }
             )
         }
     }
