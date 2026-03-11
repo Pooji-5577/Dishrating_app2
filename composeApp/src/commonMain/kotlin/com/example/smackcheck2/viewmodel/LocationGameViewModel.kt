@@ -28,6 +28,8 @@ import kotlinx.coroutines.flow.update
 data class LocationHomeUiState(
     val isLoading: Boolean = false,
     val selectedLocation: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val topRestaurants: List<Restaurant> = emptyList(),
     val topDishes: List<Dish> = emptyList(),
     val allRestaurants: List<Restaurant> = emptyList(),
@@ -42,24 +44,46 @@ class LocationHomeViewModel : ViewModel() {
     val uiState: StateFlow<LocationHomeUiState> = _uiState.asStateFlow()
     
     init {
-        // Load mock data
-        loadMockData()
+        // Don't load mock data by default — wait for real location
+        // If no location is detected, screens will show "Select Location" prompt
     }
     
+    /**
+     * Select a location by name (e.g. from the city list or from auto-detect)
+     */
     fun selectLocation(location: String) {
         _uiState.update { it.copy(selectedLocation = location, isLoading = true) }
-        // Simulate loading location-based data
         loadDataForLocation(location)
     }
-    
-    fun useCurrentLocation() {
-        // Simulate GPS location detection
-        selectLocation("New York")
+
+    /**
+     * Select a location with full GPS data (called after auto-detection)
+     *
+     * @param city     Reverse-geocoded city name
+     * @param latitude GPS latitude
+     * @param longitude GPS longitude
+     */
+    fun selectLocationWithCoordinates(city: String, latitude: Double, longitude: Double) {
+        _uiState.update {
+            it.copy(
+                selectedLocation = city,
+                latitude = latitude,
+                longitude = longitude,
+                isLoading = true
+            )
+        }
+        loadDataForLocation(city)
     }
-    
-    private fun loadMockData() {
-        // Pre-load with a default location for demo
-        selectLocation("New York")
+
+    /**
+     * Called when "Use Current Location" is tapped.
+     * The actual GPS detection happens in the platform layer (MainActivity / AppLocationManager).
+     * This is a fallback that sets a placeholder until the real location arrives.
+     */
+    fun useCurrentLocation() {
+        _uiState.update { it.copy(isLoading = true) }
+        // The actual location will be set by the platform layer calling
+        // selectLocationWithCoordinates() once GPS data is available.
     }
     
     private fun loadDataForLocation(location: String) {

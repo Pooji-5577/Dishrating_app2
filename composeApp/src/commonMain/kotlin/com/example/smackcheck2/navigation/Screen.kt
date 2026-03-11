@@ -33,6 +33,9 @@ sealed class Screen(val route: String) {
     data object TopRestaurants : Screen("top_restaurants")
     data object Game : Screen("game")
     
+    // Manual dish entry (AI fallback)
+    data object ManualDishEntry : Screen("manual_dish_entry")
+    
     // Dark theme screens
     data object DarkHome : Screen("dark_home")
     data object DarkDishCapture : Screen("dark_dish_capture")

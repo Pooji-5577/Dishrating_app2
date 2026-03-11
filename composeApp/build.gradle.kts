@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.kotlinxSerialization)
 }
 
 kotlin {
@@ -39,11 +40,17 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.kamel.image)
             implementation(libs.ktor.client.core)
+            // Supabase
+            implementation(libs.supabase.postgrest)
+            implementation(libs.supabase.auth)
+            implementation(libs.kotlinx.serialization.json)
         }
         androidMain.dependencies {
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.play.services.location)
+            implementation(libs.kotlinx.coroutines.play.services)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

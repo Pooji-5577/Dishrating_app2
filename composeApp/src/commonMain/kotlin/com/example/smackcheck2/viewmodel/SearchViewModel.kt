@@ -2,25 +2,41 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.SearchRepository
+import com.example.smackcheck2.data.SupabaseClient
+import com.example.smackcheck2.data.SupabaseRestaurantRow
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.model.Review
 import com.example.smackcheck2.model.RestaurantDetailUiState
 import com.example.smackcheck2.model.SearchUiState
 import com.example.smackcheck2.model.ManualRestaurantUiState
+import io.github.jan.supabase.postgrest.from
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
  * ViewModel for Search screen
+ * Searches restaurants from Supabase with support for
+ * "Restaurants & Cafes Only" filter, cuisine, rating and city filters.
  */
+@OptIn(FlowPreview::class)
 class SearchViewModel : ViewModel() {
+    
+    private val repository = SearchRepository()
     
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+    
+    // Debounce channel for search queries
+    private val searchQuery = MutableStateFlow("")
     
     val availableCuisines = listOf(
         "Italian", "Japanese", "Indian", "Mexican", "Chinese", 
@@ -32,11 +48,25 @@ class SearchViewModel : ViewModel() {
         "San Francisco", "Seattle", "Miami", "Boston", "Denver"
     )
     
+    init {
+        // Debounced search — waits 400ms after user stops typing
+        viewModelScope.launch {
+            searchQuery
+                .debounce(400L)
+                .distinctUntilChanged()
+                .collectLatest { query ->
+                    if (query.length >= 2) {
+                        performSearch()
+                    } else if (query.isEmpty()) {
+                        _uiState.update { it.copy(results = emptyList(), errorMessage = null) }
+                    }
+                }
+        }
+    }
+    
     fun onQueryChange(query: String) {
         _uiState.update { it.copy(query = query) }
-        if (query.length >= 2) {
-            search()
-        }
+        searchQuery.value = query
     }
     
     fun onCuisineToggle(cuisine: String) {
@@ -61,53 +91,51 @@ class SearchViewModel : ViewModel() {
         search()
     }
     
+    /**
+     * Toggle "Restaurants & Cafes Only" filter
+     */
+    fun toggleRestaurantsAndCafesFilter() {
+        _uiState.update { 
+            it.copy(restaurantsAndCafesOnly = !it.restaurantsAndCafesOnly) 
+        }
+        search()
+    }
+    
     fun search() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            performSearch()
+        }
+    }
+    
+    /**
+     * Perform the actual search against Supabase
+     */
+    private suspend fun performSearch() {
+        val state = _uiState.value
+        
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        
+        try {
+            val results = repository.searchRestaurants(
+                query = state.query,
+                cuisines = state.selectedCuisines,
+                minRating = state.selectedRating,
+                city = state.selectedCity,
+                restaurantsAndCafesOnly = state.restaurantsAndCafesOnly
+            )
             
-            try {
-                delay(500)
-                // Simulate search results
-                val results = listOf(
-                    Restaurant(
-                        id = "1",
-                        name = "Italian Kitchen",
-                        city = "New York",
-                        cuisine = "Italian",
-                        averageRating = 4.5f,
-                        reviewCount = 128
-                    ),
-                    Restaurant(
-                        id = "2",
-                        name = "Tokyo Bites",
-                        city = "Los Angeles",
-                        cuisine = "Japanese",
-                        averageRating = 4.8f,
-                        reviewCount = 256
-                    ),
-                    Restaurant(
-                        id = "3",
-                        name = "Spice Garden",
-                        city = "Chicago",
-                        cuisine = "Indian",
-                        averageRating = 4.2f,
-                        reviewCount = 89
-                    )
+            _uiState.update {
+                it.copy(
+                    results = results,
+                    isLoading = false
                 )
-                
-                _uiState.update {
-                    it.copy(
-                        results = results,
-                        isLoading = false
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Search failed"
-                    )
-                }
+            }
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    errorMessage = e.message ?: "Search failed"
+                )
             }
         }
     }
@@ -117,7 +145,8 @@ class SearchViewModel : ViewModel() {
             it.copy(
                 selectedCuisines = emptySet(),
                 selectedRating = null,
-                selectedCity = null
+                selectedCity = null,
+                restaurantsAndCafesOnly = false
             )
         }
         search()
@@ -126,64 +155,69 @@ class SearchViewModel : ViewModel() {
 
 /**
  * ViewModel for Restaurant Detail screen
+ * Loads restaurant data and photos from Supabase
  */
 class RestaurantDetailViewModel : ViewModel() {
+    
+    private val client = SupabaseClient.client
     
     private val _uiState = MutableStateFlow(RestaurantDetailUiState())
     val uiState: StateFlow<RestaurantDetailUiState> = _uiState.asStateFlow()
     
+    /**
+     * Load restaurant details from Supabase by ID.
+     * Fetches restaurant info and builds image URL list from photo_urls/image_url.
+     */
     fun loadRestaurant(restaurantId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             
             try {
-                delay(800)
-                val restaurant = Restaurant(
-                    id = restaurantId,
-                    name = "Italian Kitchen",
-                    city = "New York",
-                    cuisine = "Italian",
-                    imageUrls = listOf(
-                        "https://example.com/image1.jpg",
-                        "https://example.com/image2.jpg",
-                        "https://example.com/image3.jpg"
-                    ),
-                    averageRating = 4.5f,
-                    reviewCount = 128
-                )
+                // Fetch restaurant from Supabase
+                val row = client.from("restaurants")
+                    .select {
+                        filter { eq("id", restaurantId) }
+                    }
+                    .decodeSingleOrNull<SupabaseRestaurantRow>()
                 
-                // Mock timestamp for demo data
-                val currentTime = 1737417600000L
-                
-                val reviews = listOf(
-                    Review(
-                        id = "1",
-                        userId = "user1",
-                        userName = "John Doe",
-                        dishName = "Margherita Pizza",
-                        rating = 5f,
-                        comment = "Best pizza in town!",
-                        likesCount = 12,
-                        createdAt = currentTime
-                    ),
-                    Review(
-                        id = "2",
-                        userId = "user2",
-                        userName = "Jane Smith",
-                        dishName = "Pasta Carbonara",
-                        rating = 4f,
-                        comment = "Great pasta, authentic taste.",
-                        likesCount = 8,
-                        createdAt = currentTime - 86400000
+                if (row != null) {
+                    // Build image URLs: prefer photo_urls, fallback to image_url
+                    val images = when {
+                        !row.photoUrls.isNullOrEmpty() -> row.photoUrls
+                        !row.imageUrl.isNullOrBlank() -> listOf(row.imageUrl)
+                        else -> emptyList()
+                    }
+                    
+                    val restaurant = Restaurant(
+                        id = row.id,
+                        name = row.name,
+                        city = row.city ?: "",
+                        cuisine = row.cuisine ?: "",
+                        category = row.category ?: "",
+                        imageUrls = images,
+                        averageRating = row.averageRating?.toFloat() ?: 0f,
+                        reviewCount = row.ratingCount ?: 0,
+                        latitude = row.latitude,
+                        longitude = row.longitude
                     )
-                )
-                
-                _uiState.update {
-                    it.copy(
-                        restaurant = restaurant,
-                        reviews = reviews,
-                        isLoading = false
-                    )
+                    
+                    // TODO: Fetch reviews from Supabase ratings table
+                    val reviews = emptyList<Review>()
+                    
+                    _uiState.update {
+                        it.copy(
+                            restaurant = restaurant,
+                            reviews = reviews,
+                            isLoading = false
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = "Restaurant not found"
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update {

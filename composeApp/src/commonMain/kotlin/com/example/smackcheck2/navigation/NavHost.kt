@@ -1,12 +1,16 @@
 package com.example.smackcheck2.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.smackcheck2.location.CommonLocationState
+import com.example.smackcheck2.location.SharedLocationState
+import com.example.smackcheck2.location.requestCurrentLocationDetection
 import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.ui.screens.AllRestaurantsScreen
 import com.example.smackcheck2.ui.screens.BadgesScreen
@@ -29,8 +33,8 @@ import com.example.smackcheck2.ui.screens.LocationHomeScreen
 import com.example.smackcheck2.ui.screens.LocationPermissionScreen
 import com.example.smackcheck2.ui.screens.LocationSelectionScreen
 import com.example.smackcheck2.ui.screens.LoginScreen
+import com.example.smackcheck2.ui.screens.ManualDishEntryScreen
 import com.example.smackcheck2.ui.screens.ManualRestaurantEntryScreen
-import com.example.smackcheck2.ui.screens.DarkProfileScreen
 import com.example.smackcheck2.ui.screens.RegisterScreen
 import com.example.smackcheck2.ui.screens.RestaurantDetailScreen
 import com.example.smackcheck2.ui.screens.SearchScreen
@@ -44,6 +48,7 @@ import com.example.smackcheck2.viewmodel.DishRatingViewModel
 import com.example.smackcheck2.viewmodel.GameViewModel
 import com.example.smackcheck2.viewmodel.LocationHomeViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
+import com.example.smackcheck2.viewmodel.ManualDishEntryViewModel
 import com.example.smackcheck2.viewmodel.ManualRestaurantViewModel
 import com.example.smackcheck2.viewmodel.ProfileViewModel
 import com.example.smackcheck2.viewmodel.RegisterViewModel
@@ -116,6 +121,26 @@ fun SmackCheckNavHost() {
     val authViewModel: AuthViewModel = viewModel { AuthViewModel() }
     val authState by authViewModel.authState.collectAsState()
     
+    // ── Shared LocationHomeViewModel (single instance for the whole app) ──
+    val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
+    
+    // ── Observe SharedLocationState and auto-update the LocationHomeViewModel ──
+    val locationState by SharedLocationState.locationState.collectAsState()
+    LaunchedEffect(locationState) {
+        when (val state = locationState) {
+            is CommonLocationState.Success -> {
+                val data = state.data
+                val city = data.city ?: "Unknown Location"
+                locationHomeViewModel.selectLocationWithCoordinates(
+                    city = city,
+                    latitude = data.latitude,
+                    longitude = data.longitude
+                )
+            }
+            else -> { /* Loading, Idle, Permission, Disabled, Error – handled by individual screens */ }
+        }
+    }
+    
     val isAuthenticated = when (authState) {
         is AuthState.Authenticated -> true
         is AuthState.Unauthenticated -> false
@@ -150,7 +175,6 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.Home -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             LocationHomeScreen(
                 viewModel = locationHomeViewModel,
@@ -265,7 +289,11 @@ fun SmackCheckNavHost() {
         is Screen.LocationPermission -> {
             LocationPermissionScreen(
                 onNavigateBack = { navigationState.navigateBack() },
-                onPermissionGranted = { navigationState.navigateBack() },
+                onPermissionGranted = {
+                    // Permission granted → trigger location detection
+                    requestCurrentLocationDetection()
+                    navigationState.navigateBack()
+                },
                 onPermissionDenied = { navigationState.navigateBack() }
             )
         }
@@ -288,7 +316,6 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.LocationSelection -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             LocationSelectionScreen(
                 currentLocation = uiState.selectedLocation,
@@ -298,14 +325,14 @@ fun SmackCheckNavHost() {
                     navigationState.navigateBack()
                 },
                 onUseCurrentLocation = {
-                    locationHomeViewModel.useCurrentLocation()
+                    // Trigger real GPS location detection via platform layer
+                    requestCurrentLocationDetection()
                     navigationState.navigateBack()
                 }
             )
         }
         
         is Screen.AllRestaurants -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             AllRestaurantsScreen(
                 location = uiState.selectedLocation ?: "Unknown",
@@ -321,7 +348,6 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.TopDishes -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             DarkTopDishesScreen(
                 location = uiState.selectedLocation ?: "New York, NY",
@@ -337,7 +363,6 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.TopRestaurants -> {
-            val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
             val uiState by locationHomeViewModel.uiState.collectAsState()
             DarkTopRestaurantsScreen(
                 location = uiState.selectedLocation ?: "New York, NY",
@@ -361,8 +386,11 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.DarkHome -> {
+            // Use the auto-detected or manually-selected location
+            val homeUiState by locationHomeViewModel.uiState.collectAsState()
+            val detectedLocation = homeUiState.selectedLocation ?: "Detecting location..."
             DarkHomeScreen(
-                currentLocation = "123 Main Street, New York, NY",
+                currentLocation = detectedLocation,
                 onLocationClick = { navigationState.navigateTo(Screen.LocationSelection) },
                 onDishClick = { dishId ->
                     navigationState.navigateToWithArgs(
@@ -394,7 +422,24 @@ fun SmackCheckNavHost() {
                         "imageUri" to imageUri,
                         "dishName" to dishName
                     )
+                },
+                onAddManually = { imageUri ->
+                    // AI fallback → open manual dish entry with the captured photo
+                    navigationState.navigateToWithArgs(
+                        Screen.ManualDishEntry,
+                        "imageUri" to imageUri
+                    )
                 }
+            )
+        }
+
+        is Screen.ManualDishEntry -> {
+            val manualDishViewModel: ManualDishEntryViewModel = viewModel { ManualDishEntryViewModel() }
+            ManualDishEntryScreen(
+                viewModel = manualDishViewModel,
+                imageUri = navigationState.imageUri,
+                onNavigateBack = { navigationState.navigateBack() },
+                onSubmitSuccess = { navigationState.popToRoot() }
             )
         }
         

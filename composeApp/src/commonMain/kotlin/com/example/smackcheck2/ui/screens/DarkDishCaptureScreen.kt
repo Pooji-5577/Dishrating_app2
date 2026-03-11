@@ -61,14 +61,22 @@ import com.example.smackcheck2.ui.theme.appColors
 import kotlinx.coroutines.delay
 
 /**
- * Dark themed Dish Capture Screen with AI detection
- * Allows users to capture/upload dish photos and auto-detect dish name
+ * Dark themed Dish Capture Screen with AI detection and manual-entry fallback.
+ *
+ * When the simulated AI returns a low-confidence result (< 0.5) or no dish
+ * is detected, a fallback card is shown with:
+ *   • "Add Dish Manually" button → navigates to ManualDishEntryScreen
+ *   • "Skip" button             → navigates back
+ *
+ * A high-confidence result shows the standard confirmation card where the
+ * user can edit the detected name and proceed to rate the dish.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DarkDishCaptureScreen(
     onNavigateBack: () -> Unit,
-    onImageCaptured: (imageUri: String, dishName: String) -> Unit
+    onImageCaptured: (imageUri: String, dishName: String) -> Unit,
+    onAddManually: (imageUri: String) -> Unit = {}   // Fallback: open manual entry
 ) {
     val themeColors = appColors()
     var selectedImageUri by remember { mutableStateOf<String?>(null) }
@@ -78,26 +86,41 @@ fun DarkDishCaptureScreen(
     var editedName by remember { mutableStateOf("") }
     var flashMode by remember { mutableStateOf(FlashMode.Auto) }
     var showConfirmation by remember { mutableStateOf(false) }
+
+    // ── AI confidence tracking ──────────────────────────────────────────
+    var aiConfidence by remember { mutableStateOf(0f) }
+    var showFallback by remember { mutableStateOf(false) }  // true when AI fails
     
     // Simulate AI detection when image is captured
     LaunchedEffect(selectedImageUri) {
-        if (selectedImageUri != null && detectedDishName == null) {
+        if (selectedImageUri != null && detectedDishName == null && !showFallback) {
             isAnalyzing = true
             delay(2000) // Simulate AI processing
-            // Mock AI detection - in real app this would call ML model
-            detectedDishName = listOf(
-                "Butter Chicken",
-                "Margherita Pizza",
-                "Caesar Salad",
-                "Grilled Salmon",
-                "Pad Thai",
-                "Beef Burger",
-                "Sushi Platter",
-                "Pasta Carbonara"
-            ).random()
-            editedName = detectedDishName ?: ""
+
+            // ── Simulate confidence score (0.0 – 1.0) ──
+            // In a real app this comes from the ML model output
+            val confidence = (0..100).random() / 100f
+            aiConfidence = confidence
+
+            if (confidence >= 0.5f) {
+                // High confidence → show detected dish name
+                detectedDishName = listOf(
+                    "Butter Chicken",
+                    "Margherita Pizza",
+                    "Caesar Salad",
+                    "Grilled Salmon",
+                    "Pad Thai",
+                    "Beef Burger",
+                    "Sushi Platter",
+                    "Pasta Carbonara"
+                ).random()
+                editedName = detectedDishName ?: ""
+                showConfirmation = true
+            } else {
+                // Low confidence or no match → show fallback UI
+                showFallback = true
+            }
             isAnalyzing = false
-            showConfirmation = true
         }
     }
     
@@ -166,12 +189,14 @@ fun DarkDishCaptureScreen(
                     }
                 )
             } else {
-                // Image Preview with AI Detection
+                // Image Preview with AI Detection or Fallback
                 ImagePreviewWithAI(
                     imageUri = selectedImageUri!!,
                     isAnalyzing = isAnalyzing,
                     detectedDishName = if (isEditingName) editedName else detectedDishName,
                     showConfirmation = showConfirmation,
+                    showFallback = showFallback,
+                    aiConfidence = aiConfidence,
                     isEditingName = isEditingName,
                     editedName = editedName,
                     onEditedNameChange = { editedName = it },
@@ -188,11 +213,18 @@ fun DarkDishCaptureScreen(
                         selectedImageUri = null
                         detectedDishName = null
                         showConfirmation = false
+                        showFallback = false
+                        aiConfidence = 0f
                         isEditingName = false
                     },
                     onConfirm = {
                         onImageCaptured(selectedImageUri!!, detectedDishName ?: editedName)
-                    }
+                    },
+                    onAddManually = {
+                        // Navigate to the manual dish entry screen with the captured photo
+                        onAddManually(selectedImageUri!!)
+                    },
+                    onSkip = onNavigateBack
                 )
             }
         }
@@ -352,6 +384,8 @@ private fun ImagePreviewWithAI(
     isAnalyzing: Boolean,
     detectedDishName: String?,
     showConfirmation: Boolean,
+    showFallback: Boolean,
+    aiConfidence: Float,
     isEditingName: Boolean,
     editedName: String,
     onEditedNameChange: (String) -> Unit,
@@ -359,7 +393,9 @@ private fun ImagePreviewWithAI(
     onConfirmEdit: () -> Unit,
     onCancelEdit: () -> Unit,
     onRetake: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
+    onAddManually: () -> Unit,
+    onSkip: () -> Unit
 ) {
     val themeColors = appColors()
     Column(
@@ -437,7 +473,144 @@ private fun ImagePreviewWithAI(
             }
         }
         
-        // Detection result and actions
+        // ── FALLBACK UI: shown when AI detection fails ────────────────────
+        if (showFallback && !isAnalyzing) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = themeColors.Surface
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Warning icon
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .background(
+                                themeColors.Warning.copy(alpha = 0.15f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Restaurant,
+                            contentDescription = null,
+                            tint = themeColors.Warning,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Fallback message
+                    Text(
+                        text = "We couldn't recognize this dish",
+                        color = themeColors.TextPrimary,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = "You can add the dish details manually\nor try taking another photo.",
+                        color = themeColors.TextSecondary,
+                        fontSize = 14.sp,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 20.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // ── Action buttons ─────────────────────────────────────
+                    // Primary: Add Dish Manually
+                    Button(
+                        onClick = onAddManually,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = themeColors.Primary,
+                            contentColor = Color.White
+                        ),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Add Dish Manually",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // Secondary row: Retake + Skip
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // Retake photo
+                        Button(
+                            onClick = onRetake,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = themeColors.SurfaceVariant,
+                                contentColor = themeColors.TextPrimary
+                            ),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Retake", fontSize = 14.sp)
+                        }
+
+                        // Skip / close
+                        Button(
+                            onClick = onSkip,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = themeColors.SurfaceVariant,
+                                contentColor = themeColors.TextSecondary
+                            ),
+                            shape = RoundedCornerShape(14.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Skip", fontSize = 14.sp)
+                        }
+                    }
+                }
+            }
+        }
+
+        // Detection result and actions (high-confidence path)
         if (showConfirmation && !isAnalyzing) {
             Card(
                 modifier = Modifier

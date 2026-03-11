@@ -89,6 +89,7 @@ data class SearchUiState(
     val selectedCuisines: Set<String> = emptySet(),
     val selectedRating: Float? = null,
     val selectedCity: String? = null,
+    val restaurantsAndCafesOnly: Boolean = false,
     val results: List<Restaurant> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
@@ -115,6 +116,22 @@ data class ManualRestaurantUiState(
     val cityError: String? = null,
     val cuisineError: String? = null,
     val isLoading: Boolean = false,
+    val isSuccess: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Manual dish entry UI state (AI fallback)
+ */
+data class ManualDishEntryUiState(
+    val dishName: String = "",
+    val restaurantName: String = "",
+    val description: String = "",
+    val rating: Float = 0f,
+    val imageUri: String = "",
+    val dishNameError: String? = null,
+    val restaurantNameError: String? = null,
+    val isSubmitting: Boolean = false,
     val isSuccess: Boolean = false,
     val errorMessage: String? = null
 )

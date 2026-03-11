@@ -38,10 +38,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.Review
+import com.example.smackcheck2.ui.components.FoodImages
 import com.example.smackcheck2.ui.components.LoadingState
+import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
@@ -100,7 +103,7 @@ fun RestaurantDetailScreen(
                         .fillMaxSize()
                         .padding(paddingValues)
                 ) {
-                    // Image gallery
+                    // Image gallery / carousel
                     item {
                         Text(
                             text = "Photos",
@@ -109,24 +112,34 @@ fun RestaurantDetailScreen(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
                         
+                        // Build image list: prefer Supabase URLs, fallback to Unsplash
+                        val imageUrls = restaurant.imageUrls.ifEmpty {
+                            // Fallback: generate 3 restaurant images from Unsplash
+                            listOf(
+                                FoodImages.getRestaurantImageByName(restaurant.name),
+                                FoodImages.getRestaurantImage(restaurant.name.hashCode().let { if (it < 0) -it else it } + 1),
+                                FoodImages.getRestaurantImage(restaurant.name.hashCode().let { if (it < 0) -it else it } + 2)
+                            )
+                        }
+                        
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(restaurant.imageUrls.ifEmpty { listOf("", "", "") }) { _ ->
+                            items(imageUrls) { imageUrl ->
+                                // Each photo in the carousel
                                 Box(
                                     modifier = Modifier
                                         .size(width = 200.dp, height = 150.dp)
                                         .clip(MaterialTheme.shapes.medium)
-                                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                                    contentAlignment = Alignment.Center
+                                        .background(MaterialTheme.colorScheme.surfaceVariant)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Restaurant,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    NetworkImage(
+                                        imageUrl = imageUrl,
+                                        contentDescription = "${restaurant.name} photo",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
                                     )
                                 }
                             }

@@ -49,6 +49,7 @@ data class Restaurant(
     val name: String = "",
     val city: String = "",
     val cuisine: String = "",
+    val category: String = "",
     val imageUrls: List<String> = emptyList(),
     val averageRating: Float = 0f,
     val reviewCount: Int = 0,

@@ -1,8 +1,12 @@
 package com.example.smackcheck2.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,8 +22,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Card
@@ -40,10 +47,15 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
+import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.components.FoodImages
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.SearchViewModel
 
@@ -131,6 +143,89 @@ fun DarkSearchScreen(
                 ),
                 singleLine = true
             )
+            
+            // ── "Restaurants & Cafes Only" Filter ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val isFilterActive = uiState.restaurantsAndCafesOnly
+                FilterChip(
+                    selected = isFilterActive,
+                    onClick = { viewModel.toggleRestaurantsAndCafesFilter() },
+                    label = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isFilterActive) Icons.Default.Check else Icons.Default.Restaurant,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (isFilterActive) themeColors.Primary else themeColors.TextSecondary
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Restaurants & Cafes Only")
+                        }
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = themeColors.CardBackground,
+                        labelColor = themeColors.TextSecondary,
+                        selectedContainerColor = themeColors.Primary.copy(alpha = 0.2f),
+                        selectedLabelColor = themeColors.Primary
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        borderColor = themeColors.Surface,
+                        selectedBorderColor = themeColors.Primary,
+                        enabled = true,
+                        selected = isFilterActive
+                    )
+                )
+            }
+            
+            // Active filter banner
+            AnimatedVisibility(visible = uiState.restaurantsAndCafesOnly) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
+                        .background(
+                            themeColors.Primary.copy(alpha = 0.1f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .border(
+                            1.dp,
+                            themeColors.Primary.copy(alpha = 0.3f),
+                            RoundedCornerShape(8.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FilterList,
+                        contentDescription = null,
+                        tint = themeColors.Primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Showing Restaurants & Cafes only",
+                        color = themeColors.Primary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Text(
+                        text = "Clear",
+                        color = themeColors.Primary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.clickable {
+                            viewModel.toggleRestaurantsAndCafesFilter()
+                        }
+                    )
+                }
+            }
             
             // Cuisine filters
             Text(
@@ -277,6 +372,10 @@ private fun DarkRestaurantSearchCard(
 ) {
     val themeColors = appColors()
     
+    // Pick the image URL: prefer Supabase photo_urls, fallback to Unsplash
+    val imageUrl = restaurant.imageUrls.firstOrNull()
+        ?: FoodImages.getRestaurantImageByName(restaurant.name)
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp),
@@ -288,9 +387,27 @@ private fun DarkRestaurantSearchCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // ── Thumbnail Image ──
+            Box(
+                modifier = Modifier
+                    .size(72.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(themeColors.Surface)
+            ) {
+                NetworkImage(
+                    imageUrl = imageUrl,
+                    contentDescription = restaurant.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // ── Info ──
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = restaurant.name,
@@ -325,7 +442,7 @@ private fun DarkRestaurantSearchCard(
                 }
             }
             
-            // Rating
+            // ── Rating ──
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Filled.Star,

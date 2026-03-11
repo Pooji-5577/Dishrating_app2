@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.PermissionState
+import com.example.smackcheck2.location.requestCurrentLocationDetection
 import com.example.smackcheck2.ui.components.LocationPermissionUI
 
 /**
@@ -94,8 +95,8 @@ fun LocationPermissionScreen(
             LocationPermissionUI(
                 permissionState = permissionState,
                 onAllowClick = {
-                    // In real app, request permission here
-                    // For demo, simulate granted
+                    // Trigger real platform location permission + detection
+                    requestCurrentLocationDetection()
                     permissionState = PermissionState.Granted
                     onPermissionGranted()
                 },
@@ -104,7 +105,8 @@ fun LocationPermissionScreen(
                     onPermissionDenied()
                 },
                 onOpenSettingsClick = {
-                    // In real app, open app settings
+                    // Platform-specific: open app settings
+                    // On Android this is handled by AppLocationManager.openAppSettings()
                 },
                 modifier = Modifier.fillMaxWidth()
             )
