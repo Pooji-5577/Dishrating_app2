@@ -53,19 +53,22 @@ class DishCaptureViewModel : ViewModel() {
                         detectionConfidence = result.confidence,
                         alternatives = result.alternatives,
                         isAIDetected = result.isAIDetected,
+                        itemType = result.itemType,
                         editedName = result.dishName,
                         debugInfo = result.debugInfo,
                         showConfirmation = true,
-                        showNotDishError = !result.isAIDetected && (result.dishName == "Unknown Dish" || result.dishName == "Unknown")
+                        // Only show "Not a dish" modal when itemType is unknown (truly unrecognised)
+                        showNotDishError = result.itemType == "unknown"
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
                         isAnalyzing = false,
-                        detectedDishName = "Unknown Dish",
+                        detectedDishName = "Unknown",
                         isAIDetected = false,
-                        editedName = "Unknown Dish",
+                        itemType = "unknown",
+                        editedName = "Unknown",
                         showConfirmation = true,
                         showNotDishError = true,
                         errorMessage = "AI detection failed. Please enter dish name manually.",

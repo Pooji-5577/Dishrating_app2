@@ -263,6 +263,7 @@ data class DishCaptureUiState(
     val detectionConfidence: Float = 0f,
     val alternatives: List<String> = emptyList(),
     val isAIDetected: Boolean = false,
+    val itemType: String = "unknown", // "food", "beverage", or "unknown"
     val isEditingName: Boolean = false,
     val editedName: String = "",
     val errorMessage: String? = null,
@@ -287,6 +288,7 @@ data class DishCaptureUiState(
         if (detectionConfidence != other.detectionConfidence) return false
         if (alternatives != other.alternatives) return false
         if (isAIDetected != other.isAIDetected) return false
+        if (itemType != other.itemType) return false
         if (isEditingName != other.isEditingName) return false
         if (editedName != other.editedName) return false
         if (errorMessage != other.errorMessage) return false
@@ -306,6 +308,7 @@ data class DishCaptureUiState(
         result = 31 * result + detectionConfidence.hashCode()
         result = 31 * result + alternatives.hashCode()
         result = 31 * result + isAIDetected.hashCode()
+        result = 31 * result + itemType.hashCode()
         result = 31 * result + isEditingName.hashCode()
         result = 31 * result + editedName.hashCode()
         result = 31 * result + (errorMessage?.hashCode() ?: 0)

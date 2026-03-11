@@ -18,6 +18,7 @@ data class DishDetectionResult(
     val alternatives: List<String>,
     val cuisine: String?,
     val isAIDetected: Boolean,
+    val itemType: String = "unknown", // "food", "beverage", or "unknown"
     val debugInfo: String? = null
 )
 
@@ -46,7 +47,7 @@ class AIDetectionRepository {
         // Validate image bytes
         if (imageBytes.isEmpty()) {
             println("AIDetection: Image bytes are empty!")
-            return createFallbackResult("Unknown Dish").copy(
+            return createFallbackResult("Unknown").copy(
                 debugInfo = "ERROR: Image bytes empty"
             )
         }
@@ -96,7 +97,7 @@ class AIDetectionRepository {
                     else -> "Error: ${response.status.value}"
                 }
 
-                return createFallbackResult("Unknown Dish").copy(
+                return createFallbackResult("Unknown").copy(
                     alternatives = listOf(errorMessage),
                     debugInfo = "HTTP ${response.status.value}: ${errorText.take(100)}"
                 )
@@ -106,41 +107,91 @@ class AIDetectionRepository {
             val responseText = response.body<String>()
             println("AIDetection: Response (first 500 chars): ${responseText.take(500)}")
 
-            val edgeResponse = json.decodeFromString<EdgeFunctionResponse>(responseText)
+            // Robust deserialization: if full JSON parsing fails, fall back to regex extraction
+            val edgeResponse = try {
+                json.decodeFromString<EdgeFunctionResponse>(responseText)
+            } catch (parseException: Exception) {
+                println("AIDetection: JSON parse failed (${parseException.message}), using regex fallback...")
+                val dishNameMatch = Regex("\"dishName\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+                val confidenceMatch = Regex("\"confidence\"\\s*:\\s*([\\d.]+)").find(responseText)
+                val cuisineMatch = Regex("\"cuisine\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+                val itemTypeMatch = Regex("\"itemType\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+                val errorMatch = Regex("\"error\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+                val extracted = dishNameMatch?.groupValues?.getOrNull(1) ?: ""
+                val extractedConf = confidenceMatch?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: 0f
+                println("AIDetection: Regex extracted -> dishName='$extracted', confidence=$extractedConf")
+                EdgeFunctionResponse(
+                    dishName = extracted,
+                    cuisine = cuisineMatch?.groupValues?.getOrNull(1) ?: "",
+                    confidence = extractedConf,
+                    itemType = itemTypeMatch?.groupValues?.getOrNull(1) ?: "unknown",
+                    error = errorMatch?.groupValues?.getOrNull(1)
+                )
+            }
 
             // Check for error in response
             if (!edgeResponse.error.isNullOrBlank()) {
                 println("AIDetection: Edge Function returned error: ${edgeResponse.error}")
-                return createFallbackResult("Unknown Dish").copy(
-                    alternatives = listOf(edgeResponse.error),
+                return createFallbackResult("Unknown").copy(
+                    alternatives = listOf(edgeResponse.error!!),
                     debugInfo = "Edge Function error: ${edgeResponse.error}"
                 )
             }
 
-            // Map response to DishDetectionResult
-            val dishName = if (edgeResponse.dishName.isBlank() || edgeResponse.dishName.equals("Unknown", ignoreCase = true)) {
-                "Unknown Dish"
-            } else {
-                edgeResponse.dishName
+            // Normalise dish name
+            val dishName = when {
+                edgeResponse.dishName.isBlank() -> "Unknown"
+                edgeResponse.dishName.equals("Unknown", ignoreCase = true) -> "Unknown"
+                edgeResponse.dishName.equals("Unknown Dish", ignoreCase = true) -> "Unknown"
+                else -> edgeResponse.dishName
             }
+
+            // Normalise item type — only accept known values
+            // If AI didn't return a type, infer from the dish name as a fallback
+            val itemType = when (edgeResponse.itemType.lowercase()) {
+                "food" -> "food"
+                "beverage" -> "beverage"
+                else -> if (dishName != "Unknown") inferItemTypeFromName(dishName) else "unknown"
+            }
+
+            println("AIDetection: Final dishName='$dishName', itemType='$itemType', confidence=${edgeResponse.confidence}")
 
             DishDetectionResult(
                 dishName = dishName,
                 confidence = edgeResponse.confidence.coerceIn(0f, 1f),
                 alternatives = edgeResponse.alternatives,
                 cuisine = edgeResponse.cuisine.takeIf { it.isNotBlank() },
-                isAIDetected = dishName != "Unknown Dish" && edgeResponse.confidence > 0.1f,
-                debugInfo = "OK via Edge Function"
+                // Detected if we have a real name — removed the confidence > 0.1 gate
+                isAIDetected = dishName != "Unknown",
+                itemType = itemType,
+                debugInfo = "OK via Edge Function (type=$itemType, conf=${edgeResponse.confidence})"
             )
 
         } catch (e: Exception) {
             println("AIDetection: Exception: ${e::class.simpleName} - ${e.message}")
             e.printStackTrace()
-            createFallbackResult("Unknown Dish").copy(
+            createFallbackResult("Unknown").copy(
                 alternatives = listOf("Error: ${e.message?.take(40) ?: "Unknown"}"),
                 debugInfo = "Exception: ${e::class.simpleName} - ${e.message?.take(80)}"
             )
         }
+    }
+
+    /**
+     * Infer item type from the dish/drink name when the AI doesn't provide item_type.
+     * Matches common beverage keywords; everything else is treated as food.
+     */
+    private fun inferItemTypeFromName(dishName: String): String {
+        val lower = dishName.lowercase()
+        val beverageKeywords = listOf(
+            "coffee", "tea", "juice", "beer", "wine", "cocktail", "smoothie", "shake",
+            "milkshake", "latte", "cappuccino", "espresso", "chai", "soda", "cola",
+            "water", "drink", "beverage", "mojito", "lemonade", "cider", "punch",
+            "americano", "macchiato", "mocha", "frappe", "matcha", "lassi", "kombucha",
+            "whiskey", "vodka", "rum", "gin", "ale", "lager", "sangria", "liquor",
+            "margarita", "daiquiri", "spritzer", "tonic", "fizz", "brew", "shot"
+        )
+        return if (beverageKeywords.any { lower.contains(it) }) "beverage" else "food"
     }
 
     private fun createFallbackResult(dishName: String): DishDetectionResult {
@@ -149,7 +200,8 @@ class AIDetectionRepository {
             confidence = 0f,
             alternatives = emptyList(),
             cuisine = null,
-            isAIDetected = false
+            isAIDetected = false,
+            itemType = "unknown"
         )
     }
 }
@@ -170,5 +222,6 @@ private data class EdgeFunctionResponse(
     val alternatives: List<String> = emptyList(),
     val description: String = "",
     val ingredients: List<String> = emptyList(),
+    val itemType: String = "unknown",
     val error: String? = null
 )

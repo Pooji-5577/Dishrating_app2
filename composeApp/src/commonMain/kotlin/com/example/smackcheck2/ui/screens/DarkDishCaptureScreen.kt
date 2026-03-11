@@ -195,6 +195,7 @@ fun DarkDishCaptureScreen(
                     isEditingName = uiState.isEditingName,
                     editedName = uiState.editedName,
                     isAIDetected = uiState.isAIDetected,
+                    itemType = uiState.itemType,
                     confidence = uiState.detectionConfidence,
                     cuisine = uiState.detectedCuisine,
                     debugInfo = uiState.debugInfo,
@@ -379,6 +380,7 @@ private fun ImagePreviewWithAI(
     isEditingName: Boolean,
     editedName: String,
     isAIDetected: Boolean,
+    itemType: String,
     confidence: Float,
     cuisine: String?,
     debugInfo: String?,
@@ -511,10 +513,17 @@ private fun ImagePreviewWithAI(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (isAIDetected) {
-                                val confidencePercent = (confidence * 100).toInt()
-                                "AI Detected ($confidencePercent%)"
-                            } else "Manual Entry",
+                            text = when {
+                                !isAIDetected -> "Manual Entry"
+                                itemType == "beverage" -> {
+                                    val confidencePercent = (confidence * 100).toInt()
+                                    "Beverage ($confidencePercent%)"
+                                }
+                                else -> {
+                                    val confidencePercent = (confidence * 100).toInt()
+                                    "Food ($confidencePercent%)"
+                                }
+                            },
                             color = if (isAIDetected) themeColors.Primary else Color.Gray,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
@@ -575,7 +584,7 @@ private fun ImagePreviewWithAI(
                             modifier = Modifier.clickable { onEditClick() }
                         ) {
                             Text(
-                                text = detectedDishName ?: "Unknown Dish",
+                                text = detectedDishName ?: "Unknown",
                                 color = themeColors.TextPrimary,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
@@ -622,7 +631,7 @@ private fun ImagePreviewWithAI(
                         Button(
                             onClick = onConfirm,
                             modifier = Modifier.weight(1f),
-                            enabled = !(detectedDishName == "Unknown Dish" && !isAIDetected),
+                            enabled = !(detectedDishName == "Unknown" && !isAIDetected),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = themeColors.Primary,
                                 contentColor = Color.White,

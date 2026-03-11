@@ -18,26 +18,31 @@ interface DishAnalysisResponse {
   alternatives: string[]
   description: string
   ingredients: string[]
+  itemType: string  // "food", "beverage", or "unknown"
   error?: string
 }
 
-const DETECTION_PROMPT = `You are a food identification expert. Look at this image and identify the food dish shown.
+const DETECTION_PROMPT = `You are a food and beverage identification expert. Look at this image and identify what is shown — it could be a food dish OR a beverage (drink).
 
 IMPORTANT: You MUST respond with ONLY a JSON object, no other text before or after.
 
-Response format (JSON only):
-{"dish_name":"Pizza Margherita","cuisine":"Italian","confidence":0.9,"alternatives":["Cheese Pizza","Flatbread"],"description":"Classic Italian pizza with tomato sauce, mozzarella, and basil","ingredients":["tomato sauce","mozzarella","basil","olive oil"]}
+Response format for FOOD (JSON only):
+{"dish_name":"Pizza Margherita","cuisine":"Italian","confidence":0.9,"item_type":"food","alternatives":["Cheese Pizza","Flatbread"],"description":"Classic Italian pizza with tomato sauce, mozzarella, and basil","ingredients":["tomato sauce","mozzarella","basil","olive oil"]}
+
+Response format for BEVERAGE (JSON only):
+{"dish_name":"Cappuccino","cuisine":"Italian","confidence":0.95,"item_type":"beverage","alternatives":["Latte","Coffee"],"description":"Italian espresso-based coffee drink with steamed milk foam","ingredients":["espresso","steamed milk","milk foam"]}
 
 Guidelines:
-1. dish_name: The most common English name for this dish (be specific, e.g., "Chicken Tikka Masala" not just "Curry")
-2. cuisine: The type of cuisine (Italian, Indian, Mexican, Chinese, American, Japanese, Thai, etc.)
+1. dish_name: The most common English name for the item (be specific, e.g., "Chicken Tikka Masala" not just "Curry", "Mango Lassi" not just "Drink")
+2. cuisine: The type of cuisine or origin (Italian, Indian, Mexican, Chinese, American, Japanese, Thai, etc.)
 3. confidence: A number between 0.0 and 1.0 indicating how certain you are
-4. alternatives: 1-3 other possible names for the dish if you're not 100% sure
-5. description: A brief 1-2 sentence description of the dish
-6. ingredients: List of visible or likely ingredients
+4. item_type: Use "food" for solid food dishes/snacks/desserts, "beverage" for any drink (coffee, tea, juice, cocktail, milkshake, wine, beer, smoothie, soda, water, etc.), or "unknown" only if the image clearly shows neither food nor a drink
+5. alternatives: 1-3 other possible names if you're not 100% sure
+6. description: A brief 1-2 sentence description
+7. ingredients: List of visible or likely ingredients
 
-If the image doesn't clearly show food or you cannot identify it, respond with:
-{"dish_name":"Unknown Dish","cuisine":"Unknown","confidence":0.0,"alternatives":[],"description":"Unable to identify the dish","ingredients":[]}
+If the image clearly shows neither food nor a beverage, respond with:
+{"dish_name":"Unknown","cuisine":"Unknown","confidence":0.0,"item_type":"unknown","alternatives":[],"description":"Unable to identify food or beverage","ingredients":[]}
 
 Remember: Output ONLY the JSON, nothing else.`
 
@@ -137,16 +142,34 @@ Deno.serve(async (req) => {
     const parsedResponse = JSON.parse(jsonMatch[0])
     
     // Map to our response format (handle both snake_case and camelCase from Gemini)
+    const rawItemType = parsedResponse.item_type || parsedResponse.itemType || 'unknown'
+    let itemType = ['food', 'beverage'].includes(rawItemType.toLowerCase()) ? rawItemType.toLowerCase() : 'unknown'
+
+    // Keyword-based fallback: if Gemini didn't return a clear item_type, infer from the dish name
+    const dishNameForType = (parsedResponse.dish_name || parsedResponse.dishName || '').toLowerCase()
+    if (itemType === 'unknown' && dishNameForType && dishNameForType !== 'unknown') {
+      const beverageKeywords = [
+        'coffee', 'tea', 'juice', 'beer', 'wine', 'cocktail', 'smoothie', 'shake',
+        'milkshake', 'latte', 'cappuccino', 'espresso', 'chai', 'soda', 'cola',
+        'water', 'drink', 'beverage', 'mojito', 'lemonade', 'cider', 'punch',
+        'americano', 'macchiato', 'mocha', 'frappe', 'matcha', 'lassi', 'kombucha',
+        'whiskey', 'vodka', 'rum', 'gin', 'ale', 'lager', 'sangria', 'liquor',
+        'margarita', 'daiquiri', 'spritzer', 'tonic', 'fizz', 'brew', 'shot'
+      ]
+      itemType = beverageKeywords.some(kw => dishNameForType.includes(kw)) ? 'beverage' : 'food'
+    }
+
     const dishAnalysis: DishAnalysisResponse = {
-      dishName: parsedResponse.dish_name || parsedResponse.dishName || 'Unknown Dish',
+      dishName: parsedResponse.dish_name || parsedResponse.dishName || 'Unknown',
       cuisine: parsedResponse.cuisine || 'Unknown',
       confidence: parsedResponse.confidence || 0,
       alternatives: parsedResponse.alternatives || [],
       description: parsedResponse.description || '',
-      ingredients: parsedResponse.ingredients || []
+      ingredients: parsedResponse.ingredients || [],
+      itemType
     }
 
-    console.log(`Detected dish: ${dishAnalysis.dishName} (${dishAnalysis.confidence} confidence)`)
+    console.log(`Detected: ${dishAnalysis.dishName} (type=${dishAnalysis.itemType}, confidence=${dishAnalysis.confidence})`)
 
     return new Response(
       JSON.stringify(dishAnalysis),
@@ -165,12 +188,13 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({ 
         error: errorMessage,
-        dishName: 'Unknown Dish',
+        dishName: 'Unknown',
         cuisine: '',
         confidence: 0,
         alternatives: [],
         description: '',
-        ingredients: []
+        ingredients: [],
+        itemType: 'unknown'
       }),
       { 
         status: 400,
