@@ -209,10 +209,13 @@ fun DishRatingScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Dropdown for filtered restaurants
+                // Dropdown for filtered restaurants (searches name, cuisine, and city)
                 val filteredRestaurants = restaurants.filter {
-                    restaurantSearchQuery.isNotBlank() &&
-                            it.name.contains(restaurantSearchQuery, ignoreCase = true)
+                    restaurantSearchQuery.isNotBlank() && (
+                        it.name.contains(restaurantSearchQuery, ignoreCase = true) ||
+                        it.cuisine.contains(restaurantSearchQuery, ignoreCase = true) ||
+                        it.city.contains(restaurantSearchQuery, ignoreCase = true)
+                    )
                 }.take(5)
 
                 DropdownMenu(

@@ -89,14 +89,18 @@ fun DarkDishRatingScreen(
     imageBytes: ByteArray? = null,
     restaurants: List<Restaurant> = emptyList(),
     nearbyRestaurants: List<Restaurant> = emptyList(),
+    searchedRestaurants: List<Restaurant> = emptyList(),
     isLoadingRestaurants: Boolean = false,
+    isSearchingRestaurants: Boolean = false,
     isSubmitting: Boolean = false,
     showSuccess: Boolean = false,
     xpEarned: Int? = null,
     errorMessage: String? = null,
     onNavigateBack: () -> Unit,
     onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurantId: String?) -> Unit,
-    onDismissError: () -> Unit = {}
+    onDismissError: () -> Unit = {},
+    onAddRestaurantManually: (() -> Unit)? = null,
+    onSearchRestaurants: ((String) -> Unit)? = null
 ) {
     var rating by remember { mutableFloatStateOf(0f) }
     var comment by remember { mutableStateOf("") }
@@ -536,18 +540,36 @@ fun DarkDishRatingScreen(
                 // Search field
                 OutlinedTextField(
                     value = restaurantSearchQuery,
-                    onValueChange = { restaurantSearchQuery = it },
+                    onValueChange = { query ->
+                        restaurantSearchQuery = query
+                        // Trigger search when user types 3+ characters
+                        if (query.length >= 3 && onSearchRestaurants != null) {
+                            onSearchRestaurants(query)
+                        }
+                    },
                     placeholder = { Text("Search restaurants...") },
                     leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.Search,
-                            contentDescription = null,
-                            tint = appColors().TextSecondary
-                        )
+                        if (isSearchingRestaurants) {
+                            CircularProgressIndicator(
+                                color = appColors().Primary,
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = null,
+                                tint = appColors().TextSecondary
+                            )
+                        }
                     },
                     trailingIcon = {
                         if (restaurantSearchQuery.isNotEmpty()) {
-                            IconButton(onClick = { restaurantSearchQuery = "" }) {
+                            IconButton(onClick = { 
+                                restaurantSearchQuery = "" 
+                                // Clear search results when clearing the query
+                                onSearchRestaurants?.invoke("")
+                            }) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "Clear",
@@ -580,6 +602,13 @@ fun DarkDishRatingScreen(
                         CircularProgressIndicator(color = appColors().Primary)
                     }
                 } else {
+                    // Combine nearby restaurants with search results from Places API
+                    val searchResults = if (restaurantSearchQuery.length >= 3 && searchedRestaurants.isNotEmpty()) {
+                        searchedRestaurants
+                    } else {
+                        emptyList()
+                    }
+                    
                     // When nearby restaurants are available (location selected), show only those
                     // Otherwise fall back to all restaurants
                     val primaryRestaurants = if (nearbyRestaurants.isNotEmpty()) {
@@ -588,17 +617,21 @@ fun DarkDishRatingScreen(
                         restaurants
                     }
 
-                    // Filter based on search query
+                    // Filter based on search query (searches name, cuisine, and city)
                     val filteredNearby = primaryRestaurants.filter {
                         restaurantSearchQuery.isEmpty() ||
                         it.name.contains(restaurantSearchQuery, ignoreCase = true) ||
-                        it.cuisine.contains(restaurantSearchQuery, ignoreCase = true)
+                        it.cuisine.contains(restaurantSearchQuery, ignoreCase = true) ||
+                        it.city.contains(restaurantSearchQuery, ignoreCase = true)
                     }
+                    
+                    // Combine filtered nearby with search results
+                    val allFilteredNearby = (filteredNearby + searchResults).distinctBy { it.id }
 
                     // Only show "All Restaurants" section if no location is selected
-                    val nearbyIds = nearbyRestaurants.map { it.id }.toSet()
-                    val filteredOthers = if (nearbyRestaurants.isEmpty()) {
-                        // No location selected, don't show separate "All" section
+                    val nearbyIds = (nearbyRestaurants + searchResults).map { it.id }.toSet()
+                    val filteredOthers = if (nearbyRestaurants.isEmpty() && searchResults.isEmpty()) {
+                        // No location selected and no search results, don't show separate "All" section
                         emptyList()
                     } else {
                         // Location selected, show other restaurants from database as fallback
@@ -606,18 +639,20 @@ fun DarkDishRatingScreen(
                             restaurant.id !in nearbyIds && (
                                 restaurantSearchQuery.isEmpty() ||
                                 restaurant.name.contains(restaurantSearchQuery, ignoreCase = true) ||
-                                restaurant.cuisine.contains(restaurantSearchQuery, ignoreCase = true)
+                                restaurant.cuisine.contains(restaurantSearchQuery, ignoreCase = true) ||
+                                restaurant.city.contains(restaurantSearchQuery, ignoreCase = true)
                             )
                         }
                     }
 
-                    val hasAnyResults = filteredNearby.isNotEmpty() || filteredOthers.isNotEmpty()
+                    val hasAnyResults = allFilteredNearby.isNotEmpty() || filteredOthers.isNotEmpty()
 
-                    if (!hasAnyResults) {
+                    // Show "no results" only if we're not currently searching
+                    if (!hasAnyResults && !isSearchingRestaurants) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(200.dp),
+                                .height(250.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -629,17 +664,73 @@ fun DarkDishRatingScreen(
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "No restaurants found",
-                                    color = appColors().TextSecondary
+                                    text = if (restaurantSearchQuery.isNotEmpty()) 
+                                        "No restaurants found for \"$restaurantSearchQuery\"" 
+                                    else 
+                                        "No restaurants found in this area",
+                                    color = appColors().TextSecondary,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
                                 )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                if (onAddRestaurantManually != null) {
+                                    Button(
+                                        onClick = {
+                                            showRestaurantPicker = false
+                                            onAddRestaurantManually()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = appColors().Primary,
+                                            contentColor = Color.White
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Add,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("Add Restaurant Manually")
+                                    }
+                                }
                             }
                         }
                     } else {
                         LazyColumn(
                             modifier = Modifier.height(400.dp)
                         ) {
-                            // Nearby restaurants section
-                            if (filteredNearby.isNotEmpty()) {
+                            // Show loading indicator when searching
+                            if (isSearchingRestaurants) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 16.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.Center
+                                        ) {
+                                            CircularProgressIndicator(
+                                                color = appColors().Primary,
+                                                modifier = Modifier.size(20.dp),
+                                                strokeWidth = 2.dp
+                                            )
+                                            Spacer(modifier = Modifier.width(12.dp))
+                                            Text(
+                                                text = "Searching restaurants...",
+                                                color = appColors().TextSecondary,
+                                                fontSize = 14.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Nearby restaurants section (uses allFilteredNearby which includes search results)
+                            if (allFilteredNearby.isNotEmpty()) {
                                 item {
                                     Row(
                                         modifier = Modifier
@@ -655,14 +746,14 @@ fun DarkDishRatingScreen(
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
-                                            text = "Nearby Restaurants",
+                                            text = if (searchResults.isNotEmpty()) "Search Results" else "Nearby Restaurants",
                                             color = appColors().Primary,
                                             fontSize = 14.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )
                                     }
                                 }
-                                items(filteredNearby) { restaurant ->
+                                items(allFilteredNearby) { restaurant ->
                                     RestaurantPickerItem(
                                         restaurant = restaurant,
                                         isSelected = selectedRestaurant?.id == restaurant.id,
@@ -678,7 +769,7 @@ fun DarkDishRatingScreen(
                             // All other restaurants section (only show if no nearby restaurants)
                             if (filteredOthers.isNotEmpty()) {
                                 item {
-                                    if (filteredNearby.isNotEmpty()) {
+                                    if (allFilteredNearby.isNotEmpty()) {
                                         Spacer(modifier = Modifier.height(16.dp))
                                     }
                                     Text(

@@ -27,6 +27,11 @@ interface GeocodeCityRequest {
   cityName: string
 }
 
+interface TextSearchRequest {
+  action: 'text-search'
+  query: string
+}
+
 interface SearchPhotosRequest {
   action?: 'search-photos'  // Optional for backward compatibility
   restaurantName: string
@@ -34,7 +39,7 @@ interface SearchPhotosRequest {
   placeId?: string | null
 }
 
-type PlacesRequest = NearbySearchRequest | PlaceDetailsRequest | GeocodeCityRequest | SearchPhotosRequest
+type PlacesRequest = NearbySearchRequest | PlaceDetailsRequest | GeocodeCityRequest | TextSearchRequest | SearchPhotosRequest
 
 // --- Response types (matching client NearbyRestaurant model) ---
 
@@ -113,6 +118,8 @@ Deno.serve(async (req) => {
       return await handlePlaceDetails(body, GOOGLE_PLACES_API_KEY)
     } else if (body.action === 'geocode-city') {
       return await handleGeocodeCity(body as GeocodeCityRequest, GOOGLE_PLACES_API_KEY)
+    } else if (body.action === 'text-search') {
+      return await handleTextSearch(body as TextSearchRequest, GOOGLE_PLACES_API_KEY)
     } else if (body.action === 'search-photos' || 'restaurantName' in body) {
       // Support both explicit action and legacy format (no action, just restaurantName/city)
       return await handleSearchPhotos(body as SearchPhotosRequest, GOOGLE_PLACES_API_KEY)
@@ -238,6 +245,70 @@ async function handlePlaceDetails(
     JSON.stringify(response),
     { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
   )
+}
+
+/**
+ * Search for restaurants by text query (e.g., "Blue Nail restaurant Hyderabad").
+ * Uses Google Places Text Search API.
+ */
+async function handleTextSearch(
+  body: TextSearchRequest,
+  apiKey: string
+): Promise<Response> {
+  const { query } = body
+
+  console.log(`Text search: "${query}"`)
+
+  try {
+    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json` +
+      `?query=${encodeURIComponent(query)}` +
+      `&type=restaurant` +
+      `&key=${apiKey}`
+
+    const searchResponse = await fetch(searchUrl)
+    if (!searchResponse.ok) {
+      throw new Error(`Google Places API error: ${searchResponse.status}`)
+    }
+
+    const searchData = await searchResponse.json()
+
+    if (searchData.status !== 'OK' && searchData.status !== 'ZERO_RESULTS') {
+      console.error(`Google Places API status: ${searchData.status}, error: ${searchData.error_message ?? 'none'}`)
+      throw new Error(`Google Places API: ${searchData.error_message ?? searchData.status}`)
+    }
+
+    const results: NearbyRestaurant[] = (searchData.results ?? []).map((place: GooglePlaceResult) => ({
+      id: place.place_id,
+      name: place.name,
+      address: place.formatted_address ?? place.vicinity ?? null,
+      latitude: place.geometry.location.lat,
+      longitude: place.geometry.location.lng,
+      rating: place.rating ?? null,
+      userRatingsTotal: place.user_ratings_total ?? null,
+      priceLevel: place.price_level ?? null,
+      photoReference: place.photos?.[0]?.photo_reference ?? null,
+      isOpen: place.opening_hours?.open_now ?? null,
+    }))
+
+    console.log(`Text search returned ${results.length} restaurants`)
+
+    const response: PlacesResponse = { results }
+    return new Response(
+      JSON.stringify(response),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`Text search error: ${errorMessage}`)
+    return new Response(
+      JSON.stringify({ results: [], error: errorMessage } as PlacesResponse),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  }
 }
 
 /**

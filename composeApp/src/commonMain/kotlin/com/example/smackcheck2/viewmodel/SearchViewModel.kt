@@ -121,7 +121,8 @@ class SearchViewModel(
                     query = currentState.query.takeIf { it.isNotBlank() },
                     cuisines = currentState.selectedCuisines,
                     city = currentState.selectedCity,
-                    minRating = currentState.selectedRating
+                    minRating = currentState.selectedRating,
+                    restaurantsAndCafesOnly = currentState.restaurantsAndCafesOnly
                 )
 
                 // Fetch nearby restaurants from Google Places API with filters

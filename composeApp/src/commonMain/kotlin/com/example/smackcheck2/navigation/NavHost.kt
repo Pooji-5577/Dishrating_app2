@@ -886,27 +886,48 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             val ratingUiState by dishRatingViewModel.uiState.collectAsState()
             val databaseRepository = remember { DatabaseRepository() }
             val locationUiState by locationHomeViewModel.uiState.collectAsState()
+            val placesService = LocalPlacesService.current
 
             // State for restaurants
             var allRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
             var nearbyRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
             var isLoadingRestaurants by remember { mutableStateOf(true) }
+            
+            // State for text search
+            var searchedRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
+            var isSearchingRestaurants by remember { mutableStateOf(false) }
+            var searchQuery by remember { mutableStateOf("") }
+
+            // Convert Google Places nearby restaurants to Restaurant format
+            val placesNearbyAsRestaurants = locationUiState.nearbyRestaurants.map { nearby ->
+                Restaurant(
+                    id = nearby.id,
+                    name = nearby.name,
+                    city = locationUiState.selectedLocation ?: "Unknown",
+                    cuisine = "Restaurant", // Default cuisine for nearby restaurants
+                    imageUrls = emptyList(),
+                    averageRating = nearby.rating?.toFloat() ?: 0f,
+                    reviewCount = nearby.userRatingsTotal ?: 0,
+                    latitude = nearby.latitude,
+                    longitude = nearby.longitude
+                )
+            }
 
             // Load restaurants when screen opens - both all and nearby
             LaunchedEffect(Unit) {
                 isLoadingRestaurants = true
                 println("DarkDishRating: Loading restaurants...")
 
-                // Load all restaurants
+                // Load all restaurants from database
                 val allResult = databaseRepository.getRestaurants()
                 allResult.onSuccess { restaurants ->
                     allRestaurants = restaurants
-                    println("DarkDishRating: Loaded ${restaurants.size} total restaurants")
+                    println("DarkDishRating: Loaded ${restaurants.size} total restaurants from database")
                 }.onFailure { error ->
                     println("DarkDishRating: Failed to load restaurants: ${error.message}")
                 }
 
-                // Load nearby restaurants based on current selected city
+                // Load nearby restaurants based on current selected city from database
                 val currentCity = locationUiState.selectedLocation
                 println("DarkDishRating: Current location = $currentCity")
 
@@ -914,29 +935,94 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     println("DarkDishRating: Loading nearby restaurants for: $currentCity")
                     val nearbyResult = databaseRepository.getRestaurantsByCity(currentCity)
                     nearbyResult.onSuccess { restaurants ->
-                        nearbyRestaurants = restaurants
-                        println("DarkDishRating: Loaded ${restaurants.size} nearby restaurants in $currentCity")
+                        // Combine database restaurants with Google Places restaurants
+                        val combinedNearby = (restaurants + placesNearbyAsRestaurants).distinctBy { it.id }
+                        nearbyRestaurants = combinedNearby
+                        println("DarkDishRating: Loaded ${restaurants.size} database + ${placesNearbyAsRestaurants.size} Places API = ${combinedNearby.size} total nearby restaurants")
                     }.onFailure { error ->
-                        println("DarkDishRating: Failed to load nearby restaurants: ${error.message}")
+                        // If database fails, still use Google Places restaurants
+                        nearbyRestaurants = placesNearbyAsRestaurants
+                        println("DarkDishRating: Database failed (${error.message}), using ${placesNearbyAsRestaurants.size} Places API restaurants")
                     }
                 } else {
-                    println("DarkDishRating: No location selected - nearby restaurants unavailable")
-                    println("DarkDishRating: User should select a location from the home screen first")
+                    // No location selected - use Google Places restaurants if available
+                    nearbyRestaurants = placesNearbyAsRestaurants
+                    println("DarkDishRating: No location selected, using ${placesNearbyAsRestaurants.size} Places API restaurants")
                 }
 
                 isLoadingRestaurants = false
             }
 
-            // Reload nearby restaurants when location changes
-            LaunchedEffect(locationUiState.selectedLocation) {
+            // Reload nearby restaurants when location changes or Places API data updates
+            LaunchedEffect(locationUiState.selectedLocation, locationUiState.nearbyRestaurants) {
                 val currentCity = locationUiState.selectedLocation
-                if (!currentCity.isNullOrBlank() && allRestaurants.isNotEmpty()) {
-                    println("DarkDishRating: Location changed to $currentCity, reloading nearby restaurants...")
+                
+                // Update placesNearbyAsRestaurants conversion (it's already computed above, but we need to re-combine)
+                val updatedPlacesRestaurants = locationUiState.nearbyRestaurants.map { nearby ->
+                    Restaurant(
+                        id = nearby.id,
+                        name = nearby.name,
+                        city = currentCity ?: "Unknown",
+                        cuisine = "Restaurant",
+                        imageUrls = emptyList(),
+                        averageRating = nearby.rating?.toFloat() ?: 0f,
+                        reviewCount = nearby.userRatingsTotal ?: 0,
+                        latitude = nearby.latitude,
+                        longitude = nearby.longitude
+                    )
+                }
+                
+                if (!currentCity.isNullOrBlank()) {
+                    println("DarkDishRating: Location/Places data changed to $currentCity, reloading...")
                     val nearbyResult = databaseRepository.getRestaurantsByCity(currentCity)
                     nearbyResult.onSuccess { restaurants ->
-                        nearbyRestaurants = restaurants
-                        println("DarkDishRating: Updated nearby restaurants: ${restaurants.size} found")
+                        val combinedNearby = (restaurants + updatedPlacesRestaurants).distinctBy { it.id }
+                        nearbyRestaurants = combinedNearby
+                        println("DarkDishRating: Updated to ${combinedNearby.size} total nearby restaurants")
+                    }.onFailure {
+                        nearbyRestaurants = updatedPlacesRestaurants
                     }
+                } else {
+                    nearbyRestaurants = updatedPlacesRestaurants
+                }
+            }
+            
+            // Search restaurants via Google Places Text Search API
+            LaunchedEffect(searchQuery) {
+                if (searchQuery.length >= 3 && placesService != null) {
+                    isSearchingRestaurants = true
+                    // Add small delay for debouncing
+                    kotlinx.coroutines.delay(300)
+                    
+                    val currentCity = locationUiState.selectedLocation
+                    val fullQuery = if (!currentCity.isNullOrBlank()) {
+                        "$searchQuery $currentCity"
+                    } else {
+                        searchQuery
+                    }
+                    
+                    println("DarkDishRating: Searching for restaurants: $fullQuery")
+                    val searchResults = placesService.searchRestaurantsByText(fullQuery)
+                    
+                    // Convert NearbyRestaurant to Restaurant
+                    searchedRestaurants = searchResults.map { nearby ->
+                        Restaurant(
+                            id = nearby.id,
+                            name = nearby.name,
+                            city = currentCity ?: "Unknown",
+                            cuisine = "Restaurant",
+                            imageUrls = emptyList(),
+                            averageRating = nearby.rating?.toFloat() ?: 0f,
+                            reviewCount = nearby.userRatingsTotal ?: 0,
+                            latitude = nearby.latitude,
+                            longitude = nearby.longitude
+                        )
+                    }
+                    println("DarkDishRating: Found ${searchedRestaurants.size} restaurants from text search")
+                    isSearchingRestaurants = false
+                } else {
+                    searchedRestaurants = emptyList()
+                    isSearchingRestaurants = false
                 }
             }
 
@@ -963,9 +1049,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 dishName = navigationState.dishName,
                 imageUri = navigationState.imageUri,
                 imageBytes = ratingUiState.imageBytes,
-                restaurants = allRestaurants,
+                restaurants = (allRestaurants + placesNearbyAsRestaurants).distinctBy { it.id },
                 nearbyRestaurants = nearbyRestaurants,
+                searchedRestaurants = searchedRestaurants,
                 isLoadingRestaurants = isLoadingRestaurants,
+                isSearchingRestaurants = isSearchingRestaurants,
                 isSubmitting = ratingUiState.isSubmitting,
                 showSuccess = ratingUiState.isSuccess,
                 xpEarned = ratingUiState.xpEarned,
@@ -987,7 +1075,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         }
                     }
                 },
-                onDismissError = { dishRatingViewModel.clearError() }
+                onDismissError = { dishRatingViewModel.clearError() },
+                onAddRestaurantManually = { navigationState.navigateTo(Screen.ManualRestaurantEntry) },
+                onSearchRestaurants = { query -> searchQuery = query }
             )
         }
         

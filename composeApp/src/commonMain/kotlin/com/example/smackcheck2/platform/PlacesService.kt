@@ -200,6 +200,50 @@ class PlacesService {
             null
         }
     }
+
+    /**
+     * Search for restaurants by text query (restaurant name + optional city).
+     * Uses Google Places Text Search API.
+     *
+     * @param query The search query (e.g., "Blue Nail restaurant Hyderabad")
+     * @return List of matching restaurants
+     */
+    suspend fun searchRestaurantsByText(query: String): List<NearbyRestaurant> {
+        return try {
+            println("PlacesService: Text search for: $query")
+            
+            val requestBody = TextSearchRequest(
+                action = "text-search",
+                query = "$query restaurant"
+            )
+
+            val response = supabase.functions.invoke(
+                function = "google-places",
+                body = requestBody
+            )
+
+            if (response.status.value != 200) {
+                val errorText = response.body<String>()
+                println("PlacesService: Text search error (${response.status.value}): $errorText")
+                return emptyList()
+            }
+
+            val responseText = response.body<String>()
+            val placesResponse = json.decodeFromString<PlacesEdgeResponse>(responseText)
+
+            if (!placesResponse.error.isNullOrBlank()) {
+                println("PlacesService: Text search server error: ${placesResponse.error}")
+                return emptyList()
+            }
+
+            val results = placesResponse.results.map { it.toNearbyRestaurant() }
+            println("PlacesService: Text search returned ${results.size} results")
+            results
+        } catch (e: Exception) {
+            println("PlacesService: Text search exception: ${e::class.simpleName} - ${e.message}")
+            emptyList()
+        }
+    }
 }
 
 // --- Edge Function Request DTOs ---
@@ -223,6 +267,12 @@ private data class PlaceDetailsRequest(
 private data class GeocodeCityRequest(
     val action: String,
     val cityName: String
+)
+
+@Serializable
+private data class TextSearchRequest(
+    val action: String,
+    val query: String
 )
 
 // --- Edge Function Response DTOs ---

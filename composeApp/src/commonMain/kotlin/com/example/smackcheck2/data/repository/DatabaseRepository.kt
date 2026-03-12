@@ -37,37 +37,55 @@ class DatabaseRepository {
     }
 
     /**
-     * Search restaurants by query, cuisine, city, and minimum rating
+     * Search restaurants by query, cuisine, city, minimum rating, and category filter
+     * Query searches across name, cuisine, and city fields (case-insensitive)
      */
     suspend fun searchRestaurants(
         query: String? = null,
         cuisines: Set<String> = emptySet(),
         city: String? = null,
-        minRating: Float? = null
+        minRating: Float? = null,
+        restaurantsAndCafesOnly: Boolean = false
     ): Result<List<Restaurant>> {
         return try {
+            println("DatabaseRepository: Searching with query='$query', cuisines=$cuisines, city=$city, minRating=$minRating, restaurantsAndCafesOnly=$restaurantsAndCafesOnly")
             val restaurants = postgrest["restaurants"]
                 .select {
                     filter {
+                        // Text search: match name, cuisine, or city (case-insensitive)
                         if (!query.isNullOrBlank()) {
-                            ilike("name", "%$query%")
+                            or {
+                                ilike("name", "%$query%")
+                                ilike("cuisine", "%$query%")
+                                ilike("city", "%$query%")
+                            }
                         }
                         if (cuisines.isNotEmpty()) {
                             isIn("cuisine", cuisines.toList())
                         }
                         if (!city.isNullOrBlank()) {
-                            eq("city", city)
+                            ilike("city", "%$city%")
                         }
                         if (minRating != null) {
                             gte("average_rating", minRating)
+                        }
+                        // Restaurants & Cafes Only filter - filters by category field
+                        if (restaurantsAndCafesOnly) {
+                            or {
+                                ilike("category", "%restaurant%")
+                                ilike("category", "%cafe%")
+                                ilike("category", "%coffee%")
+                            }
                         }
                     }
                     order("average_rating", Order.DESCENDING)
                 }
                 .decodeList<RestaurantDto>()
                 .map { it.toRestaurant() }
+            println("DatabaseRepository: Found ${restaurants.size} restaurants")
             Result.success(restaurants)
         } catch (e: Exception) {
+            println("DatabaseRepository: Search error: ${e.message}")
             Result.failure(e)
         }
     }
