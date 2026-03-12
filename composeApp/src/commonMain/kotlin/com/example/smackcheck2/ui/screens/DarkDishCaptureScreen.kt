@@ -23,11 +23,10 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FlashAuto
-import androidx.compose.material.icons.filled.FlashOff
-import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,212 +42,187 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.platform.ImagePicker
+import com.example.smackcheck2.platform.RequestCameraPermission
+import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.theme.appColors
-import com.example.smackcheck2.ui.components.NetworkImage
-import com.example.smackcheck2.util.ImagePickerEffect
-import kotlinx.coroutines.delay
+import com.example.smackcheck2.viewmodel.DishCaptureViewModel
+import kotlinx.coroutines.launch
 
 /**
- * Dark themed Dish Capture Screen with AI detection and manual-entry fallback.
- *
- * When the simulated AI returns a low-confidence result (< 0.5) or no dish
- * is detected, a fallback card is shown with:
- *   • "Add Dish Manually" button → navigates to ManualDishEntryScreen
- *   • "Skip" button             → navigates back
- *
- * A high-confidence result shows the standard confirmation card where the
- * user can edit the detected name and proceed to rate the dish.
+ * Dark themed Dish Capture Screen with AI detection
+ * Allows users to capture/upload dish photos and auto-detect dish name
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DarkDishCaptureScreen(
+    viewModel: DishCaptureViewModel,
+    imagePicker: ImagePicker?,
     onNavigateBack: () -> Unit,
-    onImageCaptured: (imageUri: String, dishName: String) -> Unit,
-    onAddManually: (imageUri: String) -> Unit = {}   // Fallback: open manual entry
+    onImageCaptured: (imageUri: String, dishName: String, imageBytes: ByteArray?) -> Unit
 ) {
     val themeColors = appColors()
-    var selectedImageUri by remember { mutableStateOf<String?>(null) }
-    var isAnalyzing by remember { mutableStateOf(false) }
-    var detectedDishName by remember { mutableStateOf<String?>(null) }
-    var isEditingName by remember { mutableStateOf(false) }
-    var editedName by remember { mutableStateOf("") }
-    var flashMode by remember { mutableStateOf(FlashMode.Auto) }
-    var showConfirmation by remember { mutableStateOf(false) }
+    val uiState by viewModel.uiState.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
-    // ── AI confidence tracking ──────────────────────────────────────────
-    var aiConfidence by remember { mutableStateOf(0f) }
-    var showFallback by remember { mutableStateOf(false) }  // true when AI fails
-
-    // ── Real camera + gallery integration with EXIF fix ────────────────
-    // ImagePickerEffect registers ActivityResult launchers (on Android) and
-    // applies EXIF orientation correction before returning the URI.
-    val imagePickerActions = ImagePickerEffect(
-        onImageReady = { correctedUri ->
-            // The URI already has the correct orientation applied
-            selectedImageUri = correctedUri
-        }
-    )
-    
-    // Simulate AI detection when image is captured
-    LaunchedEffect(selectedImageUri) {
-        if (selectedImageUri != null && detectedDishName == null && !showFallback) {
-            isAnalyzing = true
-            delay(2000) // Simulate AI processing
-
-            // ── Simulate confidence score (0.0 – 1.0) ──
-            // In a real app this comes from the ML model output
-            val confidence = (0..100).random() / 100f
-            aiConfidence = confidence
-
-            if (confidence >= 0.5f) {
-                // High confidence → show detected dish name
-                detectedDishName = listOf(
-                    "Butter Chicken",
-                    "Margherita Pizza",
-                    "Caesar Salad",
-                    "Grilled Salmon",
-                    "Pad Thai",
-                    "Beef Burger",
-                    "Sushi Platter",
-                    "Pasta Carbonara"
-                ).random()
-                editedName = detectedDishName ?: ""
-                showConfirmation = true
-            } else {
-                // Low confidence or no match → show fallback UI
-                showFallback = true
+    // "Not a Dish" error modal
+    if (uiState.showNotDishError) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissNotDishError() },
+            containerColor = themeColors.Surface,
+            iconContentColor = Color(0xFFE53935),
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = Color(0xFFE53935)
+                )
+            },
+            title = {
+                Text(
+                    text = "Not a Dish",
+                    color = themeColors.TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Text(
+                    text = "This image doesn't appear to be a food dish. Please take or select a photo of a dish to rate.",
+                    color = themeColors.TextSecondary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.dismissNotDishError() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = themeColors.Primary,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Try Again", modifier = Modifier.padding(vertical = 4.dp))
+                }
             }
-            isAnalyzing = false
-        }
+        )
     }
-    
-    Scaffold(
-        containerColor = themeColors.Background,
-        topBar = {
-            TopAppBar(
-                title = { 
-                    Text(
-                        "Capture Dish",
-                        color = themeColors.TextPrimary,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = themeColors.TextPrimary
-                        )
+
+    // Wrap with camera permission request
+    RequestCameraPermission(
+        onPermissionResult = { granted ->
+            if (granted) {
+                // Permission granted, launch camera
+                coroutineScope.launch {
+                    imagePicker?.captureImage()?.let { result ->
+                        viewModel.onImageCaptured(result)
                     }
-                },
-                actions = {
-                    if (selectedImageUri == null) {
-                        IconButton(onClick = { 
-                            flashMode = when (flashMode) {
-                                FlashMode.Auto -> FlashMode.On
-                                FlashMode.On -> FlashMode.Off
-                                FlashMode.Off -> FlashMode.Auto
-                            }
-                        }) {
+                }
+            }
+        }
+    ) { requestCameraPermission ->
+        Scaffold(
+            containerColor = themeColors.Background,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Text(
+                            "Capture Dish",
+                            color = themeColors.TextPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
                             Icon(
-                                imageVector = when (flashMode) {
-                                    FlashMode.Auto -> Icons.Default.FlashAuto
-                                    FlashMode.On -> Icons.Default.FlashOn
-                                    FlashMode.Off -> Icons.Default.FlashOff
-                                },
-                                contentDescription = "Flash",
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
                                 tint = themeColors.TextPrimary
                             )
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = themeColors.Background
-                )
-            )
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            if (selectedImageUri == null) {
-                // Camera View / Capture Mode
-                CameraCaptureView(
-                    onCaptureClick = {
-                        // Launch real camera with EXIF correction
-                        imagePickerActions.launchCamera()
                     },
-                    onGalleryClick = {
-                        // Launch real gallery picker with EXIF correction
-                        imagePickerActions.launchGallery()
-                    }
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = themeColors.Background
+                    )
                 )
-            } else {
-                // Image Preview with AI Detection or Fallback
+            }
+        ) { paddingValues ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            ) {
+                if (uiState.imageUri == null) {
+                    // Camera View / Capture Mode
+                    CameraCaptureView(
+                        onCaptureClick = {
+                            // Request camera permission - camera will launch when granted
+                            requestCameraPermission()
+                        },
+                        onGalleryClick = {
+                            coroutineScope.launch {
+                                imagePicker?.pickFromGallery()?.let { result ->
+                                    viewModel.onImageCaptured(result)
+                                }
+                            }
+                        },
+                        imagePickerAvailable = imagePicker != null
+                    )
+                } else {
+                // Image Preview with AI Detection
                 ImagePreviewWithAI(
-                    imageUri = selectedImageUri!!,
-                    isAnalyzing = isAnalyzing,
-                    detectedDishName = if (isEditingName) editedName else detectedDishName,
-                    showConfirmation = showConfirmation,
-                    showFallback = showFallback,
-                    aiConfidence = aiConfidence,
-                    isEditingName = isEditingName,
-                    editedName = editedName,
-                    onEditedNameChange = { editedName = it },
-                    onEditClick = { isEditingName = true },
-                    onConfirmEdit = {
-                        isEditingName = false
-                        detectedDishName = editedName
-                    },
-                    onCancelEdit = {
-                        isEditingName = false
-                        editedName = detectedDishName ?: ""
-                    },
-                    onRetake = {
-                        selectedImageUri = null
-                        detectedDishName = null
-                        showConfirmation = false
-                        showFallback = false
-                        aiConfidence = 0f
-                        isEditingName = false
-                    },
+                    imageBytes = uiState.imageBytes,
+                    isAnalyzing = uiState.isAnalyzing,
+                    detectedDishName = if (uiState.isEditingName) uiState.editedName else uiState.detectedDishName,
+                    showConfirmation = uiState.showConfirmation,
+                    isEditingName = uiState.isEditingName,
+                    editedName = uiState.editedName,
+                    isAIDetected = uiState.isAIDetected,
+                    itemType = uiState.itemType,
+                    confidence = uiState.detectionConfidence,
+                    cuisine = uiState.detectedCuisine,
+                    debugInfo = uiState.debugInfo,
+                    onEditedNameChange = { viewModel.onDishNameEdited(it) },
+                    onEditClick = { viewModel.onEditClick() },
+                    onConfirmEdit = { viewModel.confirmDishName() },
+                    onCancelEdit = { viewModel.cancelEdit() },
+                    onRetake = { viewModel.retake() },
                     onConfirm = {
-                        onImageCaptured(selectedImageUri!!, detectedDishName ?: editedName)
-                    },
-                    onAddManually = {
-                        // Navigate to the manual dish entry screen with the captured photo
-                        onAddManually(selectedImageUri!!)
-                    },
-                    onSkip = onNavigateBack
+                        onImageCaptured(
+                            uiState.imageUri!!,
+                            viewModel.getFinalDishName(),
+                            viewModel.getImageBytes()
+                        )
+                    }
                 )
             }
         }
     }
+    } // End RequestCameraPermission
 }
-
-private enum class FlashMode { Auto, On, Off }
 
 @Composable
 private fun CameraCaptureView(
     onCaptureClick: () -> Unit,
-    onGalleryClick: () -> Unit
+    onGalleryClick: () -> Unit,
+    imagePickerAvailable: Boolean
 ) {
     val themeColors = appColors()
     Box(
@@ -294,15 +268,15 @@ private fun CameraCaptureView(
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            text = "Point camera at your dish",
+                            text = if (imagePickerAvailable) "Point camera at your dish" else "Camera not available",
                             color = themeColors.TextSecondary,
                             fontSize = 14.sp
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 // AI Detection badge
                 Row(
                     modifier = Modifier
@@ -329,7 +303,7 @@ private fun CameraCaptureView(
                 }
             }
         }
-        
+
         // Bottom controls
         Box(
             modifier = Modifier
@@ -354,25 +328,32 @@ private fun CameraCaptureView(
                 // Gallery button
                 IconButton(
                     onClick = onGalleryClick,
+                    enabled = imagePickerAvailable,
                     modifier = Modifier
                         .size(56.dp)
-                        .background(themeColors.Surface, CircleShape)
+                        .background(
+                            if (imagePickerAvailable) themeColors.Surface else themeColors.Surface.copy(alpha = 0.5f),
+                            CircleShape
+                        )
                 ) {
                     Icon(
                         imageVector = Icons.Default.PhotoLibrary,
                         contentDescription = "Gallery",
-                        tint = themeColors.TextPrimary,
+                        tint = if (imagePickerAvailable) themeColors.TextPrimary else themeColors.TextSecondary,
                         modifier = Modifier.size(28.dp)
                     )
                 }
-                
+
                 // Capture button
                 Box(
                     modifier = Modifier
                         .size(80.dp)
-                        .background(themeColors.Primary, CircleShape)
+                        .background(
+                            if (imagePickerAvailable) themeColors.Primary else themeColors.Primary.copy(alpha = 0.5f),
+                            CircleShape
+                        )
                         .border(4.dp, Color.White, CircleShape)
-                        .clickable { onCaptureClick() },
+                        .clickable(enabled = imagePickerAvailable) { onCaptureClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -382,7 +363,7 @@ private fun CameraCaptureView(
                         modifier = Modifier.size(36.dp)
                     )
                 }
-                
+
                 // Placeholder for symmetry
                 Spacer(modifier = Modifier.size(56.dp))
             }
@@ -392,22 +373,23 @@ private fun CameraCaptureView(
 
 @Composable
 private fun ImagePreviewWithAI(
-    imageUri: String,
+    imageBytes: ByteArray?,
     isAnalyzing: Boolean,
     detectedDishName: String?,
     showConfirmation: Boolean,
-    showFallback: Boolean,
-    aiConfidence: Float,
     isEditingName: Boolean,
     editedName: String,
+    isAIDetected: Boolean,
+    itemType: String,
+    confidence: Float,
+    cuisine: String?,
+    debugInfo: String?,
     onEditedNameChange: (String) -> Unit,
     onEditClick: () -> Unit,
     onConfirmEdit: () -> Unit,
     onCancelEdit: () -> Unit,
     onRetake: () -> Unit,
-    onConfirm: () -> Unit,
-    onAddManually: () -> Unit,
-    onSkip: () -> Unit
+    onConfirm: () -> Unit
 ) {
     val themeColors = appColors()
     Column(
@@ -425,15 +407,38 @@ private fun ImagePreviewWithAI(
                 .background(themeColors.Surface),
             contentAlignment = Alignment.Center
         ) {
-            // ── Real image preview: shows the EXIF-corrected photo ──
-            // The imageUri is a file:// or content:// URI with correct orientation
-            NetworkImage(
-                imageUrl = imageUri,
-                contentDescription = "Captured dish photo",
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-            )
-            
+            // Display image from bytes
+            if (imageBytes != null && imageBytes.isNotEmpty()) {
+                ByteArrayImage(
+                    imageBytes = imageBytes,
+                    contentDescription = "Captured dish",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                // Fallback placeholder
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF3D3D3D),
+                                    Color(0xFF252525)
+                                )
+                            )
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Restaurant,
+                        contentDescription = null,
+                        tint = themeColors.TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(120.dp)
+                    )
+                }
+            }
+
             // AI analyzing overlay
             if (isAnalyzing) {
                 Box(
@@ -471,145 +476,8 @@ private fun ImagePreviewWithAI(
                 }
             }
         }
-        
-        // ── FALLBACK UI: shown when AI detection fails ────────────────────
-        if (showFallback && !isAnalyzing) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = themeColors.Surface
-                )
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Warning icon
-                    Box(
-                        modifier = Modifier
-                            .size(56.dp)
-                            .background(
-                                themeColors.Warning.copy(alpha = 0.15f),
-                                CircleShape
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Restaurant,
-                            contentDescription = null,
-                            tint = themeColors.Warning,
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Fallback message
-                    Text(
-                        text = "We couldn't recognize this dish",
-                        color = themeColors.TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text(
-                        text = "You can add the dish details manually\nor try taking another photo.",
-                        color = themeColors.TextSecondary,
-                        fontSize = 14.sp,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 20.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    // ── Action buttons ─────────────────────────────────────
-                    // Primary: Add Dish Manually
-                    Button(
-                        onClick = onAddManually,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(50.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = themeColors.Primary,
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(14.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Add Dish Manually",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    // Secondary row: Retake + Skip
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Retake photo
-                        Button(
-                            onClick = onRetake,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = themeColors.SurfaceVariant,
-                                contentColor = themeColors.TextPrimary
-                            ),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CameraAlt,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Retake", fontSize = 14.sp)
-                        }
-
-                        // Skip / close
-                        Button(
-                            onClick = onSkip,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(46.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = themeColors.SurfaceVariant,
-                                contentColor = themeColors.TextSecondary
-                            ),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Skip", fontSize = 14.sp)
-                        }
-                    }
-                }
-            }
-        }
-
-        // Detection result and actions (high-confidence path)
+        // Detection result and actions
         if (showConfirmation && !isAnalyzing) {
             Card(
                 modifier = Modifier
@@ -630,7 +498,8 @@ private fun ImagePreviewWithAI(
                     Row(
                         modifier = Modifier
                             .background(
-                                themeColors.Primary.copy(alpha = 0.15f),
+                                if (isAIDetected) themeColors.Primary.copy(alpha = 0.15f)
+                                else Color.Gray.copy(alpha = 0.15f),
                                 RoundedCornerShape(12.dp)
                             )
                             .padding(horizontal = 12.dp, vertical = 6.dp),
@@ -639,20 +508,40 @@ private fun ImagePreviewWithAI(
                         Icon(
                             imageVector = Icons.Default.AutoAwesome,
                             contentDescription = null,
-                            tint = themeColors.Primary,
+                            tint = if (isAIDetected) themeColors.Primary else Color.Gray,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "AI Detected",
-                            color = themeColors.Primary,
+                            text = when {
+                                !isAIDetected -> "Manual Entry"
+                                itemType == "beverage" -> {
+                                    val confidencePercent = (confidence * 100).toInt()
+                                    "Beverage ($confidencePercent%)"
+                                }
+                                else -> {
+                                    val confidencePercent = (confidence * 100).toInt()
+                                    "Food ($confidencePercent%)"
+                                }
+                            },
+                            color = if (isAIDetected) themeColors.Primary else Color.Gray,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium
                         )
                     }
-                    
+
+                    // Show cuisine if detected
+                    if (cuisine != null && isAIDetected) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = cuisine,
+                            color = themeColors.TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     // Dish name display or edit
                     if (isEditingName) {
                         OutlinedTextField(
@@ -695,7 +584,7 @@ private fun ImagePreviewWithAI(
                             modifier = Modifier.clickable { onEditClick() }
                         ) {
                             Text(
-                                text = detectedDishName ?: "Unknown Dish",
+                                text = detectedDishName ?: "Unknown",
                                 color = themeColors.TextPrimary,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
@@ -710,7 +599,7 @@ private fun ImagePreviewWithAI(
                             )
                         }
                     }
-                    
+
                     if (!isEditingName) {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
@@ -719,9 +608,9 @@ private fun ImagePreviewWithAI(
                             fontSize = 12.sp
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(24.dp))
-                    
+
                     // Action buttons
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -738,13 +627,16 @@ private fun ImagePreviewWithAI(
                         ) {
                             Text("Retake", modifier = Modifier.padding(vertical = 4.dp))
                         }
-                        
+
                         Button(
                             onClick = onConfirm,
                             modifier = Modifier.weight(1f),
+                            enabled = !(detectedDishName == "Unknown" && !isAIDetected),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = themeColors.Primary,
-                                contentColor = Color.White
+                                contentColor = Color.White,
+                                disabledContainerColor = themeColors.Primary.copy(alpha = 0.4f),
+                                disabledContentColor = Color.White.copy(alpha = 0.5f)
                             ),
                             shape = RoundedCornerShape(12.dp)
                         ) {

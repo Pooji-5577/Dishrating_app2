@@ -60,6 +60,13 @@ fun DarkSplashScreen(
             }
         }
     }
+
+    // Safety timeout: if auth state never resolves (network down, Supabase unreachable),
+    // fall through to Login after 6 seconds so the app is never permanently stuck.
+    LaunchedEffect(Unit) {
+        delay(6000)
+        onNavigateToLogin()
+    }
     
     Box(
         modifier = Modifier

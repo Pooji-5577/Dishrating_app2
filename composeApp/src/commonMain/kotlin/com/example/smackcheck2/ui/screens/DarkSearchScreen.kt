@@ -22,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.FilterList
@@ -67,7 +68,8 @@ fun DarkSearchScreen(
     viewModel: SearchViewModel,
     photoViewModel: RestaurantPhotoViewModel? = null,
     onNavigateBack: () -> Unit,
-    onRestaurantClick: (String) -> Unit
+    onRestaurantClick: (String) -> Unit,
+    onAddRestaurantClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val photoStates by photoViewModel?.photoStates?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyMap()) }
@@ -89,6 +91,15 @@ fun DarkSearchScreen(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = themeColors.TextPrimary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onAddRestaurantClick) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add Restaurant",
+                            tint = themeColors.Primary
                         )
                     }
                 },
@@ -322,47 +333,49 @@ fun DarkSearchScreen(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // Results
-            if (uiState.isLoading) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Searching...",
-                        color = themeColors.TextSecondary
-                    )
-                }
-            } else if (uiState.results.isEmpty() && uiState.query.isNotEmpty()) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "No restaurants found",
-                        color = themeColors.TextSecondary,
-                        fontSize = 16.sp
-                    )
-                    Text(
-                        text = "Try a different search",
-                        color = themeColors.TextTertiary,
-                        fontSize = 14.sp
-                    )
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    items(uiState.results) { restaurant ->
-                        DarkRestaurantSearchCard(
-                            restaurant = restaurant,
-                            photoViewModel = photoViewModel,
-                            onClick = { onRestaurantClick(restaurant.id) }
+            // Results - use weight(1f) to fill remaining space and enable smooth scrolling
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                if (uiState.isLoading) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Searching...",
+                            color = themeColors.TextSecondary
                         )
+                    }
+                } else if (uiState.results.isEmpty() && uiState.query.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "No restaurants found",
+                            color = themeColors.TextSecondary,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = "Try a different search",
+                            color = themeColors.TextTertiary,
+                            fontSize = 14.sp
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.results) { restaurant ->
+                            DarkRestaurantSearchCard(
+                                restaurant = restaurant,
+                                photoViewModel = photoViewModel,
+                                onClick = { onRestaurantClick(restaurant.id) }
+                            )
+                        }
                     }
                 }
             }

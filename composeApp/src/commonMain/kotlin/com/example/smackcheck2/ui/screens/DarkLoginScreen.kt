@@ -50,11 +50,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.model.LoginUiState
+import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
 
 @Composable
 fun DarkLoginScreen(
     viewModel: LoginViewModel,
+    authViewModel: AuthViewModel,
     onNavigateToRegister: () -> Unit,
     onNavigateToHome: () -> Unit
 ) {
@@ -73,7 +75,7 @@ fun DarkLoginScreen(
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -230,7 +232,16 @@ fun DarkLoginScreen(
             
             // Login button
             Button(
-                onClick = { viewModel.login(onNavigateToHome) },
+                onClick = {
+                    viewModel.login {
+                        authViewModel.signIn(
+                            email = uiState.email,
+                            password = uiState.password,
+                            onSuccess = onNavigateToHome,
+                            onError = { }
+                        )
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -286,32 +297,58 @@ fun DarkLoginScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            // Social login buttons (placeholder)
+            // Social login buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                SocialLoginButton("G") { onNavigateToHome() }
+                SocialLoginButton("G") {
+                    authViewModel.signInWithGoogle(
+                        onSuccess = onNavigateToHome,
+                        onError = { error ->
+                            viewModel.setError(error)
+                        }
+                    )
+                }
                 Spacer(modifier = Modifier.size(16.dp))
-                SocialLoginButton("f") { onNavigateToHome() }
+                SocialLoginButton("f") {
+                    authViewModel.signInWithFacebook(
+                        onSuccess = onNavigateToHome,
+                        onError = { error ->
+                            viewModel.setError(error)
+                        }
+                    )
+                }
                 Spacer(modifier = Modifier.size(16.dp))
-                SocialLoginButton("A") { onNavigateToHome() }
+                SocialLoginButton("A") {
+                    authViewModel.signInWithApple(
+                        onSuccess = onNavigateToHome,
+                        onError = { error ->
+                            viewModel.setError(error)
+                        }
+                    )
+                }
             }
-            
+
             Spacer(modifier = Modifier.height(24.dp))
-            
-            // Skip login button for testing
+
+            // Demo mode removed - users must login properly
+            // If you need demo mode for testing, uncomment below:
+            /*
             Text(
                 text = "Skip Login (Demo Mode)",
                 color = appColors().Primary,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
-                    .clickable { onNavigateToHome() }
+                    .clickable {
+                        authViewModel.signInAsDemo(onSuccess = onNavigateToHome)
+                    }
                     .padding(8.dp)
             )
-            
+            */
+
             Spacer(modifier = Modifier.weight(1f))
             
             // Register link

@@ -1,34 +1,59 @@
 package com.example.smackcheck2.data
 
-import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.auth.Auth
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.createSupabaseClient
+import io.github.jan.supabase.functions.Functions
 import io.github.jan.supabase.postgrest.Postgrest
+import io.github.jan.supabase.realtime.Realtime
+import io.github.jan.supabase.storage.Storage
+import io.github.jan.supabase.auth.FlowType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 /**
- * Supabase Client Configuration
- * 
- * This singleton provides access to the Supabase backend for:
- * - Authentication (Auth)
- * - Database operations (Postgrest)
+ * Singleton Supabase client instance with session persistence
  */
-object SupabaseClient {
-    
-    // Your Supabase project credentials
-    private const val SUPABASE_URL = "https://ayopmvhtfuwbsjxhpfgd.supabase.co"
-    private const val SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5b3Btdmh0ZnV3YnNqeGhwZmdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjAyMTksImV4cCI6MjA4NDgzNjIxOX0.2siGUJfE3iLoaEKae5gycw_6mo748KKyi5C7YEHuUlQ"
-    
+object SupabaseClientProvider {
+
+    val client: SupabaseClient by lazy {
+        createSupabaseClient(
+            supabaseUrl = SupabaseConfig.SUPABASE_URL,
+            supabaseKey = SupabaseConfig.SUPABASE_ANON_KEY
+        ) {
+            install(Auth) {
+                // Enable automatic session persistence
+                autoLoadFromStorage = true
+                autoSaveToStorage = true
+                // Use implicit flow type for better session handling
+                flowType = FlowType.IMPLICIT
+                // Deep link scheme for OAuth redirects
+                scheme = "smackcheck"
+                host = "login"
+            }
+            install(Postgrest)
+            install(Storage)
+            install(Functions)
+            install(Realtime)
+        }
+    }
+
     /**
-     * The Supabase client instance.
-     * Use this to make API calls to your Supabase backend.
+     * Initialize and load session from storage
+     * Call this early in the app lifecycle (e.g., in Application.onCreate or MainActivity.onCreate)
      */
-    val client = createSupabaseClient(
-        supabaseUrl = SUPABASE_URL,
-        supabaseKey = SUPABASE_ANON_KEY
-    ) {
-        // Install authentication plugin
-        install(Auth)
-        
-        // Install database plugin (for CRUD operations)
-        install(Postgrest)
+    fun initializeSession() {
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                // The session will be automatically loaded due to autoLoadFromStorage = true
+                // This call ensures the client is initialized
+                val currentUser = client.auth.currentUserOrNull()
+                println("SupabaseClient: Session initialized, user: ${currentUser?.id ?: "none"}")
+            } catch (e: Exception) {
+                println("SupabaseClient: Failed to initialize session: ${e.message}")
+            }
+        }
     }
 }

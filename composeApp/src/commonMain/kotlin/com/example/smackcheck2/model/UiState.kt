@@ -74,11 +74,14 @@ data class HomeFeedUiState(
 data class DishRatingUiState(
     val dishName: String = "",
     val imageUri: String = "",
+    val imageBytes: ByteArray? = null,
     val rating: Float = 0f,
     val comment: String = "",
     val isSubmitting: Boolean = false,
     val isSuccess: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val xpEarned: Int? = null,
+    val showXpNotification: Boolean = false
 )
 
 /**
@@ -92,7 +95,8 @@ data class SearchUiState(
     val restaurantsAndCafesOnly: Boolean = false,
     val results: List<Restaurant> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val locationError: String? = null
 )
 
 /**
@@ -100,6 +104,7 @@ data class SearchUiState(
  */
 data class RestaurantDetailUiState(
     val restaurant: Restaurant? = null,
+    val dishes: List<Dish> = emptyList(),
     val reviews: List<Review> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
@@ -146,7 +151,9 @@ data class UserProgressUiState(
     val streakCount: Int = 0,
     val badges: List<Badge> = emptyList(),
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val showLevelUpAnimation: Boolean = false,
+    val newLevel: Int? = null
 )
 
 /**
@@ -157,4 +164,174 @@ sealed class PermissionState {
     data object Granted : PermissionState()
     data object Denied : PermissionState()
     data object PermanentlyDenied : PermissionState()
+}
+
+/**
+ * Edit profile UI state
+ */
+data class EditProfileUiState(
+    val name: String = "",
+    val bio: String = "",
+    val profilePhotoUrl: String? = null,
+    val isUploadingPhoto: Boolean = false,
+    val isSaving: Boolean = false,
+    val isSuccess: Boolean = false,
+    val errorMessage: String? = null,
+    val nameError: String? = null
+)
+
+/**
+ * Notification settings UI state
+ */
+data class NotificationSettingsUiState(
+    val settings: NotificationSettings = NotificationSettings(),
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Account settings UI state
+ */
+data class AccountSettingsUiState(
+    val email: String = "",
+    val isChangingPassword: Boolean = false,
+    val isChangingEmail: Boolean = false,
+    val isDeletingAccount: Boolean = false,
+    val showDeleteConfirmation: Boolean = false,
+    val successMessage: String? = null,
+    val errorMessage: String? = null
+)
+
+/**
+ * Privacy settings UI state
+ */
+data class PrivacySettingsUiState(
+    val settings: PrivacySettings = PrivacySettings(),
+    val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Social feed UI state with filtering
+ */
+data class SocialFeedUiState(
+    val feedItems: List<FeedItem> = emptyList(),
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val filter: FeedFilter = FeedFilter.ALL,
+    val errorMessage: String? = null
+)
+
+enum class FeedFilter { ALL, FOLLOWING, NEARBY }
+
+/**
+ * Comments UI state
+ */
+data class CommentsUiState(
+    val comments: List<Comment> = emptyList(),
+    val isLoading: Boolean = false,
+    val isSubmitting: Boolean = false,
+    val replyingTo: Comment? = null,
+    val errorMessage: String? = null
+)
+
+/**
+ * Notifications UI state
+ */
+data class NotificationsUiState(
+    val notifications: List<Notification> = emptyList(),
+    val unreadCount: Int = 0,
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * User profile (other user) UI state
+ */
+data class UserProfileUiState(
+    val user: User? = null,
+    val ratings: List<FeedItem> = emptyList(),
+    val isFollowing: Boolean = false,
+    val isLoading: Boolean = false,
+    val isFollowLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Followers/Following list UI state
+ */
+data class FollowListUiState(
+    val users: List<UserSummary> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Dish capture UI state for camera capture and AI detection
+ */
+data class DishCaptureUiState(
+    val imageUri: String? = null,
+    val imageBytes: ByteArray? = null,
+    val isAnalyzing: Boolean = false,
+    val detectedDishName: String? = null,
+    val detectedCuisine: String? = null,
+    val detectionConfidence: Float = 0f,
+    val alternatives: List<String> = emptyList(),
+    val isAIDetected: Boolean = false,
+    val itemType: String = "unknown", // "food", "beverage", or "unknown"
+    val isEditingName: Boolean = false,
+    val editedName: String = "",
+    val errorMessage: String? = null,
+    val debugInfo: String? = null,
+    val showConfirmation: Boolean = false,
+    val showNotDishError: Boolean = false
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+
+        other as DishCaptureUiState
+
+        if (imageUri != other.imageUri) return false
+        if (imageBytes != null) {
+            if (other.imageBytes == null) return false
+            if (!imageBytes.contentEquals(other.imageBytes)) return false
+        } else if (other.imageBytes != null) return false
+        if (isAnalyzing != other.isAnalyzing) return false
+        if (detectedDishName != other.detectedDishName) return false
+        if (detectedCuisine != other.detectedCuisine) return false
+        if (detectionConfidence != other.detectionConfidence) return false
+        if (alternatives != other.alternatives) return false
+        if (isAIDetected != other.isAIDetected) return false
+        if (itemType != other.itemType) return false
+        if (isEditingName != other.isEditingName) return false
+        if (editedName != other.editedName) return false
+        if (errorMessage != other.errorMessage) return false
+        if (debugInfo != other.debugInfo) return false
+        if (showConfirmation != other.showConfirmation) return false
+        if (showNotDishError != other.showNotDishError) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = imageUri?.hashCode() ?: 0
+        result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
+        result = 31 * result + isAnalyzing.hashCode()
+        result = 31 * result + (detectedDishName?.hashCode() ?: 0)
+        result = 31 * result + (detectedCuisine?.hashCode() ?: 0)
+        result = 31 * result + detectionConfidence.hashCode()
+        result = 31 * result + alternatives.hashCode()
+        result = 31 * result + isAIDetected.hashCode()
+        result = 31 * result + itemType.hashCode()
+        result = 31 * result + isEditingName.hashCode()
+        result = 31 * result + editedName.hashCode()
+        result = 31 * result + (errorMessage?.hashCode() ?: 0)
+        result = 31 * result + (debugInfo?.hashCode() ?: 0)
+        result = 31 * result + showConfirmation.hashCode()
+        result = 31 * result + showNotDishError.hashCode()
+        return result
+    }
 }

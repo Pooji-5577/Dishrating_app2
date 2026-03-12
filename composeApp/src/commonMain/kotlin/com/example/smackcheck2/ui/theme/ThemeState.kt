@@ -8,22 +8,71 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import com.example.smackcheck2.data.repository.PreferencesRepository
+import com.example.smackcheck2.model.ThemePreference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Theme state manager for toggling between light and dark themes
  */
-class ThemeState(initialDarkMode: Boolean = true) {
+class ThemeState(
+    initialDarkMode: Boolean = true,
+    private val preferencesRepository: PreferencesRepository? = null,
+    private val coroutineScope: CoroutineScope? = null
+) {
     var isDarkMode by mutableStateOf(initialDarkMode)
         private set
-    
+
+    init {
+        loadThemePreference()
+    }
+
+    private fun loadThemePreference() {
+        if (preferencesRepository == null || coroutineScope == null) return
+
+        coroutineScope.launch {
+            try {
+                val pref = preferencesRepository.getThemePreference()
+                isDarkMode = when (pref) {
+                    ThemePreference.LIGHT -> false
+                    ThemePreference.DARK -> true
+                    ThemePreference.SYSTEM -> isSystemInDarkMode()
+                }
+            } catch (e: Exception) {
+                println("ThemeState: Failed to load theme preference: ${e.message}")
+            }
+        }
+    }
+
     fun toggleTheme() {
         isDarkMode = !isDarkMode
+        saveThemePreference()
     }
-    
+
     fun updateDarkMode(enabled: Boolean) {
         isDarkMode = enabled
+        saveThemePreference()
+    }
+
+    private fun saveThemePreference() {
+        if (preferencesRepository == null || coroutineScope == null) return
+
+        coroutineScope.launch {
+            try {
+                val pref = if (isDarkMode) ThemePreference.DARK else ThemePreference.LIGHT
+                preferencesRepository.saveThemePreference(pref)
+            } catch (e: Exception) {
+                println("ThemeState: Failed to save theme preference: ${e.message}")
+            }
+        }
     }
 }
+
+/**
+ * Platform-specific function to detect system theme
+ */
+expect fun isSystemInDarkMode(): Boolean
 
 /**
  * Local composition provider for theme state

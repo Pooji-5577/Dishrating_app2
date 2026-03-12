@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -74,11 +75,12 @@ fun BadgesScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
+                        .verticalScroll(rememberScrollState())
                 ) {
                     // Earned badges section
                     val earnedBadges = uiState.badges.filter { it.isEarned }
                     val unearnedBadges = uiState.badges.filter { !it.isEarned }
-                    
+
                     if (earnedBadges.isNotEmpty()) {
                         Text(
                             text = "Earned Badges (${earnedBadges.size})",
@@ -86,13 +88,13 @@ fun BadgesScreen(
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                         )
-                        
+
                         BadgeGrid(
                             badges = earnedBadges,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
-                    
+
                     if (unearnedBadges.isNotEmpty()) {
                         Text(
                             text = "Badges to Earn (${unearnedBadges.size})",
@@ -100,12 +102,15 @@ fun BadgesScreen(
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
                         )
-                        
+
                         BadgeGrid(
                             badges = unearnedBadges,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
                     }
+
+                    // Bottom spacing for smooth scrolling
+                    Spacer(modifier = Modifier.height(24.dp))
                 }
             }
         }
@@ -157,7 +162,7 @@ fun UserProgressScreen(
             else -> {
                 Column(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .padding(paddingValues)
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),

@@ -102,7 +102,10 @@ fun DarkSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String = "Search \"biryani\"",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    onMicrophoneClick: (() -> Unit)? = null,
+    enabled: Boolean = true
 ) {
     Row(
         modifier = modifier
@@ -110,6 +113,13 @@ fun DarkSearchBar(
             .padding(horizontal = 16.dp)
             .clip(RoundedCornerShape(12.dp))
             .background(appColors().SurfaceVariant)
+            .then(
+                if (onClick != null && enabled) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                }
+            )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -119,39 +129,59 @@ fun DarkSearchBar(
             tint = appColors().TextTertiary,
             modifier = Modifier.size(20.dp)
         )
-        
+
         Spacer(modifier = Modifier.width(12.dp))
-        
-        BasicTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.weight(1f),
-            textStyle = TextStyle(
-                color = appColors().TextPrimary,
-                fontSize = 14.sp
-            ),
-            cursorBrush = SolidColor(appColors().Primary),
-            decorationBox = { innerTextField ->
-                Box {
-                    if (query.isEmpty()) {
-                        Text(
-                            text = placeholder,
-                            color = appColors().TextTertiary,
-                            fontSize = 14.sp
-                        )
+
+        Box(modifier = Modifier.weight(1f)) {
+            if (query.isEmpty() && onClick != null) {
+                // When there's an onClick and query is empty, show placeholder text
+                Text(
+                    text = placeholder,
+                    color = appColors().TextTertiary,
+                    fontSize = 14.sp
+                )
+            } else {
+                // Show text field for actual typing
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = TextStyle(
+                        color = appColors().TextPrimary,
+                        fontSize = 14.sp
+                    ),
+                    cursorBrush = SolidColor(appColors().Primary),
+                    decorationBox = { innerTextField ->
+                        Box {
+                            if (query.isEmpty()) {
+                                Text(
+                                    text = placeholder,
+                                    color = appColors().TextTertiary,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            innerTextField()
+                        }
                     }
-                    innerTextField()
-                }
+                )
             }
-        )
-        
+        }
+
         Spacer(modifier = Modifier.width(12.dp))
-        
+
         Icon(
             imageVector = Icons.Filled.Mic,
             contentDescription = "Voice search",
             tint = appColors().Primary,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier
+                .size(20.dp)
+                .then(
+                    if (onMicrophoneClick != null) {
+                        Modifier.clickable(onClick = onMicrophoneClick)
+                    } else {
+                        Modifier
+                    }
+                )
         )
     }
 }

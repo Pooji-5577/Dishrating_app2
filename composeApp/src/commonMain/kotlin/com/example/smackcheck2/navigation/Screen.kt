@@ -32,6 +32,7 @@ sealed class Screen(val route: String) {
     data object TopDishes : Screen("top_dishes")
     data object TopRestaurants : Screen("top_restaurants")
     data object Game : Screen("game")
+    data object NearbyRestaurants : Screen("nearby_restaurants")
     
     // Manual dish entry (AI fallback)
     data object ManualDishEntry : Screen("manual_dish_entry")
@@ -43,7 +44,28 @@ sealed class Screen(val route: String) {
     data object DishDetail : Screen("dish_detail/{dishId}") {
         fun createRoute(dishId: String) = "dish_detail/$dishId"
     }
-    
-    // Notifications screen
+
+    // Notifications screen (from main)
     data object Notifications : Screen("notifications")
+
+    // Profile-related screens
+    data object EditProfile : Screen("edit_profile")
+    data object NotificationSettings : Screen("notification_settings")
+    data object AccountSettings : Screen("account_settings")
+    data object PrivacySettings : Screen("privacy_settings")
+
+    // Social screens
+    data object UserProfile : Screen("user_profile/{userId}") {
+        fun createRoute(userId: String) = "user_profile/$userId"
+    }
+    data object FollowersList : Screen("followers_list/{userId}") {
+        fun createRoute(userId: String) = "followers_list/$userId"
+    }
+    data object FollowingList : Screen("following_list/{userId}") {
+        fun createRoute(userId: String) = "following_list/$userId"
+    }
+    data object Comments : Screen("comments/{ratingId}") {
+        fun createRoute(ratingId: String) = "comments/$ratingId"
+    }
+    data object NotificationsList : Screen("notifications_list")
 }

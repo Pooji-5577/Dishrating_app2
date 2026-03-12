@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,19 +22,21 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,120 +48,126 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
+import com.example.smackcheck2.model.SocialFeedUiState
 import com.example.smackcheck2.ui.components.EmptyState
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
+import com.example.smackcheck2.ui.theme.appColors
 
-/**
- * Social Feed Screen composable
- * Displays social feed with user posts, ratings, likes and comments
- * 
- * @param onNavigateBack Callback to navigate back
- * @param onShareClick Callback when share button is clicked
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SocialFeedScreen(
+    uiState: SocialFeedUiState,
     onNavigateBack: () -> Unit,
-    onShareClick: (FeedItem) -> Unit
+    onFilterSelected: (FeedFilter) -> Unit,
+    onLikeClick: (String) -> Unit,
+    onCommentClick: (String) -> Unit,
+    onShareClick: (FeedItem) -> Unit,
+    onUserClick: (String) -> Unit,
+    onRefresh: () -> Unit
 ) {
-    var isRefreshing by remember { mutableStateOf(false) }
-    
-    // Mock timestamps for demo data
-    val currentTime = 1737417600000L // Fixed timestamp for demo
-    
-    // Sample feed items
-    val feedItems = remember {
-        listOf(
-            FeedItem(
-                id = "1",
-                userProfileImageUrl = null,
-                userName = "Sarah Johnson",
-                dishImageUrl = null,
-                dishName = "Truffle Pasta",
-                restaurantName = "La Bella Italia",
-                rating = 5f,
-                likesCount = 42,
-                commentsCount = 8,
-                isLiked = true,
-                timestamp = currentTime
-            ),
-            FeedItem(
-                id = "2",
-                userProfileImageUrl = null,
-                userName = "Mike Chen",
-                dishImageUrl = null,
-                dishName = "Dragon Roll",
-                restaurantName = "Sakura Sushi",
-                rating = 4.5f,
-                likesCount = 28,
-                commentsCount = 5,
-                isLiked = false,
-                timestamp = currentTime - 3600000
-            ),
-            FeedItem(
-                id = "3",
-                userProfileImageUrl = null,
-                userName = "Emily Davis",
-                dishImageUrl = null,
-                dishName = "Butter Chicken",
-                restaurantName = "Taj Mahal",
-                rating = 4f,
-                likesCount = 35,
-                commentsCount = 12,
-                isLiked = false,
-                timestamp = currentTime - 7200000
-            )
-        )
-    }
-    
+    val colors = appColors()
+
     Scaffold(
+        containerColor = colors.Background,
         topBar = {
             TopAppBar(
-                title = { Text("Social Feed") },
+                title = { Text("Social Feed", color = colors.TextPrimary) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = "Back",
+                            tint = colors.TextPrimary
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onRefresh) {
+                        Icon(
+                            imageVector = Icons.Filled.Refresh,
+                            contentDescription = "Refresh",
+                            tint = colors.TextPrimary
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = colors.Background
                 )
             )
         }
     ) { paddingValues ->
-        if (feedItems.isEmpty()) {
-            EmptyState(
-                modifier = Modifier.padding(paddingValues),
-                title = "No Posts Yet",
-                message = "Follow friends to see their dish ratings here"
-            )
-        } else {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = { 
-                    isRefreshing = true
-                    // Simulate refresh
-                    isRefreshing = false
-                },
-                modifier = Modifier.padding(paddingValues)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Filter chips
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    items(feedItems) { item ->
-                        SocialFeedCard(
-                            item = item,
-                            onLikeClick = { /* Toggle like */ },
-                            onCommentClick = { /* Open comments */ },
-                            onShareClick = { onShareClick(item) }
+                FeedFilter.entries.forEach { filter ->
+                    FilterChip(
+                        selected = uiState.filter == filter,
+                        onClick = { onFilterSelected(filter) },
+                        label = {
+                            Text(
+                                when (filter) {
+                                    FeedFilter.ALL -> "All"
+                                    FeedFilter.FOLLOWING -> "Following"
+                                    FeedFilter.NEARBY -> "Nearby"
+                                }
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = colors.Primary,
+                            selectedLabelColor = colors.Background
                         )
+                    )
+                }
+            }
+
+            when {
+                uiState.isLoading -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = colors.Primary)
+                    }
+                }
+
+                uiState.feedItems.isEmpty() -> {
+                    EmptyState(
+                        title = "No Posts Yet",
+                        message = when (uiState.filter) {
+                            FeedFilter.FOLLOWING -> "Follow friends to see their dish ratings here"
+                            FeedFilter.NEARBY -> "No ratings from nearby restaurants yet"
+                            FeedFilter.ALL -> "Be the first to rate a dish!"
+                        }
+                    )
+                }
+
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(uiState.feedItems, key = { it.id }) { item ->
+                            SocialFeedCard(
+                                item = item,
+                                onLikeClick = { onLikeClick(item.id) },
+                                onCommentClick = { onCommentClick(item.id) },
+                                onShareClick = { onShareClick(item) },
+                                onUserClick = { onUserClick(item.userId) }
+                            )
+                        }
                     }
                 }
             }
@@ -166,25 +175,24 @@ fun SocialFeedScreen(
     }
 }
 
-/**
- * Social Feed Card composable
- */
 @Composable
 fun SocialFeedCard(
     item: FeedItem,
     onLikeClick: () -> Unit,
     onCommentClick: () -> Unit,
     onShareClick: () -> Unit,
+    onUserClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    var isLiked by remember { mutableStateOf(item.isLiked) }
-    var likesCount by remember { mutableStateOf(item.likesCount) }
-    
+    val colors = appColors()
+    var isLiked by remember(item.isLiked) { mutableStateOf(item.isLiked) }
+    var likesCount by remember(item.likesCount) { mutableStateOf(item.likesCount) }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = CardShape,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = colors.CardBackground
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
@@ -195,69 +203,72 @@ fun SocialFeedCard(
         ) {
             // User profile row
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(if (onUserClick != null) Modifier.clickable { onUserClick() } else Modifier),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
                         .size(48.dp)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
+                        .background(colors.Primary.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = item.userName.first().toString(),
-                        style = MaterialTheme.typography.titleLarge,
+                        text = item.userName.firstOrNull()?.toString()?.uppercase() ?: "?",
+                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        color = colors.Primary
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.width(12.dp))
-                
+
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = item.userName,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold
+                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = colors.TextPrimary
                     )
                     Text(
                         text = "at ${item.restaurantName}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                        color = colors.TextSecondary
                     )
                 }
-                
+
                 IconButton(onClick = onShareClick) {
                     Icon(
                         imageVector = Icons.Filled.Share,
                         contentDescription = "Share",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = colors.TextSecondary
                     )
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
-            // Dish image
+
+            // Dish image placeholder
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(220.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                    .clip(androidx.compose.material3.MaterialTheme.shapes.medium)
+                    .background(colors.Surface),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Filled.Restaurant,
                     contentDescription = null,
                     modifier = Modifier.size(80.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                    tint = colors.TextSecondary.copy(alpha = 0.5f)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(12.dp))
-            
+
             // Dish name and rating
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -266,21 +277,34 @@ fun SocialFeedCard(
             ) {
                 Text(
                     text = item.dishName,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    color = colors.TextPrimary
                 )
-                
+
                 StarRatingDisplay(
                     rating = item.rating,
                     starSize = 20.dp
                 )
             }
-            
+
+            // Comment preview
+            if (item.comment.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = item.comment,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    color = colors.TextSecondary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Actions row
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -297,17 +321,17 @@ fun SocialFeedCard(
                     Icon(
                         imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                         contentDescription = "Like",
-                        tint = if (isLiked) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = if (isLiked) colors.Error else colors.TextSecondary,
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = likesCount.toString(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                        color = colors.TextSecondary
                     )
                 }
-                
+
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.clickable(onClick = onCommentClick)
@@ -315,14 +339,14 @@ fun SocialFeedCard(
                     Icon(
                         imageVector = Icons.Filled.ChatBubbleOutline,
                         contentDescription = "Comments",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = colors.TextSecondary,
                         modifier = Modifier.size(28.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
                         text = item.commentsCount.toString(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                        color = colors.TextSecondary
                     )
                 }
             }

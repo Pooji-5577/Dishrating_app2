@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -28,8 +30,12 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -39,13 +45,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -59,9 +70,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.model.Restaurant
+import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.theme.appColors
 
 /**
@@ -73,28 +86,47 @@ import com.example.smackcheck2.ui.theme.appColors
 fun DarkDishRatingScreen(
     dishName: String,
     imageUri: String,
-    restaurantName: String = "",
+    imageBytes: ByteArray? = null,
+    restaurants: List<Restaurant> = emptyList(),
+    nearbyRestaurants: List<Restaurant> = emptyList(),
+    isLoadingRestaurants: Boolean = false,
+    isSubmitting: Boolean = false,
+    showSuccess: Boolean = false,
+    errorMessage: String? = null,
     onNavigateBack: () -> Unit,
-    onSubmitRating: (rating: Float, comment: String, tags: List<String>) -> Unit
+    onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurantId: String?) -> Unit,
+    onDismissError: () -> Unit = {}
 ) {
     var rating by remember { mutableFloatStateOf(0f) }
     var comment by remember { mutableStateOf("") }
-    var restaurantInput by remember { mutableStateOf(restaurantName) }
+    var selectedRestaurant by remember { mutableStateOf<Restaurant?>(null) }
     var selectedTags by remember { mutableStateOf(setOf<String>()) }
-    var isSubmitting by remember { mutableStateOf(false) }
-    var showSuccess by remember { mutableStateOf(false) }
-    
+    var showRestaurantPicker by remember { mutableStateOf(false) }
+    var restaurantSearchQuery by remember { mutableStateOf("") }
+
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Show error message in Snackbar
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            onDismissError()
+        }
+    }
+
     val tags = listOf(
-        "🔥 Spicy", "😋 Tasty", "🥗 Healthy", "💰 Value for Money",
-        "🎨 Good Presentation", "⚡ Quick Service", "🍽️ Large Portion",
-        "🌿 Fresh Ingredients", "👨‍🍳 Chef's Special", "❤️ Must Try"
+        "Spicy", "Tasty", "Healthy", "Value for Money",
+        "Good Presentation", "Quick Service", "Large Portion",
+        "Fresh Ingredients", "Chef's Special", "Must Try"
     )
-    
+
     Scaffold(
         containerColor = appColors().Background,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { 
+                title = {
                     Text(
                         "Rate Dish",
                         color = appColors().TextPrimary,
@@ -127,7 +159,7 @@ fun DarkDishRatingScreen(
         } else {
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .padding(paddingValues)
                     .verticalScroll(rememberScrollState())
             ) {
@@ -147,23 +179,42 @@ fun DarkDishRatingScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Dish image — show the real EXIF-corrected captured photo
-                        Box(
-                            modifier = Modifier
-                                .size(80.dp)
-                                .clip(RoundedCornerShape(16.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            NetworkImage(
-                                imageUrl = imageUri,
-                                contentDescription = "Captured dish photo",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                        // Dish image - shows captured photo
+                        if (imageBytes != null) {
+                            ByteArrayImage(
+                                imageBytes = imageBytes,
+                                contentDescription = dishName,
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(RoundedCornerShape(16.dp))
                             )
+                        } else {
+                            // Fallback to placeholder if no image
+                            Box(
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(RoundedCornerShape(16.dp))
+                                    .background(
+                                        Brush.radialGradient(
+                                            colors = listOf(
+                                                Color(0xFF3D3D3D),
+                                                Color(0xFF252525)
+                                            )
+                                        )
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Restaurant,
+                                    contentDescription = null,
+                                    tint = appColors().TextSecondary,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
                         }
-                        
+
                         Spacer(modifier = Modifier.width(16.dp))
-                        
+
                         Column(modifier = Modifier.weight(1f)) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
@@ -191,33 +242,73 @@ fun DarkDishRatingScreen(
                         }
                     }
                 }
-                
-                // Restaurant input
-                OutlinedTextField(
-                    value = restaurantInput,
-                    onValueChange = { restaurantInput = it },
-                    label = { Text("Restaurant Name (optional)") },
-                    placeholder = { Text("Where did you eat this?") },
-                    singleLine = true,
+
+                // Restaurant Selection
+                Text(
+                    text = "Where did you eat this?",
+                    color = appColors().TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Restaurant picker button
+                Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = appColors().Primary,
-                        unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
-                        focusedLabelColor = appColors().Primary,
-                        unfocusedLabelColor = appColors().TextSecondary,
-                        cursorColor = appColors().Primary,
-                        focusedTextColor = appColors().TextPrimary,
-                        unfocusedTextColor = appColors().TextPrimary,
-                        focusedPlaceholderColor = appColors().TextSecondary,
-                        unfocusedPlaceholderColor = appColors().TextSecondary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                )
-                
+                        .padding(horizontal = 16.dp)
+                        .clickable { showRestaurantPicker = true },
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = appColors().Surface
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = if (selectedRestaurant != null) appColors().Primary else appColors().TextSecondary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            if (selectedRestaurant != null) {
+                                Text(
+                                    text = selectedRestaurant!!.name,
+                                    color = appColors().TextPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${selectedRestaurant!!.cuisine} • ${selectedRestaurant!!.city}",
+                                    color = appColors().TextSecondary,
+                                    fontSize = 12.sp
+                                )
+                            } else {
+                                Text(
+                                    text = "Select a restaurant",
+                                    color = appColors().TextSecondary,
+                                    fontSize = 16.sp
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = appColors().TextSecondary
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 // Star rating section
                 Text(
                     text = "How would you rate it?",
@@ -226,24 +317,24 @@ fun DarkDishRatingScreen(
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 // Interactive star rating
                 StarRatingInput(
                     rating = rating,
                     onRatingChange = { rating = it },
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                
+
                 // Rating label
                 Text(
                     text = when {
-                        rating >= 4.5f -> "Amazing! 🤩"
-                        rating >= 4f -> "Great! 😄"
-                        rating >= 3f -> "Good 👍"
-                        rating >= 2f -> "Okay 😐"
-                        rating >= 1f -> "Not Good 😕"
+                        rating >= 4.5f -> "Amazing!"
+                        rating >= 4f -> "Great!"
+                        rating >= 3f -> "Good"
+                        rating >= 2f -> "Okay"
+                        rating >= 1f -> "Not Good"
                         else -> "Tap to rate"
                     },
                     color = if (rating > 0) appColors().Primary else appColors().TextSecondary,
@@ -253,9 +344,9 @@ fun DarkDishRatingScreen(
                         .padding(top = 8.dp),
                     textAlign = TextAlign.Center
                 )
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 // Tags section
                 Text(
                     text = "Add tags (optional)",
@@ -264,9 +355,9 @@ fun DarkDishRatingScreen(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 FlowRow(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -285,7 +376,7 @@ fun DarkDishRatingScreen(
                                 )
                                 .border(
                                     width = 1.dp,
-                                    color = if (isSelected) appColors().Primary 
+                                    color = if (isSelected) appColors().Primary
                                            else appColors().TextSecondary.copy(alpha = 0.3f),
                                     shape = RoundedCornerShape(20.dp)
                                 )
@@ -300,16 +391,16 @@ fun DarkDishRatingScreen(
                         ) {
                             Text(
                                 text = tag,
-                                color = if (isSelected) appColors().Primary 
+                                color = if (isSelected) appColors().Primary
                                        else appColors().TextSecondary,
                                 fontSize = 13.sp
                             )
                         }
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 // Comment section
                 Text(
                     text = "Add a comment (optional)",
@@ -318,9 +409,9 @@ fun DarkDishRatingScreen(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 OutlinedTextField(
                     value = comment,
                     onValueChange = { comment = it },
@@ -340,9 +431,9 @@ fun DarkDishRatingScreen(
                     ),
                     shape = RoundedCornerShape(12.dp)
                 )
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
-                
+
                 // XP Preview
                 Card(
                     modifier = Modifier
@@ -381,18 +472,15 @@ fun DarkDishRatingScreen(
                         }
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(24.dp))
-                
+
                 // Submit button
                 Button(
                     onClick = {
-                        isSubmitting = true
-                        // Simulate submission delay
-                        onSubmitRating(rating, comment, selectedTags.toList())
-                        showSuccess = true
+                        onSubmitRating(rating, comment, selectedTags.toList(), selectedRestaurant?.id)
                     },
-                    enabled = rating > 0 && !isSubmitting,
+                    enabled = rating > 0 && selectedRestaurant != null && !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
@@ -412,14 +500,332 @@ fun DarkDishRatingScreen(
                         )
                     } else {
                         Text(
-                            text = "Submit Rating",
+                            text = if (selectedRestaurant == null) "Select a restaurant first" else "Submit Rating",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+
+    // Restaurant picker bottom sheet
+    if (showRestaurantPicker) {
+        ModalBottomSheet(
+            onDismissRequest = { showRestaurantPicker = false },
+            sheetState = sheetState,
+            containerColor = appColors().Background
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = "Select Restaurant",
+                    color = appColors().TextPrimary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                // Search field
+                OutlinedTextField(
+                    value = restaurantSearchQuery,
+                    onValueChange = { restaurantSearchQuery = it },
+                    placeholder = { Text("Search restaurants...") },
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = appColors().TextSecondary
+                        )
+                    },
+                    trailingIcon = {
+                        if (restaurantSearchQuery.isNotEmpty()) {
+                            IconButton(onClick = { restaurantSearchQuery = "" }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Clear",
+                                    tint = appColors().TextSecondary
+                                )
+                            }
+                        }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = appColors().Primary,
+                        unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                        cursorColor = appColors().Primary,
+                        focusedTextColor = appColors().TextPrimary,
+                        unfocusedTextColor = appColors().TextPrimary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                if (isLoadingRestaurants) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = appColors().Primary)
+                    }
+                } else {
+                    // When nearby restaurants are available (location selected), show only those
+                    // Otherwise fall back to all restaurants
+                    val primaryRestaurants = if (nearbyRestaurants.isNotEmpty()) {
+                        nearbyRestaurants
+                    } else {
+                        restaurants
+                    }
+
+                    // Filter based on search query
+                    val filteredNearby = primaryRestaurants.filter {
+                        restaurantSearchQuery.isEmpty() ||
+                        it.name.contains(restaurantSearchQuery, ignoreCase = true) ||
+                        it.cuisine.contains(restaurantSearchQuery, ignoreCase = true)
+                    }
+
+                    // Only show "All Restaurants" section if no location is selected
+                    val nearbyIds = nearbyRestaurants.map { it.id }.toSet()
+                    val filteredOthers = if (nearbyRestaurants.isEmpty()) {
+                        // No location selected, don't show separate "All" section
+                        emptyList()
+                    } else {
+                        // Location selected, show other restaurants from database as fallback
+                        restaurants.filter { restaurant ->
+                            restaurant.id !in nearbyIds && (
+                                restaurantSearchQuery.isEmpty() ||
+                                restaurant.name.contains(restaurantSearchQuery, ignoreCase = true) ||
+                                restaurant.cuisine.contains(restaurantSearchQuery, ignoreCase = true)
+                            )
+                        }
+                    }
+
+                    val hasAnyResults = filteredNearby.isNotEmpty() || filteredOthers.isNotEmpty()
+
+                    if (!hasAnyResults) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    imageVector = Icons.Default.Restaurant,
+                                    contentDescription = null,
+                                    tint = appColors().TextSecondary,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "No restaurants found",
+                                    color = appColors().TextSecondary
+                                )
+                            }
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.height(400.dp)
+                        ) {
+                            // Nearby restaurants section
+                            if (filteredNearby.isNotEmpty()) {
+                                item {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.LocationOn,
+                                            contentDescription = null,
+                                            tint = appColors().Primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "Nearby Restaurants",
+                                            color = appColors().Primary,
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                                items(filteredNearby) { restaurant ->
+                                    RestaurantPickerItem(
+                                        restaurant = restaurant,
+                                        isSelected = selectedRestaurant?.id == restaurant.id,
+                                        isNearby = true,
+                                        onClick = {
+                                            selectedRestaurant = restaurant
+                                            showRestaurantPicker = false
+                                        }
+                                    )
+                                }
+                            }
+
+                            // All other restaurants section (only show if no nearby restaurants)
+                            if (filteredOthers.isNotEmpty()) {
+                                item {
+                                    if (filteredNearby.isNotEmpty()) {
+                                        Spacer(modifier = Modifier.height(16.dp))
+                                    }
+                                    Text(
+                                        text = if (nearbyRestaurants.isEmpty()) "All Restaurants" else "Other Nearby",
+                                        color = appColors().TextSecondary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(vertical = 8.dp)
+                                    )
+                                }
+                                items(filteredOthers) { restaurant ->
+                                    RestaurantPickerItem(
+                                        restaurant = restaurant,
+                                        isSelected = selectedRestaurant?.id == restaurant.id,
+                                        isNearby = false,
+                                        onClick = {
+                                            selectedRestaurant = restaurant
+                                            showRestaurantPicker = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RestaurantPickerItem(
+    restaurant: Restaurant,
+    isSelected: Boolean,
+    isNearby: Boolean = false,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = when {
+                isSelected -> appColors().Primary.copy(alpha = 0.15f)
+                isNearby -> appColors().Primary.copy(alpha = 0.05f)
+                else -> appColors().Surface
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(
+                        if (isNearby) appColors().Primary.copy(alpha = 0.1f)
+                        else appColors().SurfaceVariant
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isNearby) Icons.Default.LocationOn else Icons.Default.Restaurant,
+                    contentDescription = null,
+                    tint = if (isNearby) appColors().Primary else appColors().TextSecondary,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = restaurant.name,
+                        color = appColors().TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (isNearby) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    appColors().Primary.copy(alpha = 0.2f),
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = "Nearby",
+                                color = appColors().Primary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = restaurant.cuisine,
+                        color = appColors().TextSecondary,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = " • ",
+                        color = appColors().TextSecondary,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = restaurant.city,
+                        color = appColors().TextSecondary,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = " • ",
+                        color = appColors().TextSecondary,
+                        fontSize = 13.sp
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Star,
+                        contentDescription = null,
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = " ${restaurant.averageRating}",
+                        color = appColors().TextSecondary,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.Check,
+                    contentDescription = "Selected",
+                    tint = appColors().Primary,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
@@ -446,7 +852,7 @@ private fun StarRatingInput(
                 targetValue = if (isSelected) Color(0xFFFFD700) else appColors().TextSecondary.copy(alpha = 0.4f),
                 animationSpec = tween(150)
             )
-            
+
             Icon(
                 imageVector = Icons.Default.Star,
                 contentDescription = "Star $i",
@@ -493,27 +899,27 @@ private fun RatingSuccessScreen(
                 modifier = Modifier.size(64.dp)
             )
         }
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         Text(
             text = "Rating Submitted!",
             color = appColors().TextPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
-        
+
         Spacer(modifier = Modifier.height(12.dp))
-        
+
         Text(
             text = "Thanks for rating $dishName",
             color = appColors().TextSecondary,
             fontSize = 16.sp,
             textAlign = TextAlign.Center
         )
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
+
         // XP earned card
         Card(
             shape = RoundedCornerShape(20.dp),
@@ -547,9 +953,9 @@ private fun RatingSuccessScreen(
                 }
             }
         }
-        
+
         Spacer(modifier = Modifier.height(48.dp))
-        
+
         Button(
             onClick = onContinue,
             modifier = Modifier

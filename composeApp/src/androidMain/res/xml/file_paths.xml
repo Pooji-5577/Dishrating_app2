@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-    FileProvider path configuration for SmackCheck.
-    Allows the camera app to write captured photos to our app's cache directory.
--->
-<paths>
-    <cache-path name="dish_photos" path="dish_photos/" />
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="images" path="images/"/>
 </paths>

@@ -1,125 +1,60 @@
 package com.example.smackcheck2
 
-import android.Manifest
+import android.content.Intent
 import android.os.Bundle
-import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.lifecycle.lifecycleScope
-import com.example.smackcheck2.location.AppLocationManager
-import com.example.smackcheck2.location.LocationState
-import com.example.smackcheck2.util.ImageProcessorContext
-import kotlinx.coroutines.launch
+import com.example.smackcheck2.data.SupabaseClientProvider
+import io.github.jan.supabase.auth.handleDeeplinks
+import com.example.smackcheck2.platform.GeofencingService
+import com.example.smackcheck2.platform.ImagePicker
+import com.example.smackcheck2.platform.LocationService
+import com.example.smackcheck2.platform.PlacesService
+import com.example.smackcheck2.platform.PreferencesManager
+import com.example.smackcheck2.platform.ShareService
 
 class MainActivity : ComponentActivity() {
+    // ImagePicker must be created at Activity level for ActivityResult APIs
+    private lateinit var imagePicker: ImagePicker
 
-    companion object {
-        private const val TAG = "MainActivity"
-    }
-
-    // ─── Step 1: Register the permission launcher using the modern Activity Result API ───
-    // This replaces the deprecated onRequestPermissionsResult callback.
-    private val locationPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val fineGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        val coarseGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
-
-        when {
-            // ✅ Both permissions granted → immediately detect location
-            fineGranted && coarseGranted -> {
-                Log.d(TAG, "Both FINE and COARSE location permissions granted")
-                detectLocationNow()
-            }
-            // ⚠️ Only coarse granted → can still get approximate location
-            coarseGranted -> {
-                Log.d(TAG, "Only COARSE location permission granted")
-                detectLocationNow()
-            }
-            // ❌ All denied
-            else -> {
-                Log.w(TAG, "Location permissions denied by user")
-                Toast.makeText(
-                    this,
-                    "Location permission denied. You can select a city manually.",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        SupabaseClientProvider.client.handleDeeplinks(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Initialize Supabase session early for session restoration
+        SupabaseClientProvider.initializeSession()
+        // Handle deep link if app was launched via OAuth redirect
+        SupabaseClientProvider.client.handleDeeplinks(intent)
+
+        // ImagePicker must be created before setContent for ActivityResult registration
+        imagePicker = ImagePicker(this)
+
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        // ─── Step 2: Initialize the AppLocationManager with application context ───
-        AppLocationManager.initialize(this)
-
-        // ─── Step 2b: Initialize ImageProcessor context for EXIF orientation fix ───
-        ImageProcessorContext.appContext = applicationContext
-
-        // ─── Step 3: If permissions are already granted, auto-detect location on app start ───
-        if (AppLocationManager.hasPermission()) {
-            detectLocationNow()
-        } else {
-            // Request permissions on first launch
-            requestLocationPermissions()
-        }
-
         setContent {
-            App()
-        }
-    }
-
-    /**
-     * Launches the system permission dialog for fine + coarse location.
-     * Called from the UI layer when the "Allow Location" button is pressed.
-     */
-    fun requestLocationPermissions() {
-        locationPermissionLauncher.launch(
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+            val context = LocalContext.current
+            val preferencesManager = remember { PreferencesManager(context) }
+            val locationService = remember { LocationService(context) }
+            val placesService = remember { PlacesService() }
+            val shareService = remember { ShareService(context) }
+            val geofencingService = remember { GeofencingService(context) }
+            App(
+                preferencesManager = preferencesManager,
+                locationService = locationService,
+                imagePicker = imagePicker,
+                placesService = placesService,
+                shareService = shareService,
+                geofencingService = geofencingService
             )
-        )
-    }
-
-    /**
-     * Triggers actual GPS detection via coroutines.
-     * The result flows into [AppLocationManager.locationState] which the UI observes.
-     */
-    private fun detectLocationNow() {
-        lifecycleScope.launch {
-            AppLocationManager.detectLocation()
-
-            // Show a toast with the result for user feedback
-            when (val state = AppLocationManager.locationState.value) {
-                is LocationState.Success -> {
-                    val city = state.locationData.city ?: "Unknown"
-                    Log.d(TAG, "Detected city: $city")
-                    Toast.makeText(
-                        this@MainActivity,
-                        "📍 Location: $city",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-                is LocationState.LocationDisabled -> {
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Please enable GPS in device settings",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-                is LocationState.Error -> {
-                    Log.e(TAG, "Location error: ${state.message}")
-                }
-                else -> { /* Loading, Idle, PermissionRequired – handled by UI */ }
-            }
         }
     }
 }
@@ -127,5 +62,7 @@ class MainActivity : ComponentActivity() {
 @Preview
 @Composable
 fun AppAndroidPreview() {
-    App()
+    val context = LocalContext.current
+    val preferencesManager = remember { PreferencesManager(context) }
+    App(preferencesManager = preferencesManager)
 }

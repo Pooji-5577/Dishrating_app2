@@ -122,20 +122,22 @@ fun GameScreen(
                 }
             }
             
-            // Tab content
-            when (selectedTab) {
-                0 -> ChallengesTab(
-                    dailyChallenges = uiState.dailyChallenges,
-                    weeklyChallenges = uiState.weeklyChallenges,
-                    onChallengeClick = { /* Handle challenge click */ }
-                )
-                1 -> LeaderboardTab(
-                    leaderboard = uiState.leaderboard,
-                    currentUserRank = uiState.rank
-                )
-                2 -> AchievementsTab(
-                    achievements = uiState.achievements
-                )
+            // Tab content - use weight(1f) to fill remaining space and enable scrolling
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when (selectedTab) {
+                    0 -> ChallengesTab(
+                        dailyChallenges = uiState.dailyChallenges,
+                        weeklyChallenges = uiState.weeklyChallenges,
+                        onChallengeClick = { /* Handle challenge click */ }
+                    )
+                    1 -> LeaderboardTab(
+                        leaderboard = uiState.leaderboard,
+                        currentUserRank = uiState.rank
+                    )
+                    2 -> AchievementsTab(
+                        achievements = uiState.achievements
+                    )
+                }
             }
         }
     }

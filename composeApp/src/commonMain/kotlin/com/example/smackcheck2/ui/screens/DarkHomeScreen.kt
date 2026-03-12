@@ -27,15 +27,20 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -74,6 +79,8 @@ data class NavItem(
 @Composable
 fun DarkHomeScreen(
     currentLocation: String,
+    allRestaurants: List<com.example.smackcheck2.model.Restaurant> = emptyList(),
+    allDishes: List<com.example.smackcheck2.model.Dish> = emptyList(),
     onLocationClick: () -> Unit,
     onDishClick: (String) -> Unit,
     onRestaurantClick: (String) -> Unit,
@@ -83,6 +90,9 @@ fun DarkHomeScreen(
     onCameraClick: () -> Unit = {},
     onTopDishesClick: () -> Unit = {},
     onTopRestaurantsClick: () -> Unit = {},
+    onNearbyRestaurantsClick: () -> Unit = {},
+    onSocialFeedClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = appColors()
@@ -94,28 +104,112 @@ fun DarkHomeScreen(
     val categories = listOf("Healthy", "Gourmet", "Chef's Special", "Quick Bites", "Desserts")
     val filters = listOf("Great Offers", "Nearest", "Rating 4.0+", "Pure Veg")
     var selectedFilters by remember { mutableStateOf(setOf<String>()) }
-    
-    // Sample dishes data
-    val featuredDishes = remember {
-        listOf(
-            DishInfo("1", "Grilled Salmon", "Ocean Grill", 4.5f, 453),
-            DishInfo("2", "Avocado Toast", "Green Cafe", 4.3f, 320),
-            DishInfo("3", "Caesar Salad", "Fresh Bowl", 4.2f, 280),
-            DishInfo("4", "Quinoa Bowl", "Healthy Hub", 4.6f, 410),
-            DishInfo("5", "Mediterranean Wrap", "Pita Palace", 4.1f, 380)
-        )
+
+    // Convert real data to UI models with category filtering
+    val featuredDishes = remember(allDishes, selectedCategory) {
+        allDishes
+            .filter { dish ->
+                // Filter by category using name and comment
+                val searchText = "${dish.name} ${dish.comment}".lowercase()
+                when (selectedCategory) {
+                    "Healthy" -> searchText.contains("healthy") || searchText.contains("salad") ||
+                                searchText.contains("grilled") || searchText.contains("steamed")
+                    "Gourmet" -> searchText.contains("gourmet") || searchText.contains("premium") ||
+                                searchText.contains("fine") || dish.rating >= 4.5f
+                    "Chef's Special" -> searchText.contains("special") || searchText.contains("signature") ||
+                                       searchText.contains("chef") || dish.rating >= 4.5f
+                    "Quick Bites" -> searchText.contains("quick") || searchText.contains("snack") ||
+                                    searchText.contains("bite") || searchText.contains("appetizer")
+                    "Desserts" -> searchText.contains("dessert") || searchText.contains("sweet") ||
+                                 searchText.contains("cake") || searchText.contains("ice cream") ||
+                                 searchText.contains("pastry")
+                    else -> true
+                }
+            }
+            .sortedByDescending { it.rating }
+            .take(10)
+            .map { dish ->
+                DishInfo(
+                    id = dish.id,
+                    name = dish.name,
+                    restaurant = dish.restaurantName,
+                    rating = dish.rating,
+                    calories = 0 // Default calories, not in model
+                )
+            }
     }
-    
-    val tryThisOut = remember {
-        TryDishInfo("Truffle Pasta", "La Cucina", 4.7f, 856, 553, true)
+
+    val tryThisOut = remember<TryDishInfo?>(allDishes, selectedCategory) {
+        allDishes
+            .filter { dish ->
+                val searchText = "${dish.name} ${dish.comment}".lowercase()
+                when (selectedCategory) {
+                    "Healthy" -> searchText.contains("healthy") || searchText.contains("salad") ||
+                                searchText.contains("grilled") || searchText.contains("steamed")
+                    "Gourmet" -> searchText.contains("gourmet") || searchText.contains("premium") ||
+                                searchText.contains("fine") || dish.rating >= 4.5f
+                    "Chef's Special" -> searchText.contains("special") || searchText.contains("signature") ||
+                                       searchText.contains("chef") || dish.rating >= 4.5f
+                    "Quick Bites" -> searchText.contains("quick") || searchText.contains("snack") ||
+                                    searchText.contains("bite") || searchText.contains("appetizer")
+                    "Desserts" -> searchText.contains("dessert") || searchText.contains("sweet") ||
+                                 searchText.contains("cake") || searchText.contains("ice cream") ||
+                                 searchText.contains("pastry")
+                    else -> true
+                }
+            }
+            .maxByOrNull { it.rating }
+            ?.let { dish ->
+                TryDishInfo(
+                    name = dish.name,
+                    restaurant = dish.restaurantName,
+                    rating = dish.rating,
+                    reviewCount = 0, // Not in model
+                    calories = 0,
+                    isBestseller = true
+                )
+            }
     }
-    
-    val restaurants = remember {
-        listOf(
-            RestaurantInfo("1", "Spice Garden", "Indian, Asian", 4.5f, 230, "30-40 min"),
-            RestaurantInfo("2", "Burger Barn", "American, Fast Food", 4.3f, 420, "20-30 min"),
-            RestaurantInfo("3", "Sushi Master", "Japanese", 4.8f, 180, "35-45 min")
-        )
+
+    val restaurants = remember(allRestaurants, selectedFilters) {
+        allRestaurants
+            .filter { restaurant ->
+                // Apply filters
+                val matchesRating = if (selectedFilters.contains("Rating 4.0+")) {
+                    restaurant.averageRating >= 4.0f
+                } else true
+
+                val matchesVeg = if (selectedFilters.contains("Pure Veg")) {
+                    restaurant.cuisine.contains("veg", ignoreCase = true) ||
+                    restaurant.name.contains("veg", ignoreCase = true)
+                } else true
+
+                val matchesOffers = if (selectedFilters.contains("Great Offers")) {
+                    // Show restaurants with good ratings (likely to have offers)
+                    restaurant.averageRating >= 3.5f
+                } else true
+
+                matchesRating && matchesVeg && matchesOffers
+            }
+            .let { filtered ->
+                // Apply "Nearest" sorting if selected
+                if (selectedFilters.contains("Nearest")) {
+                    // Sort by those with lat/long first (actual nearby restaurants)
+                    filtered.sortedByDescending { it.latitude != null && it.longitude != null }
+                } else {
+                    filtered
+                }
+            }
+            .map { restaurant ->
+                RestaurantInfo(
+                    id = restaurant.id,
+                    name = restaurant.name,
+                    cuisine = restaurant.cuisine,
+                    rating = restaurant.averageRating,
+                    reviewCount = restaurant.reviewCount,
+                    deliveryTime = "30-40 min" // Default delivery time
+                )
+            }
     }
     
     val navItems = listOf(
@@ -133,6 +227,11 @@ fun DarkHomeScreen(
             "Rate",
             { Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) },
             { Icon(Icons.Outlined.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) }
+        ),
+        NavItem(
+            "Feed",
+            { Icon(Icons.Filled.People, contentDescription = null, modifier = Modifier.size(24.dp)) },
+            { Icon(Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(24.dp)) }
         ),
         NavItem(
             "Profile",
@@ -156,7 +255,8 @@ fun DarkHomeScreen(
                             when (index) {
                                 1 -> onSearchClick()
                                 2 -> onCameraClick()
-                                3 -> onProfileClick()
+                                3 -> onSocialFeedClick()
+                                4 -> onProfileClick()
                             }
                         },
                         icon = {
@@ -188,14 +288,31 @@ fun DarkHomeScreen(
                 .background(themeColors.Background),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            // Location Header
+            // Location Header + Notifications Bell
             item {
-                LocationHeader(
-                    locationType = "Location",
-                    address = currentLocation,
-                    onLocationClick = onLocationClick,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    LocationHeader(
+                        locationType = "Location",
+                        address = currentLocation,
+                        onLocationClick = onLocationClick,
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    )
+                    IconButton(onClick = onNotificationsClick) {
+                        Icon(
+                            imageVector = Icons.Outlined.Notifications,
+                            contentDescription = "Notifications",
+                            tint = themeColors.TextPrimary,
+                            modifier = Modifier.size(26.dp)
+                        )
+                    }
+                }
             }
             
             // Search Bar
@@ -204,9 +321,12 @@ fun DarkHomeScreen(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
                     placeholder = "Search dishes, restaurants...",
-                    modifier = Modifier
-                        .padding(horizontal = 16.dp)
-                        .fillMaxWidth()
+                    onClick = onSearchClick,
+                    onMicrophoneClick = {
+                        // TODO: Implement voice search
+                        onSearchClick()
+                    },
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
             
@@ -259,11 +379,15 @@ fun DarkHomeScreen(
             
             // Featured Dishes Horizontal Scroll
             item {
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(featuredDishes) { dish ->
+                    Spacer(modifier = Modifier.width(4.dp))
+                    featuredDishes.forEach { dish ->
                         var isFavorite by remember { mutableStateOf(false) }
                         FeaturedDishCard(
                             dishName = dish.name,
@@ -275,62 +399,112 @@ fun DarkHomeScreen(
                             onFavoriteClick = { isFavorite = !isFavorite }
                         )
                     }
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
             }
             
             // Try This Out Section
-            item {
-                Column(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "Try This Out",
-                        color = themeColors.TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    LargeDishCard(
-                        dishName = tryThisOut.name,
-                        restaurantName = tryThisOut.restaurant,
-                        rating = tryThisOut.rating,
-                        reviewCount = tryThisOut.reviewCount,
-                        calories = tryThisOut.calories,
-                        isBestseller = tryThisOut.isBestseller,
-                        onClick = { onDishClick("bestseller") }
-                    )
+            tryThisOut?.let { dish ->
+                item {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    ) {
+                        Text(
+                            text = "Try This Out",
+                            color = themeColors.TextPrimary,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        LargeDishCard(
+                            dishName = dish.name,
+                            restaurantName = dish.restaurant,
+                            rating = dish.rating,
+                            reviewCount = dish.reviewCount,
+                            calories = dish.calories,
+                            isBestseller = dish.isBestseller,
+                            onClick = { onDishClick("bestseller") }
+                        )
+                    }
                 }
             }
             
             // All Restaurants Section Header
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "All Restaurants",
-                        color = themeColors.TextPrimary,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "See All >",
-                        color = themeColors.Primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable { onTopRestaurantsClick() }
-                    )
-                }
+
+                Text(
+                    text = "All Restaurants",
+                    color = themeColors.TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
             
+            // Nearby Restaurants Banner
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                        .clickable { onNearbyRestaurantsClick() },
+                    colors = CardDefaults.cardColors(
+                        containerColor = themeColors.Primary.copy(alpha = 0.15f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(themeColors.Primary.copy(alpha = 0.2f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.LocationOn,
+                                    contentDescription = null,
+                                    tint = themeColors.Primary,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Find Nearby Restaurants",
+                                    color = themeColors.TextPrimary,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Discover restaurants around you",
+                                    color = themeColors.TextSecondary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = themeColors.Primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                }
+            }
+
             // Restaurant Filters
             item {
                 Row(

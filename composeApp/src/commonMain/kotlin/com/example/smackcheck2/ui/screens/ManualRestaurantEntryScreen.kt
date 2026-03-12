@@ -85,7 +85,7 @@ fun ManualRestaurantEntryScreen(
     ) { paddingValues ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
                 .padding(paddingValues)
                 .verticalScroll(rememberScrollState())
                 .padding(24.dp),

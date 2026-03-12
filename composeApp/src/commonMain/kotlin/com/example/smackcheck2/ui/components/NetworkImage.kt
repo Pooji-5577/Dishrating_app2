@@ -83,11 +83,11 @@ fun NetworkImage(
     placeholderIcon: ImageVector = Icons.Filled.Restaurant
 ) {
     KamelImage(
-        resource = { asyncPainterResource(imageUrl) },
+        resource = asyncPainterResource(imageUrl),
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
-        onLoading = { progress ->
+        onLoading = {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -95,13 +95,12 @@ fun NetworkImage(
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
-                    progress = { progress },
                     color = appColors().Primary,
                     strokeWidth = 2.dp
                 )
             }
         },
-        onFailure = { _ ->
+        onFailure = {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

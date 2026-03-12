@@ -7,6 +7,15 @@ xcuserdata
 local.properties
 .idea
 .DS_Store
+# Environment variables (contains secrets)
+.env
+
+# Firebase service config files (may contain API keys)
+GoogleService-Info*.plist
+google-services.json
+
+# iOS xcconfig with secrets (use Config.xcconfig.example as template)
+Config.xcconfig
 captures
 .externalNativeBuild
 .cxx
@@ -17,3 +26,6 @@ captures
 !*.xcworkspace/contents.xcworkspacedata
 **/xcshareddata/WorkspaceSettings.xcsettings
 node_modules/
+
+# Legacy subdirectory (removed — contained hardcoded secrets)
+Dishrating_app2/
