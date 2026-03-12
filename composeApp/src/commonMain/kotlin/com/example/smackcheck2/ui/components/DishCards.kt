@@ -324,19 +324,25 @@ fun RestaurantCardDark(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = null,
-                            tint = appColors().StarYellow,
-                            modifier = Modifier.size(14.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "$rating ($reviewCount)",
-                            color = appColors().TextPrimary,
-                            fontSize = 12.sp
-                        )
+                    // Only show rating if there are SmackCheck reviews
+                    if (reviewCount > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Star,
+                                contentDescription = null,
+                                tint = appColors().StarYellow,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "$rating ($reviewCount)",
+                                color = appColors().TextPrimary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    } else {
+                        // Empty spacer to maintain layout when no rating
+                        Spacer(modifier = Modifier.width(1.dp))
                     }
                     Text(
                         text = deliveryTime,

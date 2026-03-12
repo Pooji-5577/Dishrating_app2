@@ -83,6 +83,7 @@ fun DarkHomeScreen(
     currentLocation: String,
     allRestaurants: List<com.example.smackcheck2.model.Restaurant> = emptyList(),
     allDishes: List<com.example.smackcheck2.model.Dish> = emptyList(),
+    noRestaurantsFound: Boolean = false,
     onLocationClick: () -> Unit,
     onDishClick: (String) -> Unit,
     onRestaurantClick: (String) -> Unit,
@@ -96,6 +97,7 @@ fun DarkHomeScreen(
     onNearbyRestaurantsClick: () -> Unit = {},
     onSocialFeedClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
+    onAddRestaurantClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = appColors()
@@ -532,6 +534,86 @@ fun DarkHomeScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
+                }
+            }
+            
+            // No Restaurants Found Message
+            if (noRestaurantsFound || restaurants.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = themeColors.Surface
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Restaurant,
+                                contentDescription = null,
+                                tint = themeColors.TextSecondary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No restaurants found in $currentLocation",
+                                color = themeColors.TextPrimary,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Try selecting a different location or be the first to add a restaurant here!",
+                                color = themeColors.TextSecondary,
+                                fontSize = 14.sp,
+                                modifier = Modifier.padding(horizontal = 16.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Card(
+                                    modifier = Modifier
+                                        .clickable { onLocationClick() },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = themeColors.Primary.copy(alpha = 0.15f)
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Change Location",
+                                        color = themeColors.Primary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                                    )
+                                }
+                                Card(
+                                    modifier = Modifier
+                                        .clickable { onAddRestaurantClick() },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = themeColors.Primary
+                                    ),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Add Restaurant",
+                                        color = Color.White,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
             
