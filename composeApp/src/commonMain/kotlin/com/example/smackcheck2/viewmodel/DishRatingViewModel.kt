@@ -89,15 +89,26 @@ class DishRatingViewModel : ViewModel() {
             try {
                 // Upload image if available
                 var imageUrl: String? = null
-                currentState.imageBytes?.let { bytes ->
+                if (currentState.imageBytes == null) {
+                    println("DishRatingViewModel: ⚠ No imageBytes — photo will NOT be uploaded")
+                } else {
+                    val bytes = currentState.imageBytes
                     println("DishRatingViewModel: Uploading image (${bytes.size} bytes)...")
                     val uploadResult = storageRepository.uploadDishImage(
                         userId = userId,
                         imageBytes = bytes,
                         fileName = "${currentState.dishName}.jpg"
                     )
-                    imageUrl = uploadResult.getOrNull()
-                    println("DishRatingViewModel: Image upload result: ${imageUrl ?: "failed"}")
+                    uploadResult.fold(
+                        onSuccess = { url ->
+                            imageUrl = url
+                            println("DishRatingViewModel: ✓ Image uploaded: $url")
+                        },
+                        onFailure = { error ->
+                            println("DishRatingViewModel: ✗ Image upload FAILED: ${error.message}")
+                            // Don't block the rating — proceed without photo
+                        }
+                    )
                 }
 
                 // Create or get dish

@@ -8,6 +8,8 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.datetime.Instant
 import kotlinx.datetime.Clock
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * Repository for database operations using Supabase Postgrest
@@ -343,11 +345,24 @@ class DatabaseRepository {
                 .decodeSingleOrNull<DishDto>()
 
             if (existing != null) {
+                // If the existing dish has no image but we now have one, update it
+                if (existing.imageUrl == null && imageUrl != null) {
+                    try {
+                        postgrest["dishes"].update({
+                            set("image_url", imageUrl)
+                        }) {
+                            filter { eq("id", existing.id!!) }
+                        }
+                        return Result.success(existing.toDish().copy(imageUrl = imageUrl))
+                    } catch (_: Exception) { /* non-critical, return existing */ }
+                }
                 return Result.success(existing.toDish())
             }
 
             // Create new dish
+            @OptIn(ExperimentalUuidApi::class)
             val dto = DishDto(
+                id = Uuid.random().toString(),
                 name = name,
                 restaurantId = restaurantId,
                 imageUrl = imageUrl
@@ -377,7 +392,9 @@ class DatabaseRepository {
         imageUrl: String? = null
     ): Result<Unit> {
         return try {
+            @OptIn(ExperimentalUuidApi::class)
             val dto = RatingDto(
+                id = Uuid.random().toString(),
                 userId = userId,
                 dishId = dishId,
                 restaurantId = restaurantId,

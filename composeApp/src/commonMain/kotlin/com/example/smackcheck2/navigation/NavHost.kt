@@ -462,6 +462,13 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             val databaseRepository = remember { DatabaseRepository() }
             var allRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
 
+            // Pass image bytes captured in preview screen into the view model for upload
+            LaunchedEffect(navigationState.imageUri) {
+                navigationState.imageBytes?.let { bytes ->
+                    dishRatingViewModel.setImageBytes(bytes)
+                }
+            }
+
             // Load restaurants when screen opens
             LaunchedEffect(Unit) {
                 val result = databaseRepository.getRestaurants()

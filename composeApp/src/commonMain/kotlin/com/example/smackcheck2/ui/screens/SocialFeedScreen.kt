@@ -250,7 +250,7 @@ fun SocialFeedCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Dish image placeholder
+            // Dish image
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -259,12 +259,23 @@ fun SocialFeedCard(
                     .background(colors.Surface),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = colors.TextSecondary.copy(alpha = 0.5f)
-                )
+                val imageUrl = item.dishImageUrl?.takeIf { it.isNotBlank() }
+                    ?: item.imageUrls.firstOrNull()
+                if (imageUrl != null) {
+                    com.example.smackcheck2.ui.components.NetworkImage(
+                        imageUrl = imageUrl,
+                        contentDescription = item.dishName,
+                        modifier = Modifier.fillMaxSize(),
+                        showGradientOnFailure = false
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Restaurant,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = colors.TextSecondary.copy(alpha = 0.5f)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))

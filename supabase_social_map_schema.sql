@@ -48,6 +48,13 @@ CREATE INDEX IF NOT EXISTS idx_ratings_location
 -- PART 4: FUNCTION TO GET NEARBY USERS WITH RECENT DISH POSTS
 -- ═══════════════════════════════════════════════════════════════════════════════
 
+-- Drop existing functions first to allow return type changes
+DROP FUNCTION IF EXISTS public.get_nearby_users_with_dishes(DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS public.get_nearby_dish_posts_postgis(DOUBLE PRECISION, DOUBLE PRECISION, INTEGER, INTEGER);
+DROP FUNCTION IF EXISTS public.update_user_location(DOUBLE PRECISION, DOUBLE PRECISION);
+DROP FUNCTION IF EXISTS public.toggle_location_sharing(BOOLEAN);
+DROP FUNCTION IF EXISTS public.get_current_user_map_profile();
+
 -- Get nearby users who have posted dishes recently (within specified radius in meters)
 CREATE OR REPLACE FUNCTION public.get_nearby_users_with_dishes(
   p_user_lat DOUBLE PRECISION,
@@ -56,18 +63,18 @@ CREATE OR REPLACE FUNCTION public.get_nearby_users_with_dishes(
   p_hours_ago INTEGER DEFAULT 168        -- Default 7 days (168 hours)
 )
 RETURNS TABLE (
-  user_id UUID,
+  user_id TEXT,
   username TEXT,
   avatar_url TEXT,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   distance_meters DOUBLE PRECISION,
-  latest_rating_id UUID,
-  latest_dish_id UUID,
+  latest_rating_id TEXT,
+  latest_dish_id TEXT,
   latest_dish_name TEXT,
   latest_dish_image TEXT,
   latest_rating REAL,
-  latest_restaurant_id UUID,
+  latest_restaurant_id TEXT,
   latest_restaurant_name TEXT,
   latest_post_time TIMESTAMPTZ
 ) AS $$
@@ -107,7 +114,7 @@ BEGIN
     lr.dish_id AS latest_dish_id,
     d.name AS latest_dish_name,
     COALESCE(lr.rating_image_url, d.image_url) AS latest_dish_image,
-    lr.rating AS latest_rating,
+    lr.rating::REAL AS latest_rating,
     lr.restaurant_id AS latest_restaurant_id,
     rest.name AS latest_restaurant_name,
     lr.created_at AS latest_post_time
@@ -145,17 +152,17 @@ CREATE OR REPLACE FUNCTION public.get_nearby_dish_posts_postgis(
   p_limit INTEGER DEFAULT 50
 )
 RETURNS TABLE (
-  user_id UUID,
+  user_id TEXT,
   username TEXT,
   avatar_url TEXT,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
-  rating_id UUID,
-  dish_id UUID,
+  rating_id TEXT,
+  dish_id TEXT,
   dish_name TEXT,
   dish_image TEXT,
   rating REAL,
-  restaurant_id UUID,
+  restaurant_id TEXT,
   restaurant_name TEXT,
   posted_at TIMESTAMPTZ
 ) AS $$
@@ -171,7 +178,7 @@ BEGIN
     r.dish_id,
     d.name AS dish_name,
     COALESCE(r.image_url, d.image_url) AS dish_image,
-    r.rating,
+    r.rating::REAL AS rating,
     r.restaurant_id,
     rest.name AS restaurant_name,
     r.created_at AS posted_at
@@ -208,7 +215,7 @@ BEGIN
     latitude = p_latitude,
     longitude = p_longitude,
     location_updated_at = NOW()
-  WHERE id = auth.uid();
+  WHERE id = auth.uid()::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -223,7 +230,7 @@ RETURNS VOID AS $$
 BEGIN
   UPDATE public.profiles
   SET location_sharing_enabled = p_enabled
-  WHERE id = auth.uid();
+  WHERE id = auth.uid()::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
@@ -233,14 +240,14 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION public.get_current_user_map_profile()
 RETURNS TABLE (
-  user_id UUID,
+  user_id TEXT,
   username TEXT,
   avatar_url TEXT,
   latitude DOUBLE PRECISION,
   longitude DOUBLE PRECISION,
   location_sharing_enabled BOOLEAN,
   total_ratings BIGINT,
-  latest_rating_id UUID,
+  latest_rating_id TEXT,
   latest_dish_name TEXT,
   latest_dish_image TEXT
 ) AS $$
@@ -258,7 +265,7 @@ BEGIN
     (SELECT d.name FROM public.ratings r JOIN public.dishes d ON r.dish_id = d.id WHERE r.user_id = p.id ORDER BY r.created_at DESC LIMIT 1) AS latest_dish_name,
     (SELECT COALESCE(r.image_url, d.image_url) FROM public.ratings r JOIN public.dishes d ON r.dish_id = d.id WHERE r.user_id = p.id ORDER BY r.created_at DESC LIMIT 1) AS latest_dish_image
   FROM public.profiles p
-  WHERE p.id = auth.uid();
+  WHERE p.id = auth.uid()::TEXT;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

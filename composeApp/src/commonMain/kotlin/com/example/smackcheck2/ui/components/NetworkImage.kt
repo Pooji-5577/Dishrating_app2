@@ -3,6 +3,7 @@ package com.example.smackcheck2.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Restaurant
@@ -80,8 +81,10 @@ fun NetworkImage(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
-    placeholderIcon: ImageVector = Icons.Filled.Restaurant
+    placeholderIcon: ImageVector = Icons.Filled.Restaurant,
+    showGradientOnFailure: Boolean = true
 ) {
+    val colors = appColors()
     KamelImage(
         resource = asyncPainterResource(imageUrl),
         contentDescription = contentDescription,
@@ -91,11 +94,11 @@ fun NetworkImage(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(appColors().SurfaceVariant),
+                    .background(colors.SurfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(
-                    color = appColors().Primary,
+                    color = colors.Primary,
                     strokeWidth = 2.dp
                 )
             }
@@ -105,21 +108,26 @@ fun NetworkImage(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(
-                        Brush.linearGradient(
-                            colors = listOf(
-                                Color(0xFF8B4513),
-                                Color(0xFFD2691E),
-                                Color(0xFFA0522D)
+                        if (showGradientOnFailure)
+                            Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF8B4513),
+                                    Color(0xFFD2691E),
+                                    Color(0xFFA0522D)
+                                )
                             )
-                        )
+                        else
+                            Brush.linearGradient(
+                                colors = listOf(colors.Surface, colors.Surface)
+                            )
                     ),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = placeholderIcon,
                     contentDescription = null,
-                    tint = appColors().TextTertiary.copy(alpha = 0.5f),
-                    modifier = Modifier
+                    modifier = Modifier.size(80.dp),
+                    tint = colors.TextSecondary.copy(alpha = 0.5f)
                 )
             }
         }
