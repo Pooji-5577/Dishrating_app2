@@ -769,6 +769,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             val uiState by locationHomeViewModel.uiState.collectAsState()
 
             // Convert nearby restaurants to Restaurant format
+            // Use SmackCheck ratings (0 for new restaurants), NOT Google ratings
             val nearbyAsRestaurants = uiState.nearbyRestaurants.map { nearby ->
                 Restaurant(
                     id = nearby.id,
@@ -776,8 +777,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     city = uiState.selectedLocation ?: "Unknown",
                     cuisine = "Restaurant",
                     imageUrls = emptyList(),
-                    averageRating = nearby.rating?.toFloat() ?: 0f,
-                    reviewCount = nearby.userRatingsTotal ?: 0,
+                    averageRating = 0f,  // SmackCheck rating - 0 until users rate it
+                    reviewCount = 0,      // SmackCheck reviews - 0 until users review it
                     latitude = nearby.latitude,
                     longitude = nearby.longitude
                 )
@@ -790,6 +791,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 currentLocation = uiState.selectedLocation ?: "Select Location",
                 allRestaurants = combinedRestaurants,
                 allDishes = uiState.topDishes,
+                noRestaurantsFound = uiState.noRestaurantsFound,
                 onLocationClick = { navigationState.navigateTo(Screen.LocationSelection) },
                 onDishClick = { dishId ->
                     navigationState.navigateToWithArgs(
@@ -812,7 +814,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
                 onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) },
                 onSocialFeedClick = { navigationState.navigateTo(Screen.SocialFeed) },
-                onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) }
+                onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) },
+                onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) }
             )
         }
         

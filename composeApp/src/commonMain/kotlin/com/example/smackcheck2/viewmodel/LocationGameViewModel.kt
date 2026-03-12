@@ -48,7 +48,8 @@ data class LocationHomeUiState(
     val nearbyRestaurants: List<NearbyRestaurant> = emptyList(),
     val searchResults: List<LocationResult> = emptyList(),
     val error: String? = null,
-    val locationError: String? = null
+    val locationError: String? = null,
+    val noRestaurantsFound: Boolean = false
 )
 
 /**
@@ -232,32 +233,61 @@ class LocationHomeViewModel : ViewModel() {
 
     private fun loadDataForLocation(location: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, error = null, noRestaurantsFound = false) }
+            println("LocationHomeViewModel: Loading data for location: $location")
 
             try {
                 // Fetch restaurants for the selected city from Supabase
+                println("LocationHomeViewModel: Fetching restaurants from database for: $location")
                 val restaurantsResult = databaseRepository.getRestaurantsByCity(location)
 
-                // Get coordinates for the selected location using geocoding
-                val coordinates = if (locationService != null) {
+                // Get coordinates for the selected location
+                // Strategy: Try Android geocoder first, then fall back to Google Places geocoding
+                println("LocationHomeViewModel: Getting coordinates for: $location")
+                var coordinates: LocationResult? = null
+                
+                // Step 1: Try Android/iOS native geocoder
+                if (locationService != null) {
                     try {
-                        // Try geocoding the selected city first
                         val geocodedLocation = locationService?.getCoordinatesForCity(location)
                         if (geocodedLocation != null) {
-                            println("LocationHomeViewModel: Geocoded $location to: ${geocodedLocation.latitude}, ${geocodedLocation.longitude}")
-                            geocodedLocation
+                            println("LocationHomeViewModel: Native geocoder success for $location: ${geocodedLocation.latitude}, ${geocodedLocation.longitude}")
+                            coordinates = geocodedLocation
                         } else {
-                            // Fall back to current GPS if geocoding fails
-                            println("LocationHomeViewModel: Geocoding failed, falling back to GPS location")
-                            locationService?.getCurrentLocation()
+                            println("LocationHomeViewModel: Native geocoder returned null for $location")
                         }
                     } catch (e: Exception) {
-                        println("LocationHomeViewModel: Geocoding error: ${e.message}, falling back to GPS")
-                        locationService?.getCurrentLocation()
+                        println("LocationHomeViewModel: Native geocoder error for $location: ${e.message}")
                     }
-                } else null
+                }
+                
+                // Step 2: If native geocoder failed, try Google Places geocoding via Edge Function
+                if (coordinates == null && placesService != null) {
+                    println("LocationHomeViewModel: Trying Google Places geocoding for: $location")
+                    try {
+                        val geocodedCity = placesService?.geocodeCity(location)
+                        if (geocodedCity != null) {
+                            println("LocationHomeViewModel: Google Places geocoded $location to: ${geocodedCity.latitude}, ${geocodedCity.longitude}")
+                            coordinates = LocationResult(
+                                latitude = geocodedCity.latitude,
+                                longitude = geocodedCity.longitude,
+                                cityName = location,
+                                fullAddress = geocodedCity.formattedAddress
+                            )
+                        } else {
+                            println("LocationHomeViewModel: Google Places geocoding returned null for $location")
+                        }
+                    } catch (e: Exception) {
+                        println("LocationHomeViewModel: Google Places geocoding error: ${e.message}")
+                    }
+                }
+                
+                if (coordinates == null) {
+                    println("LocationHomeViewModel: All geocoding methods failed for $location - cannot fetch nearby restaurants")
+                }
 
-                // Fetch nearby restaurants from Google Places API using the location's coordinates
+                // Fetch nearby restaurants from Google Places API using the geocoded coordinates
+                println("LocationHomeViewModel: placesService=${placesService != null}, coordinates=${coordinates != null}")
                 val nearbyRestaurants = if (placesService != null && coordinates != null) {
                     try {
                         // Update coordinates in state
@@ -267,22 +297,31 @@ class LocationHomeViewModel : ViewModel() {
                                 currentLongitude = coordinates.longitude
                             )
                         }
-                        println("LocationHomeViewModel: Fetching nearby restaurants at: ${coordinates.latitude}, ${coordinates.longitude}")
-                        placesService?.findNearbyRestaurants(
+                        println("LocationHomeViewModel: Calling Google Places API at: ${coordinates.latitude}, ${coordinates.longitude}")
+                        val nearby = placesService?.findNearbyRestaurants(
                             latitude = coordinates.latitude,
                             longitude = coordinates.longitude,
                             radiusInMeters = 5000
                         ) ?: emptyList()
+                        println("LocationHomeViewModel: Google Places returned ${nearby.size} restaurants")
+                        nearby
                     } catch (e: Exception) {
                         println("LocationHomeViewModel: Failed to load nearby restaurants: ${e.message}")
+                        e.printStackTrace()
                         emptyList()
                     }
                 } else {
+                    if (coordinates == null) {
+                        println("LocationHomeViewModel: Skipping Google Places - geocoding failed for '$location'")
+                    } else {
+                        println("LocationHomeViewModel: Skipping Google Places - placesService is null")
+                    }
                     emptyList()
                 }
 
                 restaurantsResult.fold(
                     onSuccess = { restaurants ->
+                        println("LocationHomeViewModel: Database returned ${restaurants.size} restaurants")
                         // Get top 5 restaurants by rating (from database)
                         val topRestaurants = restaurants
                             .sortedByDescending { it.averageRating }
@@ -295,6 +334,12 @@ class LocationHomeViewModel : ViewModel() {
                             emptyList()
                         }
 
+                        // Check if we found any restaurants at all
+                        val totalRestaurants = restaurants.size + nearbyRestaurants.size
+                        val noResults = totalRestaurants == 0
+
+                        println("LocationHomeViewModel: Final state - topRestaurants=${topRestaurants.size}, allRestaurants=${restaurants.size}, nearbyRestaurants=${nearbyRestaurants.size}, topDishes=${topDishes.size}, noRestaurantsFound=$noResults")
+                        
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
@@ -302,27 +347,33 @@ class LocationHomeViewModel : ViewModel() {
                                 topDishes = topDishes,
                                 allRestaurants = restaurants,
                                 nearbyRestaurants = nearbyRestaurants,
-                                error = null
+                                error = null,
+                                noRestaurantsFound = noResults
                             )
                         }
                     },
                     onFailure = { error ->
+                        println("LocationHomeViewModel: Database query failed: ${error.message}")
                         // Even if database fails, show nearby restaurants if available
+                        val noResults = nearbyRestaurants.isEmpty()
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
-                                error = if (nearbyRestaurants.isEmpty())
+                                error = if (noResults)
                                     "Failed to load restaurants: ${error.message}"
                                 else null,
                                 topRestaurants = emptyList(),
                                 topDishes = emptyList(),
                                 allRestaurants = emptyList(),
-                                nearbyRestaurants = nearbyRestaurants
+                                nearbyRestaurants = nearbyRestaurants,
+                                noRestaurantsFound = noResults
                             )
                         }
                     }
                 )
             } catch (e: Exception) {
+                println("LocationHomeViewModel: Critical error: ${e.message}")
+                e.printStackTrace()
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -330,7 +381,8 @@ class LocationHomeViewModel : ViewModel() {
                         topRestaurants = emptyList(),
                         topDishes = emptyList(),
                         allRestaurants = emptyList(),
-                        nearbyRestaurants = emptyList()
+                        nearbyRestaurants = emptyList(),
+                        noRestaurantsFound = true
                     )
                 }
             }

@@ -114,21 +114,25 @@ class DatabaseRepository {
     }
 
     /**
-     * Get restaurants by city
+     * Get restaurants by city (case-insensitive partial match)
      */
     suspend fun getRestaurantsByCity(city: String): Result<List<Restaurant>> {
         return try {
+            println("DatabaseRepository: Searching for restaurants in city: $city")
             val restaurants = postgrest["restaurants"]
                 .select {
                     filter {
-                        eq("city", city)
+                        // Use case-insensitive pattern matching for better results
+                        ilike("city", "%$city%")
                     }
                     order("average_rating", Order.DESCENDING)
                 }
                 .decodeList<RestaurantDto>()
                 .map { it.toRestaurant() }
+            println("DatabaseRepository: Found ${restaurants.size} restaurants for city: $city")
             Result.success(restaurants)
         } catch (e: Exception) {
+            println("DatabaseRepository: Error searching restaurants: ${e.message}")
             Result.failure(e)
         }
     }

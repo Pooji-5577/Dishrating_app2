@@ -1,13 +1,8 @@
 package com.example.smackcheck2.data
 
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.from
-import io.ktor.client.HttpClient
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.bodyAsText
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
+import io.ktor.client.call.body
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -45,16 +40,7 @@ class RestaurantPhotoService {
 
     private val supabaseClient = SupabaseClient.client
 
-    private val httpClient = HttpClient()
-
     private val json = Json { ignoreUnknownKeys = true }
-
-    companion object {
-        private const val EDGE_FUNCTION_URL =
-            "https://ayopmvhtfuwbsjxhpfgd.supabase.co/functions/v1/google-places"
-        private const val SUPABASE_ANON_KEY =
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5b3Btdmh0ZnV3YnNqeGhwZmdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjAyMTksImV4cCI6MjA4NDgzNjIxOX0.2siGUJfE3iLoaEKae5gycw_6mo748KKyi5C7YEHuUlQ"
-    }
 
     /**
      * Get photo URLs for a restaurant.
@@ -147,25 +133,26 @@ class RestaurantPhotoService {
         placeId: String? = null
     ): List<String> {
         return try {
-            // Build JSON request body
-            val bodyJson = buildString {
-                append("{")
-                append("\"restaurantName\":\"${restaurantName.replace("\"", "\\\"")}\"")
-                append(",\"city\":\"${city.replace("\"", "\\\"")}\"")
-                if (placeId != null) {
-                    append(",\"placeId\":\"${placeId}\"")
-                }
-                append("}")
+            // Build request body
+            val requestBody = PhotoSearchRequest(
+                restaurantName = restaurantName,
+                city = city,
+                placeId = placeId
+            )
+
+            // Use Supabase functions client which handles auth headers automatically
+            val response = supabaseClient.functions.invoke(
+                function = "google-places",
+                body = requestBody
+            )
+
+            if (response.status.value != 200) {
+                val errorText = response.body<String>()
+                println("Edge Function error (${response.status.value}): $errorText")
+                return emptyList()
             }
 
-            val response = httpClient.post(EDGE_FUNCTION_URL) {
-                contentType(ContentType.Application.Json)
-                header("Authorization", "Bearer $SUPABASE_ANON_KEY")
-                header("apikey", SUPABASE_ANON_KEY)
-                setBody(bodyJson)
-            }
-
-            val responseText = response.bodyAsText()
+            val responseText = response.body<String>()
             println("Edge Function response: $responseText")
 
             // Parse the JSON response: { "photos": ["url1", "url2", ...] }
@@ -178,6 +165,13 @@ class RestaurantPhotoService {
             emptyList()
         }
     }
+
+    @Serializable
+    private data class PhotoSearchRequest(
+        val restaurantName: String,
+        val city: String,
+        val placeId: String? = null
+    )
 
     /**
      * Cache photo URLs in the restaurants table for future lookups.

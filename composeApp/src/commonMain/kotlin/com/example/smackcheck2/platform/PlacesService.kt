@@ -24,6 +24,15 @@ data class NearbyRestaurant(
 )
 
 /**
+ * Data class representing geocoded city coordinates
+ */
+data class GeocodedCity(
+    val latitude: Double,
+    val longitude: Double,
+    val formattedAddress: String?
+)
+
+/**
  * Places API service that proxies requests through a Supabase Edge Function.
  *
  * The Google Places API key is stored server-side as a Supabase secret
@@ -138,6 +147,59 @@ class PlacesService {
             null
         }
     }
+
+    /**
+     * Geocode a city name to get its coordinates using Google Places Text Search.
+     * This is more reliable than device geocoders for smaller/regional cities.
+     *
+     * @param cityName The name of the city to geocode (e.g., "Rajampet", "Hyderabad")
+     * @return GeocodedCity with coordinates or null if geocoding fails
+     */
+    suspend fun geocodeCity(cityName: String): GeocodedCity? {
+        return try {
+            println("PlacesService: Geocoding city: $cityName")
+            
+            val requestBody = GeocodeCityRequest(
+                action = "geocode-city",
+                cityName = cityName
+            )
+
+            val response = supabase.functions.invoke(
+                function = "google-places",
+                body = requestBody
+            )
+
+            if (response.status.value != 200) {
+                val errorText = response.body<String>()
+                println("PlacesService: Geocode error (${response.status.value}): $errorText")
+                return null
+            }
+
+            val responseText = response.body<String>()
+            val geocodeResponse = json.decodeFromString<GeocodeCityResponse>(responseText)
+
+            if (!geocodeResponse.error.isNullOrBlank()) {
+                println("PlacesService: Geocode server error: ${geocodeResponse.error}")
+                return null
+            }
+
+            if (geocodeResponse.latitude == null || geocodeResponse.longitude == null) {
+                println("PlacesService: No geocode results for: $cityName")
+                return null
+            }
+
+            val result = GeocodedCity(
+                latitude = geocodeResponse.latitude,
+                longitude = geocodeResponse.longitude,
+                formattedAddress = geocodeResponse.formattedAddress
+            )
+            println("PlacesService: Geocoded $cityName to: ${result.latitude}, ${result.longitude}")
+            result
+        } catch (e: Exception) {
+            println("PlacesService: Geocode exception: ${e::class.simpleName} - ${e.message}")
+            null
+        }
+    }
 }
 
 // --- Edge Function Request DTOs ---
@@ -157,6 +219,12 @@ private data class PlaceDetailsRequest(
     val placeId: String
 )
 
+@Serializable
+private data class GeocodeCityRequest(
+    val action: String,
+    val cityName: String
+)
+
 // --- Edge Function Response DTOs ---
 
 @Serializable
@@ -168,6 +236,14 @@ private data class PlacesEdgeResponse(
 @Serializable
 private data class PlaceDetailsEdgeResponse(
     val result: RestaurantDto? = null,
+    val error: String? = null
+)
+
+@Serializable
+private data class GeocodeCityResponse(
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val formattedAddress: String? = null,
     val error: String? = null
 )
 
