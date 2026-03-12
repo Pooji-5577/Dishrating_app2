@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.model.CapturedImage
 import com.example.smackcheck2.model.Restaurant
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.smackcheck2.model.AuthState
@@ -66,14 +67,16 @@ import com.example.smackcheck2.ui.screens.TopRestaurantsScreen
 import com.example.smackcheck2.ui.screens.UserProgressScreen
 import com.example.smackcheck2.platform.LocalLocationService
 import com.example.smackcheck2.platform.LocalPlacesService
+import com.example.smackcheck2.platform.LocalGeofencingService
 import com.example.smackcheck2.platform.RequestLocationPermission
 import com.example.smackcheck2.platform.LocalImagePicker
 import com.example.smackcheck2.platform.LocalShareService
 import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.NearbyRestaurantsViewModel
 import com.example.smackcheck2.viewmodel.DishCaptureViewModel
+import com.example.smackcheck2.viewmodel.DishDetailViewModel
 import com.example.smackcheck2.viewmodel.DishRatingViewModel
-import com.example.smackcheck2.viewmodel.GameViewModel
+import com.example.smackcheck2.gamification.GamificationViewModel
 import com.example.smackcheck2.viewmodel.LocationHomeViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
 import com.example.smackcheck2.viewmodel.ManualDishEntryViewModel
@@ -98,7 +101,9 @@ import com.example.smackcheck2.ui.screens.UserProfileScreen
 import com.example.smackcheck2.ui.screens.FollowersListScreen
 import com.example.smackcheck2.ui.screens.CommentsScreen
 import com.example.smackcheck2.ui.screens.NotificationsListScreen
+import com.example.smackcheck2.ui.screens.SocialMapScreen
 import com.example.smackcheck2.viewmodel.SocialFeedViewModel
+import com.example.smackcheck2.viewmodel.SocialMapViewModel
 import com.example.smackcheck2.viewmodel.CommentsViewModel
 import com.example.smackcheck2.viewmodel.NotificationsViewModel
 import com.example.smackcheck2.model.FeedFilter
@@ -107,7 +112,6 @@ import com.example.smackcheck2.model.UserProfileUiState
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.launch
 // Main branch additions: gamification, notifications, location state
-import com.example.smackcheck2.gamification.GamificationViewModel
 import com.example.smackcheck2.gamification.PointsEarnedEvent
 import com.example.smackcheck2.ui.components.PointsEarnedPopup
 import com.example.smackcheck2.notifications.NotificationViewModel
@@ -153,6 +157,9 @@ class NavigationState {
     var imageBytes by mutableStateOf<ByteArray?>(null)
         private set
 
+    var allCapturedImages by mutableStateOf<List<CapturedImage>>(emptyList())
+        private set
+
     fun navigateTo(screen: Screen) {
         backStack.add(currentScreen)
         currentScreen = screen
@@ -189,6 +196,10 @@ class NavigationState {
 
     fun updateImageBytes(bytes: ByteArray?) {
         imageBytes = bytes
+    }
+
+    fun updateAllCapturedImages(images: List<CapturedImage>) {
+        allCapturedImages = images
     }
 }
 
@@ -416,9 +427,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         }
 
         is Screen.DishCapture -> {
+            val imagePicker = LocalImagePicker.current
             DishCaptureScreen(
+                imagePicker = imagePicker,
                 onNavigateBack = { navigationState.navigateBack() },
-                onImageCaptured = { imageUri ->
+                onImageCaptured = { imageUri, imageBytes ->
+                    navigationState.updateImageBytes(imageBytes)
                     navigationState.navigateToWithArgs(
                         Screen.DishPreview,
                         "imageUri" to imageUri
@@ -430,6 +444,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.DishPreview -> {
             DishPreviewScreen(
                 imageUri = navigationState.imageUri,
+                imageBytes = navigationState.imageBytes,
                 onNavigateBack = { navigationState.navigateBack() },
                 onConfirm = { dishName ->
                     navigationState.navigateToWithArgs(
@@ -444,10 +459,22 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         
         is Screen.DishRating -> {
             val dishRatingViewModel: DishRatingViewModel = viewModel { DishRatingViewModel() }
+            val databaseRepository = remember { DatabaseRepository() }
+            var allRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
+
+            // Load restaurants when screen opens
+            LaunchedEffect(Unit) {
+                val result = databaseRepository.getRestaurants()
+                result.onSuccess { restaurants ->
+                    allRestaurants = restaurants
+                }
+            }
+
             DishRatingScreen(
                 viewModel = dishRatingViewModel,
                 dishName = navigationState.dishName,
                 imageUri = navigationState.imageUri,
+                restaurants = allRestaurants,
                 onNavigateBack = { navigationState.navigateBack() },
                 onSubmitSuccess = {
                     gamificationViewModel.recordAction(
@@ -507,6 +534,29 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     )
                 },
                 onRefresh = { socialFeedViewModel.refresh() }
+            )
+        }
+        
+        is Screen.SocialMap -> {
+            val socialMapViewModel: SocialMapViewModel = viewModel {
+                SocialMapViewModel(locationService)
+            }
+            
+            SocialMapScreen(
+                viewModel = socialMapViewModel,
+                onNavigateBack = { navigationState.navigateBack() },
+                onUserProfileClick = { userId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to userId
+                    )
+                },
+                onDishDetailClick = { ratingId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.DishDetail,
+                        "dishId" to ratingId
+                    )
+                }
             )
         }
         
@@ -683,11 +733,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         }
         
         is Screen.Game -> {
-            val gameViewModel: GameViewModel = viewModel { GameViewModel() }
+            val gameViewModel: GamificationViewModel = viewModel { GamificationViewModel() }
 
             // Refresh game data every time screen is shown (to show updated XP and leaderboard)
             LaunchedEffect(Unit) {
-                gameViewModel.loadGameData()
+                gameViewModel.loadAll()
             }
 
             DarkGameScreen(
@@ -698,8 +748,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
 
         is Screen.NearbyRestaurants -> {
             val placesService = LocalPlacesService.current
+            val geofencingService = LocalGeofencingService.current
             val nearbyRestaurantsViewModel: NearbyRestaurantsViewModel = viewModel {
-                NearbyRestaurantsViewModel(locationService, placesService)
+                NearbyRestaurantsViewModel(locationService, placesService, geofencingService)
             }
             NearbyRestaurantsScreen(
                 viewModel = nearbyRestaurantsViewModel,
@@ -753,6 +804,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     )
                 },
                 onSearchClick = { navigationState.navigateTo(Screen.Search) },
+                onMapClick = { navigationState.navigateTo(Screen.SocialMap) },
                 onProfileClick = { navigationState.navigateTo(Screen.Profile) },
                 onGameClick = { navigationState.navigateTo(Screen.Game) },
                 onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
@@ -772,13 +824,15 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 viewModel = dishCaptureViewModel,
                 imagePicker = imagePicker,
                 onNavigateBack = { navigationState.navigateBack() },
-                onImageCaptured = { imageUri, dishName, imageBytes ->
+                onImageCaptured = { imageUri, dishName, imageBytes, allImages ->
                     // Award points for photo upload (from main)
                     gamificationViewModel.recordAction(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_UPLOAD_PHOTO,
                         actionLabel = "Photo Uploaded"
                     )
+                    // Store all images for rating screen
                     navigationState.updateImageBytes(imageBytes)
+                    navigationState.updateAllCapturedImages(allImages)
                     navigationState.navigateToWithArgs(
                         Screen.DarkDishRating,
                         "imageUri" to imageUri,
@@ -904,6 +958,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 isLoadingRestaurants = isLoadingRestaurants,
                 isSubmitting = ratingUiState.isSubmitting,
                 showSuccess = ratingUiState.isSuccess,
+                xpEarned = ratingUiState.xpEarned,
                 errorMessage = ratingUiState.errorMessage,
                 onNavigateBack = { navigationState.navigateBack() },
                 onSubmitRating = { rating, comment, tags, restaurantId ->
@@ -914,6 +969,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     )
                     dishRatingViewModel.onRatingChange(rating)
                     dishRatingViewModel.onCommentChange(comment)
+                    dishRatingViewModel.onTagsChange(tags)
                     if (restaurantId != null) {
                         dishRatingViewModel.setRestaurantId(restaurantId)
                         dishRatingViewModel.submitRating {
@@ -926,10 +982,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         }
         
         is Screen.DishDetail -> {
+            val dishDetailViewModel: DishDetailViewModel = viewModel { DishDetailViewModel() }
             DishDetailScreen(
+                viewModel = dishDetailViewModel,
                 dishId = navigationState.dishId,
                 onBackClick = { navigationState.navigateBack() },
-                onAddToCart = { /* Add to cart logic */ },
                 onRelatedDishClick = { dishId ->
                     navigationState.navigateToWithArgs(
                         Screen.DishDetail,

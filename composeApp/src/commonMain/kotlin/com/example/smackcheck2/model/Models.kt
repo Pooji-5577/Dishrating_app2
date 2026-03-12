@@ -153,3 +153,61 @@ data class UserSummary(
     val profilePhotoUrl: String? = null,
     val isFollowing: Boolean = false
 )
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SOCIAL MAP MODELS (Snapchat-style map feature)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * User marker on the social map - represents a user with their latest dish post
+ */
+data class MapUserMarker(
+    val userId: String,
+    val username: String,
+    val avatarUrl: String?,
+    val latitude: Double,
+    val longitude: Double,
+    val distanceMeters: Double = 0.0,
+    val latestRatingId: String? = null,
+    val latestDishId: String? = null,
+    val latestDishName: String? = null,
+    val latestDishImage: String? = null,
+    val latestRating: Float? = null,
+    val latestRestaurantId: String? = null,
+    val latestRestaurantName: String? = null,
+    val latestPostTime: Long? = null,
+    val isCurrentUser: Boolean = false
+)
+
+/**
+ * User's map profile - for the current user's own marker
+ */
+data class UserMapProfile(
+    val userId: String,
+    val username: String,
+    val avatarUrl: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val locationSharingEnabled: Boolean = true,
+    val totalRatings: Int = 0,
+    val latestRatingId: String? = null,
+    val latestDishName: String? = null,
+    val latestDishImage: String? = null
+)
+
+/**
+ * UI state for the Social Map screen
+ */
+data class SocialMapUiState(
+    val isLoading: Boolean = true,
+    val currentUserProfile: UserMapProfile? = null,
+    val nearbyUsers: List<MapUserMarker> = emptyList(),
+    val selectedUser: MapUserMarker? = null,
+    val currentLatitude: Double? = null,
+    val currentLongitude: Double? = null,
+    val radiusMeters: Int = 3000,
+    val errorMessage: String? = null,
+    val isRefreshing: Boolean = false,
+    val lastRefreshTime: Long = 0L,
+    val locationPermissionGranted: Boolean = false
+)

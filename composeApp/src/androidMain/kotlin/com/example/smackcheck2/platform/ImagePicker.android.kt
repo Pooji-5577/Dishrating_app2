@@ -28,6 +28,7 @@ actual class ImagePicker(
 
     private var captureResultCallback: ((Uri?) -> Unit)? = null
     private var galleryResultCallback: ((Uri?) -> Unit)? = null
+    private var multipleGalleryResultCallback: ((List<Uri>) -> Unit)? = null
     private var pendingCameraUri: Uri? = null
 
     private val takePictureLauncher: ActivityResultLauncher<Uri> =
@@ -48,6 +49,14 @@ actual class ImagePicker(
             val callback = galleryResultCallback
             galleryResultCallback = null
             callback?.invoke(uri)
+        }
+    
+    private val pickMultipleMediaLauncher: ActivityResultLauncher<PickVisualMediaRequest> =
+        activity.registerForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(5)) { uris ->
+            Log.d(TAG, "Multiple gallery pick result: ${uris.size} images selected")
+            val callback = multipleGalleryResultCallback
+            multipleGalleryResultCallback = null
+            callback?.invoke(uris)
         }
 
     actual suspend fun captureImage(): ImageResult? {
@@ -123,6 +132,47 @@ actual class ImagePicker(
             } catch (e: Exception) {
                 Log.e(TAG, "Error launching gallery picker", e)
                 continuation.resume(null)
+            }
+        }
+    }
+    
+    actual suspend fun pickMultipleFromGallery(maxImages: Int): List<ImageResult> {
+        Log.d(TAG, "pickMultipleFromGallery called, maxImages=$maxImages")
+
+        return suspendCancellableCoroutine { continuation ->
+            try {
+                multipleGalleryResultCallback = { uris ->
+                    if (uris.isNotEmpty()) {
+                        try {
+                            val results = uris.take(maxImages).mapNotNull { uri ->
+                                try {
+                                    val bytes = readBytesFromUri(uri)
+                                    val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+                                    Log.d(TAG, "Image picked: ${bytes.size} bytes, mimeType=$mimeType")
+                                    ImageResult(uri.toString(), bytes, mimeType)
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error reading picked image: $uri", e)
+                                    null
+                                }
+                            }
+                            Log.d(TAG, "Multiple images picked: ${results.size} images")
+                            continuation.resume(results)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error processing picked images", e)
+                            continuation.resume(emptyList())
+                        }
+                    } else {
+                        Log.d(TAG, "Multiple gallery pick cancelled or no selection")
+                        continuation.resume(emptyList())
+                    }
+                }
+
+                pickMultipleMediaLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Error launching multiple gallery picker", e)
+                continuation.resume(emptyList())
             }
         }
     }

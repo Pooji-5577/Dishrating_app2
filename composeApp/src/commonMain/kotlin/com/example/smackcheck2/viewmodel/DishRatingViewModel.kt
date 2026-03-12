@@ -54,6 +54,10 @@ class DishRatingViewModel : ViewModel() {
         _uiState.update { it.copy(comment = comment) }
     }
 
+    fun onTagsChange(tags: List<String>) {
+        _uiState.update { it.copy(tags = tags) }
+    }
+
     fun submitRating(onSuccess: () -> Unit) {
         val currentState = _uiState.value
         val userId = authRepository.getCurrentUserId()
@@ -133,12 +137,14 @@ class DishRatingViewModel : ViewModel() {
                         println("DishRatingViewModel: ✓ Rating submitted successfully!")
 
                         // Calculate variable XP rewards
+                        // Unified formula: base 10 + photo 5 + comment(>50 chars) 10 + tags * 2
                         val baseXp = 10
                         val photoBonus = if (imageUrl != null) 5 else 0
                         val commentBonus = if (currentState.comment.length > 50) 10 else 0
-                        val totalXp = baseXp + photoBonus + commentBonus
+                        val tagBonus = currentState.tags.size * 2
+                        val totalXp = baseXp + photoBonus + commentBonus + tagBonus
 
-                        println("DishRatingViewModel: Awarding $totalXp XP (base: $baseXp, photo: $photoBonus, comment: $commentBonus)...")
+                        println("DishRatingViewModel: Awarding $totalXp XP (base: $baseXp, photo: $photoBonus, comment: $commentBonus, tags: $tagBonus)...")
 
                         // PROPERLY AWAIT the XP award
                         val xpResult = databaseRepository.addXpToUser(userId, totalXp)

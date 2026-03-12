@@ -1,6 +1,6 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
-console.log('SmackCheck Push Notification Function initialized')
+console.log('SmackCheck Push Notification Function initialized (FCM + Expo)')
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -32,11 +32,48 @@ interface ExpoPushMessage {
   badge?: number
 }
 
+interface FCMMessage {
+  message: {
+    token: string
+    notification: {
+      title: string
+      body: string
+    }
+    data?: Record<string, string>
+    android?: {
+      priority: 'high' | 'normal'
+      notification?: {
+        channel_id: string
+        sound: string
+        click_action: string
+      }
+    }
+    apns?: {
+      payload: {
+        aps: {
+          sound: string
+          badge?: number
+        }
+      }
+    }
+  }
+}
+
 interface ExpoPushTicket {
   status: 'ok' | 'error'
   id?: string
   message?: string
   details?: { error?: string }
+}
+
+interface FCMResponse {
+  name?: string
+  error?: {
+    code: number
+    message: string
+    status: string
+    details?: unknown[]
+  }
 }
 
 // ─── Supabase Client ─────────────────────────────────────────────
@@ -50,10 +87,47 @@ const supabase = createClient(
 
 const EVENT_CHANNEL_MAP: Record<string, string> = {
   review_liked: 'social',
+  new_follower: 'social',
   dish_comment: 'social',
+  comment_reply: 'social',
   points_earned: 'gamification',
   challenge_completed: 'gamification',
+  level_up: 'gamification',
+  badge_earned: 'gamification',
   trending_dish: 'discovery',
+  nearby_restaurant: 'discovery',
+  geofence_enter: 'discovery',
+}
+
+// ─── Token Type Detection ────────────────────────────────────────
+
+type TokenType = 'expo' | 'fcm' | 'apns' | 'unknown'
+
+function detectTokenType(token: string): TokenType {
+  if (!token) return 'unknown'
+  
+  // Expo tokens start with ExponentPushToken[ or ExpoPushToken[
+  if (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken[')) {
+    return 'expo'
+  }
+  
+  // FCM tokens are typically long alphanumeric strings with colons
+  // They're usually 152+ characters
+  if (token.length > 100 && token.includes(':')) {
+    return 'fcm'
+  }
+  
+  // APNs device tokens are 64-character hex strings
+  if (/^[a-fA-F0-9]{64}$/.test(token)) {
+    return 'apns'
+  }
+  
+  // Default to FCM for other long tokens (most common case)
+  if (token.length > 100) {
+    return 'fcm'
+  }
+  
+  return 'unknown'
 }
 
 // ─── Main Handler ────────────────────────────────────────────────
@@ -81,10 +155,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Fetch user's Expo push token
+    // Fetch user's push tokens (supports both FCM and Expo)
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('expo_push_token')
+      .select('expo_push_token, fcm_token')
       .eq('id', record.user_id)
       .single()
 
@@ -96,9 +170,22 @@ Deno.serve(async (req) => {
       )
     }
 
-    const pushToken = profile?.expo_push_token
+    // Try FCM token first (Android native), then fall back to Expo token
+    const fcmToken = profile?.fcm_token
+    const expoToken = profile?.expo_push_token
+    
+    // Choose which token to use
+    let pushToken: string | null = null
+    let tokenType: TokenType = 'unknown'
+    
+    if (fcmToken) {
+      pushToken = fcmToken
+      tokenType = detectTokenType(fcmToken)
+    } else if (expoToken) {
+      pushToken = expoToken
+      tokenType = detectTokenType(expoToken)
+    }
 
-    // Validate push token exists and is a valid Expo token
     if (!pushToken) {
       console.warn(`No push token for user ${record.user_id}, skipping notification`)
       return new Response(
@@ -107,42 +194,32 @@ Deno.serve(async (req) => {
       )
     }
 
-    if (!isValidExpoPushToken(pushToken)) {
-      console.error(`Invalid Expo push token for user ${record.user_id}: ${pushToken}`)
-      return new Response(
-        JSON.stringify({ error: 'Invalid Expo push token format' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
+    console.log(`Sending ${tokenType} push notification for user ${record.user_id}`)
+
+    let result: { success: boolean; ticket?: unknown; error?: string }
+
+    // Send notification based on token type
+    if (tokenType === 'fcm') {
+      result = await sendFCMNotification(pushToken, record)
+    } else if (tokenType === 'expo') {
+      result = await sendExpoNotification(pushToken, record)
+    } else {
+      // Try FCM as default for unknown tokens (most common case)
+      console.warn(`Unknown token type for user ${record.user_id}, trying FCM`)
+      result = await sendFCMNotification(pushToken, record)
     }
 
-    // Build the push message
-    const message: ExpoPushMessage = {
-      to: pushToken,
-      sound: 'default',
-      title: record.title || 'SmackCheck',
-      body: record.body,
-      data: {
-        ...record.data,
-        notificationId: record.id,
-        eventType: record.event_type,
-      },
-      channelId: EVENT_CHANNEL_MAP[record.event_type] || 'default',
-      priority: 'high',
-    }
-
-    // Send push notification via Expo Push API
-    const ticket = await sendExpoPushNotification(message)
-
-    console.log(`Push notification sent for user ${record.user_id}:`, ticket)
+    console.log(`Push notification result for user ${record.user_id}:`, result)
 
     return new Response(
       JSON.stringify({
-        success: true,
-        ticket,
+        success: result.success,
+        ticket: result.ticket,
         user_id: record.user_id,
         event_type: record.event_type,
+        token_type: tokenType,
       }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      { status: result.success ? 200 : 500, headers: { 'Content-Type': 'application/json' } }
     )
   } catch (error) {
     console.error('Unhandled error in push function:', error)
@@ -153,18 +230,221 @@ Deno.serve(async (req) => {
   }
 })
 
-// ─── Helpers ─────────────────────────────────────────────────────
+// ─── FCM Push Notification ───────────────────────────────────────
 
-function isValidExpoPushToken(token: string): boolean {
-  return (
-    typeof token === 'string' &&
-    (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken[')) &&
-    token.endsWith(']')
-  )
+async function sendFCMNotification(
+  token: string,
+  notification: Notification
+): Promise<{ success: boolean; ticket?: FCMResponse; error?: string }> {
+  const projectId = Deno.env.get('FIREBASE_PROJECT_ID')
+  const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+
+  if (!projectId || !serviceAccountJson) {
+    console.error('Firebase configuration missing')
+    return {
+      success: false,
+      error: 'Firebase configuration missing (PROJECT_ID or SERVICE_ACCOUNT_JSON)',
+    }
+  }
+
+  try {
+    // Get OAuth2 access token for Firebase
+    const accessToken = await getFirebaseAccessToken(serviceAccountJson)
+
+    const channelId = EVENT_CHANNEL_MAP[notification.event_type] || 'default'
+
+    const fcmMessage: FCMMessage = {
+      message: {
+        token: token,
+        notification: {
+          title: notification.title || 'SmackCheck',
+          body: notification.body,
+        },
+        data: {
+          notificationId: notification.id,
+          eventType: notification.event_type,
+          ...Object.fromEntries(
+            Object.entries(notification.data || {}).map(([k, v]) => [k, String(v)])
+          ),
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            channel_id: channelId,
+            sound: 'default',
+            click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+            },
+          },
+        },
+      },
+    }
+
+    const response = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(fcmMessage),
+      }
+    )
+
+    const result: FCMResponse = await response.json()
+
+    if (!response.ok) {
+      console.error('FCM API error:', result)
+      
+      // Handle invalid token errors
+      if (result.error?.message?.includes('not found') || 
+          result.error?.message?.includes('not registered')) {
+        console.warn(`Removing invalid FCM token for user`)
+        await supabase
+          .from('profiles')
+          .update({ fcm_token: null })
+          .eq('fcm_token', token)
+      }
+      
+      return {
+        success: false,
+        ticket: result,
+        error: result.error?.message || 'FCM send failed',
+      }
+    }
+
+    return { success: true, ticket: result }
+  } catch (error) {
+    console.error('FCM notification error:', error)
+    return {
+      success: false,
+      error: (error as Error).message,
+    }
+  }
 }
 
-async function sendExpoPushNotification(message: ExpoPushMessage): Promise<ExpoPushTicket> {
+// ─── Firebase OAuth2 Access Token ────────────────────────────────
+
+async function getFirebaseAccessToken(serviceAccountJson: string): Promise<string> {
+  const serviceAccount = JSON.parse(serviceAccountJson)
+  
+  // Create JWT header and claim set
+  const header = {
+    alg: 'RS256',
+    typ: 'JWT',
+  }
+
+  const now = Math.floor(Date.now() / 1000)
+  const claim = {
+    iss: serviceAccount.client_email,
+    scope: 'https://www.googleapis.com/auth/firebase.messaging',
+    aud: 'https://oauth2.googleapis.com/token',
+    exp: now + 3600,
+    iat: now,
+  }
+
+  // Encode and sign JWT
+  const encodedHeader = base64UrlEncode(JSON.stringify(header))
+  const encodedClaim = base64UrlEncode(JSON.stringify(claim))
+  const signatureInput = `${encodedHeader}.${encodedClaim}`
+  
+  const signature = await signWithRS256(signatureInput, serviceAccount.private_key)
+  const jwt = `${signatureInput}.${signature}`
+
+  // Exchange JWT for access token
+  const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion: jwt,
+    }),
+  })
+
+  const tokenData = await tokenResponse.json()
+  
+  if (!tokenResponse.ok) {
+    throw new Error(`Failed to get Firebase access token: ${JSON.stringify(tokenData)}`)
+  }
+
+  return tokenData.access_token
+}
+
+// ─── Crypto Helpers ──────────────────────────────────────────────
+
+function base64UrlEncode(str: string): string {
+  const base64 = btoa(str)
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function signWithRS256(data: string, privateKeyPem: string): Promise<string> {
+  // Remove PEM headers and decode
+  const pemContent = privateKeyPem
+    .replace('-----BEGIN PRIVATE KEY-----', '')
+    .replace('-----END PRIVATE KEY-----', '')
+    .replace(/\n/g, '')
+  
+  const binaryKey = Uint8Array.from(atob(pemContent), c => c.charCodeAt(0))
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'pkcs8',
+    binaryKey,
+    {
+      name: 'RSASSA-PKCS1-v1_5',
+      hash: 'SHA-256',
+    },
+    false,
+    ['sign']
+  )
+
+  const encoder = new TextEncoder()
+  const signature = await crypto.subtle.sign(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    encoder.encode(data)
+  )
+
+  return arrayBufferToBase64Url(signature)
+}
+
+// ─── Expo Push Notification (Legacy/Fallback) ────────────────────
+
+async function sendExpoNotification(
+  token: string,
+  notification: Notification
+): Promise<{ success: boolean; ticket?: ExpoPushTicket; error?: string }> {
   const accessToken = Deno.env.get('EXPO_ACCESS_TOKEN')
+
+  const message: ExpoPushMessage = {
+    to: token,
+    sound: 'default',
+    title: notification.title || 'SmackCheck',
+    body: notification.body,
+    data: {
+      ...notification.data,
+      notificationId: notification.id,
+      eventType: notification.event_type,
+    },
+    channelId: EVENT_CHANNEL_MAP[notification.event_type] || 'default',
+    priority: 'high',
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -172,39 +452,53 @@ async function sendExpoPushNotification(message: ExpoPushMessage): Promise<ExpoP
     'Accept-Encoding': 'gzip, deflate',
   }
 
-  // Use enhanced security if access token is available
   if (accessToken) {
     headers['Authorization'] = `Bearer ${accessToken}`
   }
 
-  const response = await fetch('https://exp.host/--/api/v2/push/send', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(message),
-  })
+  try {
+    const response = await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(message),
+    })
 
-  const result = await response.json()
+    const result = await response.json()
 
-  if (!response.ok) {
-    console.error('Expo Push API error:', result)
-    throw new Error(`Expo Push API returned ${response.status}: ${JSON.stringify(result)}`)
-  }
+    if (!response.ok) {
+      console.error('Expo Push API error:', result)
+      return {
+        success: false,
+        error: `Expo Push API returned ${response.status}`,
+      }
+    }
 
-  // Expo returns { data: { ... } } for single messages
-  const ticket: ExpoPushTicket = result.data || result
+    const ticket: ExpoPushTicket = result.data || result
 
-  if (ticket.status === 'error') {
-    console.error('Push ticket error:', ticket.message, ticket.details)
+    if (ticket.status === 'error') {
+      console.error('Push ticket error:', ticket.message, ticket.details)
 
-    // If the token is invalid, remove it from the profile to prevent future errors
-    if (ticket.details?.error === 'DeviceNotRegistered') {
-      console.warn(`Removing invalid push token for message to: ${message.to}`)
-      await supabase
-        .from('profiles')
-        .update({ expo_push_token: null })
-        .eq('expo_push_token', message.to)
+      // Remove invalid token
+      if (ticket.details?.error === 'DeviceNotRegistered') {
+        await supabase
+          .from('profiles')
+          .update({ expo_push_token: null })
+          .eq('expo_push_token', token)
+      }
+
+      return {
+        success: false,
+        ticket,
+        error: ticket.message,
+      }
+    }
+
+    return { success: true, ticket }
+  } catch (error) {
+    console.error('Expo notification error:', error)
+    return {
+      success: false,
+      error: (error as Error).message,
     }
   }
-
-  return ticket
 }

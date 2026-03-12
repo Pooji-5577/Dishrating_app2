@@ -92,6 +92,7 @@ fun DarkDishRatingScreen(
     isLoadingRestaurants: Boolean = false,
     isSubmitting: Boolean = false,
     showSuccess: Boolean = false,
+    xpEarned: Int? = null,
     errorMessage: String? = null,
     onNavigateBack: () -> Unit,
     onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurantId: String?) -> Unit,
@@ -153,7 +154,7 @@ fun DarkDishRatingScreen(
             RatingSuccessScreen(
                 dishName = dishName,
                 rating = rating,
-                xpEarned = 50,
+                xpEarned = xpEarned ?: calculateXP(rating, comment, selectedTags, imageBytes != null),
                 onContinue = onNavigateBack
             )
         } else {
@@ -464,7 +465,7 @@ fun DarkDishRatingScreen(
                                 fontSize = 12.sp
                             )
                             Text(
-                                text = "+${calculateXP(rating, comment, selectedTags)} XP",
+                                text = "+${calculateXP(rating, comment, selectedTags, imageBytes != null)} XP",
                                 color = appColors().Primary,
                                 fontSize = 18.sp,
                                 fontWeight = FontWeight.Bold
@@ -976,10 +977,14 @@ private fun RatingSuccessScreen(
     }
 }
 
-private fun calculateXP(rating: Float, comment: String, tags: Set<String>): Int {
-    var xp = 25 // Base XP for rating
-    if (rating > 0) xp += 15 // Extra for providing rating
-    if (comment.length > 20) xp += 10 // Bonus for detailed comment
+/**
+ * Unified XP formula matching DishRatingViewModel:
+ * base 10 + photo 5 + comment(>50 chars) 10 + tags * 2
+ */
+private fun calculateXP(rating: Float, comment: String, tags: Set<String>, hasPhoto: Boolean = true): Int {
+    var xp = 10 // Base XP for submitting a rating
+    if (hasPhoto) xp += 5 // Bonus for including a photo
+    if (comment.length > 50) xp += 10 // Bonus for detailed comment
     xp += tags.size * 2 // 2 XP per tag
     return xp
 }

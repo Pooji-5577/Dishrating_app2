@@ -44,6 +44,13 @@ expect class ImagePicker {
      * Returns null if selection is cancelled or fails
      */
     suspend fun pickFromGallery(): ImageResult?
+    
+    /**
+     * Pick multiple images from the device gallery
+     * Returns empty list if selection is cancelled or fails
+     * @param maxImages Maximum number of images to select (default 5)
+     */
+    suspend fun pickMultipleFromGallery(maxImages: Int = 5): List<ImageResult>
 
     /**
      * Check if camera permission is granted

@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Restaurant
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.CameraAlt
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.Search
@@ -85,6 +87,7 @@ fun DarkHomeScreen(
     onDishClick: (String) -> Unit,
     onRestaurantClick: (String) -> Unit,
     onSearchClick: () -> Unit,
+    onMapClick: () -> Unit = {},
     onProfileClick: () -> Unit,
     onGameClick: () -> Unit,
     onCameraClick: () -> Unit = {},
@@ -219,9 +222,9 @@ fun DarkHomeScreen(
             { Icon(Icons.Outlined.Home, contentDescription = null, modifier = Modifier.size(24.dp)) }
         ),
         NavItem(
-            "Search",
-            { Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(24.dp)) },
-            { Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(24.dp)) }
+            "Map",
+            { Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(24.dp)) },
+            { Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(24.dp)) }
         ),
         NavItem(
             "Rate",
@@ -253,7 +256,7 @@ fun DarkHomeScreen(
                         onClick = {
                             selectedNavItem = index
                             when (index) {
-                                1 -> onSearchClick()
+                                1 -> onMapClick()
                                 2 -> onCameraClick()
                                 3 -> onSocialFeedClick()
                                 4 -> onProfileClick()

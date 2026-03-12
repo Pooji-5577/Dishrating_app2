@@ -234,12 +234,11 @@ fun DarkLoginScreen(
             Button(
                 onClick = {
                     viewModel.login {
-                        authViewModel.signIn(
-                            email = uiState.email,
-                            password = uiState.password,
-                            onSuccess = onNavigateToHome,
-                            onError = { }
-                        )
+                        // LoginViewModel.login() already calls authRepository.signIn()
+                        // and sets isSuccess=true. AuthViewModel picks up the session
+                        // change automatically via observeSessionStatus().
+                        // No need to call authViewModel.signIn() again.
+                        onNavigateToHome()
                     }
                 },
                 modifier = Modifier

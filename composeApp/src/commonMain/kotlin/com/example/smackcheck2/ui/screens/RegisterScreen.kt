@@ -246,21 +246,11 @@ fun RegisterScreen(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         focusManager.clearFocus()
+                        // RegisterViewModel.register() already calls authRepository.signUp()
+                        // and handles loading/success/error states internally.
+                        // AuthViewModel picks up the session change via observeSessionStatus().
                         viewModel.register {
-                            // On validation success, call AuthViewModel to register
-                            authViewModel.register(
-                                name = uiState.name,
-                                email = uiState.email,
-                                password = uiState.password,
-                                onSuccess = {
-                                    viewModel.setLoading(false)
-                                    viewModel.setSuccess(true)
-                                    onNavigateToHome()
-                                },
-                                onError = { error ->
-                                    viewModel.setLoading(false)
-                                }
-                            )
+                            onNavigateToHome()
                         }
                     }
                 ),
@@ -274,21 +264,11 @@ fun RegisterScreen(
             // Register button
             Button(
                 onClick = {
+                    // RegisterViewModel.register() already calls authRepository.signUp()
+                    // and handles loading/success/error states internally.
+                    // AuthViewModel picks up the session change via observeSessionStatus().
                     viewModel.register {
-                        // On validation success, call AuthViewModel to register
-                        authViewModel.register(
-                            name = uiState.name,
-                            email = uiState.email,
-                            password = uiState.password,
-                            onSuccess = {
-                                viewModel.setLoading(false)
-                                viewModel.setSuccess(true)
-                                onNavigateToHome()
-                            },
-                            onError = { error ->
-                                viewModel.setLoading(false)
-                            }
-                        )
+                        onNavigateToHome()
                     }
                 },
                 modifier = Modifier

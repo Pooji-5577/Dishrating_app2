@@ -16,6 +16,9 @@ import kotlinx.coroutines.launch
 /**
  * Singleton Supabase client instance with session persistence
  */
+// Type alias for backward compatibility with code using "SupabaseClient"
+typealias SupabaseClient = SupabaseClientProvider
+
 object SupabaseClientProvider {
 
     val client: SupabaseClient by lazy {

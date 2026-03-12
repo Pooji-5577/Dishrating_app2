@@ -1,0 +1,251 @@
+package com.example.smackcheck2.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.repository.SocialMapRepository
+import com.example.smackcheck2.model.MapUserMarker
+import com.example.smackcheck2.model.SocialMapUiState
+import com.example.smackcheck2.platform.LocationOperationResult
+import com.example.smackcheck2.platform.LocationService
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+
+/**
+ * ViewModel for the Social Map screen (Snapchat-style map with user avatars)
+ */
+class SocialMapViewModel(
+    private val locationService: LocationService?
+) : ViewModel() {
+
+    private val repository = SocialMapRepository()
+
+    private val _uiState = MutableStateFlow(SocialMapUiState())
+    val uiState: StateFlow<SocialMapUiState> = _uiState.asStateFlow()
+
+    private var autoRefreshJob: Job? = null
+
+    companion object {
+        private const val DEFAULT_RADIUS_METERS = 3000
+        private const val AUTO_REFRESH_INTERVAL_MS = 30_000L // 30 seconds
+        private const val DEFAULT_HOURS_AGO = 168 // 7 days
+    }
+
+    init {
+        loadCurrentUserProfile()
+    }
+
+    /**
+     * Initialize the map with user's current location
+     */
+    fun initializeWithLocation(latitude: Double, longitude: Double) {
+        _uiState.update { it.copy(
+            currentLatitude = latitude,
+            currentLongitude = longitude,
+            locationPermissionGranted = true
+        ) }
+        
+        // Update user's location in database
+        updateUserLocationInDb(latitude, longitude)
+        
+        // Load nearby users
+        loadNearbyUsers()
+        
+        // Start auto-refresh
+        startAutoRefresh()
+    }
+
+    /**
+     * Request current location from device GPS
+     */
+    fun requestCurrentLocation() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            
+            if (locationService == null) {
+                _uiState.update { it.copy(
+                    isLoading = false,
+                    errorMessage = "Location service not available"
+                ) }
+                return@launch
+            }
+
+            try {
+                if (!locationService.hasLocationPermission()) {
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        locationPermissionGranted = false
+                    ) }
+                    return@launch
+                }
+
+                when (val result = locationService.getCurrentLocationWithDetails()) {
+                    is LocationOperationResult.Success -> {
+                        initializeWithLocation(result.location.latitude, result.location.longitude)
+                    }
+                    is LocationOperationResult.Error -> {
+                        _uiState.update { it.copy(
+                            isLoading = false,
+                            errorMessage = "Failed to get location: ${result.reason}"
+                        ) }
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(
+                    isLoading = false,
+                    errorMessage = "Failed to get location: ${e.message}"
+                ) }
+            }
+        }
+    }
+
+    /**
+     * Load current user's map profile
+     */
+    private fun loadCurrentUserProfile() {
+        viewModelScope.launch {
+            repository.getCurrentUserMapProfile()
+                .onSuccess { profile ->
+                    _uiState.update { it.copy(currentUserProfile = profile) }
+                }
+                .onFailure { error ->
+                    println("SocialMapViewModel: Failed to load user profile: ${error.message}")
+                }
+        }
+    }
+
+    /**
+     * Load nearby users with dish posts
+     */
+    fun loadNearbyUsers() {
+        val state = _uiState.value
+        val lat = state.currentLatitude ?: return
+        val lng = state.currentLongitude ?: return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isRefreshing = true) }
+
+            // Try PostGIS query first, falls back to Haversine
+            repository.getNearbyDishPostsPostGIS(
+                userLat = lat,
+                userLng = lng,
+                radiusMeters = state.radiusMeters,
+                limit = 50
+            ).onSuccess { users ->
+                _uiState.update { currentState ->
+                    currentState.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        nearbyUsers = users,
+                        lastRefreshTime = Clock.System.now().toEpochMilliseconds(),
+                        errorMessage = null
+                    )
+                }
+            }.onFailure { error ->
+                _uiState.update { it.copy(
+                    isLoading = false,
+                    isRefreshing = false,
+                    errorMessage = "Failed to load nearby users: ${error.message}"
+                ) }
+            }
+        }
+    }
+
+    /**
+     * Change the search radius
+     */
+    fun setRadius(radiusMeters: Int) {
+        _uiState.update { it.copy(radiusMeters = radiusMeters) }
+        loadNearbyUsers()
+    }
+
+    /**
+     * Select a user marker to show their dish preview
+     */
+    fun selectUser(user: MapUserMarker?) {
+        _uiState.update { it.copy(selectedUser = user) }
+    }
+
+    /**
+     * Dismiss the selected user's preview
+     */
+    fun dismissUserPreview() {
+        _uiState.update { it.copy(selectedUser = null) }
+    }
+
+    /**
+     * Manually refresh nearby users
+     */
+    fun refresh() {
+        loadNearbyUsers()
+    }
+
+    /**
+     * Toggle location sharing
+     */
+    fun toggleLocationSharing(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.toggleLocationSharing(enabled)
+                .onSuccess {
+                    loadCurrentUserProfile() // Reload profile to get updated status
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(
+                        errorMessage = "Failed to update location sharing: ${error.message}"
+                    ) }
+                }
+        }
+    }
+
+    /**
+     * Update user's location in the database
+     */
+    private fun updateUserLocationInDb(latitude: Double, longitude: Double) {
+        viewModelScope.launch {
+            repository.updateUserLocation(latitude, longitude)
+                .onFailure { error ->
+                    println("SocialMapViewModel: Failed to update location: ${error.message}")
+                }
+        }
+    }
+
+    /**
+     * Start auto-refresh every 30 seconds
+     */
+    private fun startAutoRefresh() {
+        autoRefreshJob?.cancel()
+        autoRefreshJob = viewModelScope.launch {
+            while (true) {
+                delay(AUTO_REFRESH_INTERVAL_MS)
+                if (_uiState.value.currentLatitude != null) {
+                    loadNearbyUsers()
+                }
+            }
+        }
+    }
+
+    /**
+     * Stop auto-refresh
+     */
+    fun stopAutoRefresh() {
+        autoRefreshJob?.cancel()
+        autoRefreshJob = null
+    }
+
+    /**
+     * Clear any error message
+     */
+    fun clearError() {
+        _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        stopAutoRefresh()
+    }
+}

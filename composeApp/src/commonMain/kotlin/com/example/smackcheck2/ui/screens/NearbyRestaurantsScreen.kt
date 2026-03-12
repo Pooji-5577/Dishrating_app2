@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.smackcheck2.data.repository.GeofenceEvent
 import com.example.smackcheck2.platform.MapMarker
 import com.example.smackcheck2.platform.NearbyRestaurant
 import com.example.smackcheck2.platform.PlatformMapView
@@ -26,7 +27,7 @@ import com.example.smackcheck2.viewmodel.NearbyRestaurantsViewModel
 
 /**
  * Nearby Restaurants Screen
- * Displays restaurants near the user's current location
+ * Displays restaurants near the user's current location with geofencing support
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -36,11 +37,30 @@ fun NearbyRestaurantsScreen(
     onRestaurantClick: (NearbyRestaurant) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val geofenceEnabled by viewModel.geofenceEnabled.collectAsState()
+    val geofenceEvent by viewModel.geofenceEvents.collectAsState()
     var showMapView by remember { mutableStateOf(false) }
     var selectedRadius by remember { mutableStateOf(2000) }
     var showRadiusDialog by remember { mutableStateOf(false) }
+    
+    // Show snackbar for geofence events
+    val snackbarHostState = remember { SnackbarHostState() }
+    LaunchedEffect(geofenceEvent) {
+        geofenceEvent?.let { event ->
+            val message = when (event) {
+                is GeofenceEvent.Entered -> "You're near ${event.restaurantName}! Time to rate some dishes?"
+                is GeofenceEvent.Exited -> "Left ${event.restaurantName} area"
+            }
+            snackbarHostState.showSnackbar(
+                message = message,
+                duration = SnackbarDuration.Short
+            )
+            viewModel.clearGeofenceEvent()
+        }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Nearby Restaurants") },
@@ -53,6 +73,14 @@ fun NearbyRestaurantsScreen(
                     }
                 },
                 actions = {
+                    // Geofencing toggle
+                    IconButton(onClick = { viewModel.toggleGeofencing() }) {
+                        Icon(
+                            imageVector = if (geofenceEnabled) Icons.Filled.LocationOn else Icons.Filled.LocationOff,
+                            contentDescription = if (geofenceEnabled) "Disable Notifications" else "Enable Notifications",
+                            tint = if (geofenceEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                     // Toggle between map and list view
                     IconButton(onClick = { showMapView = !showMapView }) {
                         Icon(
@@ -96,42 +124,49 @@ fun NearbyRestaurantsScreen(
                 }
 
                 is NearbyRestaurantsUiState.Success -> {
-                    if (state.restaurants.isEmpty()) {
-                        EmptyState(
-                            title = "No Restaurants Found",
-                            message = "No restaurants found nearby",
-                            icon = Icons.Filled.Restaurant
-                        )
-                    } else {
-                        if (showMapView) {
-                            val markers = state.restaurants.map { r ->
-                                MapMarker(
-                                    id = r.id,
-                                    latitude = r.latitude,
-                                    longitude = r.longitude,
-                                    title = r.name,
-                                    snippet = r.address,
-                                    rating = r.rating?.toFloat()
-                                )
-                            }
-                            val centerLat = state.currentLocation?.latitude ?: state.restaurants.firstOrNull()?.latitude ?: 0.0
-                            val centerLng = state.currentLocation?.longitude ?: state.restaurants.firstOrNull()?.longitude ?: 0.0
-                            PlatformMapView(
-                                latitude = centerLat,
-                                longitude = centerLng,
-                                zoom = 14f,
-                                markers = markers,
-                                onMarkerClick = { id ->
-                                    state.restaurants.find { it.id == id }?.let { onRestaurantClick(it) }
-                                },
-                                modifier = Modifier.fillMaxSize()
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        // Geofencing status bar
+                        if (state.geofencingEnabled && state.monitoredCount > 0) {
+                            GeofencingStatusBar(monitoredCount = state.monitoredCount)
+                        }
+                        
+                        if (state.restaurants.isEmpty()) {
+                            EmptyState(
+                                title = "No Restaurants Found",
+                                message = "No restaurants found nearby",
+                                icon = Icons.Filled.Restaurant
                             )
                         } else {
-                            // List view
-                            RestaurantsList(
-                                restaurants = state.restaurants,
-                                onRestaurantClick = onRestaurantClick
-                            )
+                            if (showMapView) {
+                                val markers = state.restaurants.map { r ->
+                                    MapMarker(
+                                        id = r.id,
+                                        latitude = r.latitude,
+                                        longitude = r.longitude,
+                                        title = r.name,
+                                        snippet = r.address,
+                                        rating = r.rating?.toFloat()
+                                    )
+                                }
+                                val centerLat = state.currentLocation?.latitude ?: state.restaurants.firstOrNull()?.latitude ?: 0.0
+                                val centerLng = state.currentLocation?.longitude ?: state.restaurants.firstOrNull()?.longitude ?: 0.0
+                                PlatformMapView(
+                                    latitude = centerLat,
+                                    longitude = centerLng,
+                                    zoom = 14f,
+                                    markers = markers,
+                                    onMarkerClick = { id ->
+                                        state.restaurants.find { it.id == id }?.let { onRestaurantClick(it) }
+                                    },
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                // List view
+                                RestaurantsList(
+                                    restaurants = state.restaurants,
+                                    onRestaurantClick = onRestaurantClick
+                                )
+                            }
                         }
                     }
                 }
@@ -175,6 +210,38 @@ fun NearbyRestaurantsScreen(
                 showRadiusDialog = false
             }
         )
+    }
+}
+
+/**
+ * Status bar showing geofencing is active
+ */
+@Composable
+private fun GeofencingStatusBar(monitoredCount: Int) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.NotificationsActive,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = "Monitoring $monitoredCount restaurants nearby",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
     }
 }
 

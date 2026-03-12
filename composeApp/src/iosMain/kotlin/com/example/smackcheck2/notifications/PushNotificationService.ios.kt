@@ -1,58 +1,68 @@
 package com.example.smackcheck2.notifications
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.IO
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import platform.UserNotifications.UNUserNotificationCenter
+import platform.UserNotifications.UNAuthorizationOptionAlert
+import platform.UserNotifications.UNAuthorizationOptionBadge
+import platform.UserNotifications.UNAuthorizationOptionSound
+import kotlin.coroutines.resume
+
 /**
  * SmackCheck - Push Notification Service (iOS)
  *
  * Uses Apple Push Notification Service (APNs) for push token registration.
+ * The actual push sending is handled server-side by Supabase Edge Functions
+ * + database webhooks.
  *
  * Prerequisites:
  * 1. Enable Push Notifications capability in Xcode
- * 2. Create APNs key in Apple Developer Portal
- * 3. Upload the APNs key to your Supabase project (or your push provider)
+ * 2. Create an APNs key in Apple Developer Portal
+ * 3. Upload the APNs key to your Supabase project or configure
+ *    FCM with your APNs key for cross-platform support
  *
- * TODO: Uncomment the APNs code below once you configure push in Xcode.
- * For now, this provides a stub implementation that won't crash the app.
+ * Note: The actual APNs device token is delivered to AppDelegate's
+ * didRegisterForRemoteNotificationsWithDeviceToken callback.
+ * You need to bridge that token back to Kotlin via IosPushTokenHolder.
  */
 
-// TODO: Uncomment these imports once APNs is configured:
-// import platform.UserNotifications.UNUserNotificationCenter
-// import platform.UserNotifications.UNAuthorizationOptionAlert
-// import platform.UserNotifications.UNAuthorizationOptionBadge
-// import platform.UserNotifications.UNAuthorizationOptionSound
-// import platform.UIKit.UIApplication
-// import kotlinx.coroutines.suspendCancellableCoroutine
-// import kotlin.coroutines.resume
-
 actual suspend fun registerForPushNotifications(): PushTokenResult {
-    // ── Stub implementation ──
-    // Replace with APNs registration once push is configured in Xcode:
-    //
-    // return suspendCancellableCoroutine { continuation ->
-    //     val center = UNUserNotificationCenter.currentNotificationCenter()
-    //     center.requestAuthorizationWithOptions(
-    //         UNAuthorizationOptionAlert or UNAuthorizationOptionBadge or UNAuthorizationOptionSound
-    //     ) { granted, error ->
-    //         if (granted) {
-    //             // Registration for remote notifications must happen on main thread
-    //             dispatch_async(dispatch_get_main_queue()) {
-    //                 UIApplication.sharedApplication.registerForRemoteNotifications()
-    //             }
-    //             // Note: The actual device token is received in AppDelegate
-    //             // You'll need to pass it back to Kotlin via a callback or shared state
-    //             continuation.resume(PushTokenResult(success = true, token = null, error = null))
-    //         } else {
-    //             val message = error?.localizedDescription ?: "Notification permission denied"
-    //             continuation.resume(PushTokenResult(success = false, token = null, error = message))
-    //         }
-    //     }
-    // }
-
-    println("Push notifications: APNs not yet configured. Enable Push Notifications in Xcode.")
-    return PushTokenResult(
-        success = false,
-        token = null,
-        error = "APNs not yet configured. See PushNotificationService.ios.kt for setup instructions."
-    )
+    return suspendCancellableCoroutine { continuation ->
+        val center = UNUserNotificationCenter.currentNotificationCenter()
+        center.requestAuthorizationWithOptions(
+            UNAuthorizationOptionAlert or UNAuthorizationOptionBadge or UNAuthorizationOptionSound
+        ) { granted, error ->
+            if (granted) {
+                // Request remote notification registration on main thread
+                // Note: registerForRemoteNotifications is handled at the Swift/AppDelegate level
+                // The Kotlin side just requests authorization
+                // Note: The actual device token is received asynchronously in AppDelegate's
+                // application:didRegisterForRemoteNotificationsWithDeviceToken:
+                // The token will be saved to Supabase from there via IosPushTokenHolder.
+                // Return success - if token is already available, include it.
+                continuation.resume(
+                    PushTokenResult(
+                        success = true,
+                        token = IosPushTokenHolder.currentToken,
+                        error = null
+                    )
+                )
+            } else {
+                val message = error?.localizedDescription ?: "Notification permission denied"
+                println("Push notifications: APNs authorization denied - $message")
+                continuation.resume(
+                    PushTokenResult(
+                        success = false,
+                        token = null,
+                        error = message
+                    )
+                )
+            }
+        }
+    }
 }
 
 actual fun setupNotificationChannels() {
@@ -61,8 +71,47 @@ actual fun setupNotificationChannels() {
 }
 
 actual fun isPushNotificationSupported(): Boolean {
-    // On a real iOS device, push is supported
-    // On the simulator, push is NOT supported
-    // TODO: Detect simulator vs device
+    // On a real iOS device, push is supported.
+    // On the simulator, push registration will fail gracefully.
     return true
+}
+
+/**
+ * Holder for the iOS APNs device token.
+ * Set this from the Swift AppDelegate when the token is received:
+ *
+ * ```swift
+ * func application(_ application: UIApplication,
+ *     didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+ *     let tokenString = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+ *     IosPushTokenHolder.companion.setToken(token: tokenString)
+ * }
+ * ```
+ */
+object IosPushTokenHolder {
+    var currentToken: String? = null
+        private set
+
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    /**
+     * Call this from Swift AppDelegate when the APNs device token is received.
+     * Automatically saves the token to Supabase.
+     */
+    fun setToken(token: String) {
+        currentToken = token
+        println("APNs device token received: $token")
+        // Auto-save to Supabase when token is set
+        scope.launch {
+            try {
+                val result = NotificationRepository.savePushTokenToSupabase(token)
+                result.fold(
+                    onSuccess = { println("APNs token saved to Supabase successfully") },
+                    onFailure = { println("Failed to save APNs token to Supabase: ${it.message}") }
+                )
+            } catch (e: Exception) {
+                println("Error saving APNs token: ${e.message}")
+            }
+        }
+    }
 }

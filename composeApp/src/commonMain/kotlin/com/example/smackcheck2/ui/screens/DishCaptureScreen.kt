@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,23 +41,30 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.example.smackcheck2.platform.ImagePicker
+import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.theme.CardShape
+import kotlinx.coroutines.launch
 
 /**
- * Dish Capture Screen composable
- * Allows users to capture or pick an image of a dish
- * 
+ * Dish Capture Screen composable (light theme)
+ * Allows users to capture or pick an image of a dish using the real camera/gallery.
+ *
+ * @param imagePicker Platform ImagePicker for camera/gallery access (null on unsupported platforms)
  * @param onNavigateBack Callback to navigate back
  * @param onImageCaptured Callback when image is captured/selected with URI
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DishCaptureScreen(
+    imagePicker: ImagePicker? = null,
     onNavigateBack: () -> Unit,
-    onImageCaptured: (String) -> Unit
+    onImageCaptured: (String, ByteArray?) -> Unit
 ) {
     var selectedImageUri by remember { mutableStateOf<String?>(null) }
-    
+    var capturedImageBytes by remember { mutableStateOf<ByteArray?>(null) }
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -97,8 +105,15 @@ fun DishCaptureScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (selectedImageUri != null) {
-                        // Image would be loaded here
+                    if (capturedImageBytes != null) {
+                        // Show the actual captured image
+                        ByteArrayImage(
+                            imageBytes = capturedImageBytes!!,
+                            contentDescription = "Captured dish",
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else if (selectedImageUri != null) {
+                        // Fallback placeholder for URI-only
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -133,16 +148,22 @@ fun DishCaptureScreen(
                     }
                 }
             }
-            
+
             Spacer(modifier = Modifier.height(32.dp))
-            
-            // Camera button
+
+            // Camera button - uses real ImagePicker
             Button(
                 onClick = {
-                    // In a real app, this would launch the camera
-                    // For demo, simulate image capture
-                    selectedImageUri = "captured_image_uri"
+                    if (imagePicker != null) {
+                        coroutineScope.launch {
+                            imagePicker.captureImage()?.let { result ->
+                                selectedImageUri = result.uri
+                                capturedImageBytes = result.bytes
+                            }
+                        }
+                    }
                 },
+                enabled = imagePicker != null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -158,16 +179,22 @@ fun DishCaptureScreen(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
-            // Gallery button
+
+            // Gallery button - uses real ImagePicker
             OutlinedButton(
                 onClick = {
-                    // In a real app, this would launch the photo picker
-                    // For demo, simulate image selection
-                    selectedImageUri = "gallery_image_uri"
+                    if (imagePicker != null) {
+                        coroutineScope.launch {
+                            imagePicker.pickFromGallery()?.let { result ->
+                                selectedImageUri = result.uri
+                                capturedImageBytes = result.bytes
+                            }
+                        }
+                    }
                 },
+                enabled = imagePicker != null,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp)
@@ -183,13 +210,13 @@ fun DishCaptureScreen(
                     style = MaterialTheme.typography.labelLarge
                 )
             }
-            
+
             if (selectedImageUri != null) {
                 Spacer(modifier = Modifier.height(32.dp))
-                
+
                 // Continue button
                 Button(
-                    onClick = { onImageCaptured(selectedImageUri!!) },
+                    onClick = { onImageCaptured(selectedImageUri!!, capturedImageBytes) },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)

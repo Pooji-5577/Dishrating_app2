@@ -2,6 +2,9 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.repository.GeofenceEvent
+import com.example.smackcheck2.data.repository.GeofenceRepository
+import com.example.smackcheck2.platform.GeofencingService
 import com.example.smackcheck2.platform.LocationResult
 import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.NearbyRestaurant
@@ -19,27 +22,46 @@ sealed class NearbyRestaurantsUiState {
     data object Loading : NearbyRestaurantsUiState()
     data class Success(
         val restaurants: List<NearbyRestaurant>,
-        val currentLocation: LocationResult?
+        val currentLocation: LocationResult?,
+        val geofencingEnabled: Boolean = false,
+        val monitoredCount: Int = 0
     ) : NearbyRestaurantsUiState()
     data class Error(val message: String) : NearbyRestaurantsUiState()
 }
 
 /**
- * ViewModel for managing nearby restaurants
+ * ViewModel for managing nearby restaurants with geofencing support
  */
 class NearbyRestaurantsViewModel(
     private val locationService: LocationService?,
-    private val placesService: PlacesService?
+    private val placesService: PlacesService?,
+    geofencingService: GeofencingService? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<NearbyRestaurantsUiState>(NearbyRestaurantsUiState.Initial)
     val uiState: StateFlow<NearbyRestaurantsUiState> = _uiState.asStateFlow()
 
     private var currentLocation: LocationResult? = null
+    
+    // Geofencing support
+    private val geofenceRepository = GeofenceRepository(geofencingService)
+    
+    private val _geofenceEnabled = MutableStateFlow(false)
+    val geofenceEnabled: StateFlow<Boolean> = _geofenceEnabled.asStateFlow()
+    
+    val geofenceEvents: StateFlow<GeofenceEvent?> = geofenceRepository.lastEvent
 
     init {
         // Automatically load nearby restaurants when ViewModel is created
         loadNearbyRestaurants()
+    }
+    
+    override fun onCleared() {
+        super.onCleared()
+        // Clean up geofences when ViewModel is destroyed
+        if (_geofenceEnabled.value) {
+            geofenceRepository.stopMonitoringAll()
+        }
     }
 
     /**
@@ -77,17 +99,17 @@ class NearbyRestaurantsViewModel(
                     radiusInMeters = radiusInMeters
                 )
 
-                if (restaurants.isEmpty()) {
-                    _uiState.value = NearbyRestaurantsUiState.Success(
-                        restaurants = emptyList(),
-                        currentLocation = location
-                    )
-                } else {
-                    _uiState.value = NearbyRestaurantsUiState.Success(
-                        restaurants = restaurants,
-                        currentLocation = location
-                    )
+                // Update geofences if enabled
+                if (_geofenceEnabled.value && restaurants.isNotEmpty()) {
+                    geofenceRepository.startMonitoringRestaurants(restaurants)
                 }
+
+                _uiState.value = NearbyRestaurantsUiState.Success(
+                    restaurants = restaurants,
+                    currentLocation = location,
+                    geofencingEnabled = _geofenceEnabled.value,
+                    monitoredCount = if (_geofenceEnabled.value) geofenceRepository.monitoredCount() else 0
+                )
 
             } catch (e: Exception) {
                 _uiState.value = NearbyRestaurantsUiState.Error(
@@ -95,6 +117,55 @@ class NearbyRestaurantsViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * Toggle geofencing on/off
+     */
+    fun toggleGeofencing() {
+        _geofenceEnabled.value = !_geofenceEnabled.value
+        
+        val currentState = _uiState.value
+        if (currentState is NearbyRestaurantsUiState.Success) {
+            if (_geofenceEnabled.value) {
+                // Start monitoring
+                geofenceRepository.startMonitoringRestaurants(currentState.restaurants)
+            } else {
+                // Stop monitoring
+                geofenceRepository.stopMonitoringAll()
+            }
+            
+            // Update UI state
+            _uiState.value = currentState.copy(
+                geofencingEnabled = _geofenceEnabled.value,
+                monitoredCount = if (_geofenceEnabled.value) geofenceRepository.monitoredCount() else 0
+            )
+        }
+    }
+    
+    /**
+     * Enable geofencing for nearby restaurants
+     */
+    fun enableGeofencing() {
+        if (!_geofenceEnabled.value) {
+            toggleGeofencing()
+        }
+    }
+    
+    /**
+     * Disable geofencing
+     */
+    fun disableGeofencing() {
+        if (_geofenceEnabled.value) {
+            toggleGeofencing()
+        }
+    }
+    
+    /**
+     * Clear the last geofence event after handling
+     */
+    fun clearGeofenceEvent() {
+        geofenceRepository.clearLastEvent()
     }
 
     /**

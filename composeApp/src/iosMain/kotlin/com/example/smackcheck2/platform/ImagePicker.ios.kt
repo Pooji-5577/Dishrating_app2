@@ -192,6 +192,101 @@ actual class ImagePicker {
             }
         }
     }
+    
+    /**
+     * Pick multiple images from the device gallery.
+     * Presents PHPickerViewController for multiple image selection.
+     * Returns empty list if selection is cancelled or fails.
+     * @param maxImages Maximum number of images to select (default 5)
+     */
+    actual suspend fun pickMultipleFromGallery(maxImages: Int): List<ImageResult> {
+        return suspendCancellableCoroutine { continuation ->
+            var resumed = false
+
+            val configuration = PHPickerConfiguration().apply {
+                this.selectionLimit = maxImages.toLong()
+                this.filter = PHPickerFilter.imagesFilter
+            }
+
+            val delegate = object : NSObject(), PHPickerViewControllerDelegateProtocol {
+                override fun picker(
+                    picker: PHPickerViewController,
+                    didFinishPicking: List<*>
+                ) {
+                    picker.dismissViewControllerAnimated(true, completion = null)
+
+                    if (resumed) return
+
+                    val results = didFinishPicking.filterIsInstance<PHPickerResult>()
+                    
+                    if (results.isEmpty()) {
+                        resumed = true
+                        continuation.resume(emptyList())
+                        return
+                    }
+
+                    val imageResults = mutableListOf<ImageResult>()
+                    var processedCount = 0
+                    val totalCount = results.size
+
+                    results.forEach { result ->
+                        val itemProvider = result.itemProvider
+                        if (itemProvider.hasItemConformingToTypeIdentifier(UTTypeImage.identifier)) {
+                            itemProvider.loadDataRepresentationForTypeIdentifier(
+                                UTTypeImage.identifier
+                            ) { data, error ->
+                                processedCount++
+                                if (data != null && error == null) {
+                                    val bytes = nsDataToByteArray(data)
+                                    if (bytes != null) {
+                                        // Note: This callback runs on main thread, so direct access is safe
+                                        imageResults.add(
+                                            ImageResult(
+                                                uri = "picker://${result.hashCode()}",
+                                                bytes = bytes,
+                                                mimeType = "image/jpeg"
+                                            )
+                                        )
+                                    }
+                                }
+                                
+                                // When all items are processed, resume
+                                if (processedCount == totalCount && !resumed) {
+                                    resumed = true
+                                    continuation.resume(imageResults.toList())
+                                }
+                            }
+                        } else {
+                            processedCount++
+                            if (processedCount == totalCount && !resumed) {
+                                resumed = true
+                                continuation.resume(imageResults.toList())
+                            }
+                        }
+                    }
+                }
+            }
+
+            val rootViewController = getRootViewController()
+            if (rootViewController == null) {
+                if (!resumed) {
+                    resumed = true
+                    continuation.resume(emptyList())
+                }
+                return@suspendCancellableCoroutine
+            }
+
+            val pickerVC = PHPickerViewController(configuration = configuration).apply {
+                this.delegate = delegate
+            }
+
+            rootViewController.presentViewController(pickerVC, animated = true, completion = null)
+
+            continuation.invokeOnCancellation {
+                pickerVC.dismissViewControllerAnimated(true, completion = null)
+            }
+        }
+    }
 
     /**
      * Check if camera permission is granted.

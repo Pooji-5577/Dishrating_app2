@@ -136,6 +136,98 @@ class DatabaseRepository {
     // ==================== DISHES ====================
 
     /**
+     * Get a single dish by ID, including its average rating and restaurant name
+     */
+    suspend fun getDishById(dishId: String): Result<Dish?> {
+        return try {
+            val dishDto = postgrest["dishes"]
+                .select {
+                    filter { eq("id", dishId) }
+                }
+                .decodeSingleOrNull<DishDto>()
+
+            if (dishDto == null) {
+                return Result.success(null)
+            }
+
+            // Fetch restaurant name
+            val restaurant = postgrest["restaurants"]
+                .select {
+                    filter { eq("id", dishDto.restaurantId) }
+                }
+                .decodeSingleOrNull<RestaurantDto>()
+
+            // Calculate average rating from all ratings for this dish
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter { eq("dish_id", dishId) }
+                }
+                .decodeList<RatingDto>()
+
+            val avgRating = if (ratings.isNotEmpty()) {
+                ratings.map { it.rating }.average().toFloat()
+            } else 0f
+
+            val dish = dishDto.toDish().copy(
+                rating = avgRating,
+                restaurantName = restaurant?.name ?: "Unknown Restaurant"
+            )
+            Result.success(dish)
+        } catch (e: Exception) {
+            println("DatabaseRepository: Error fetching dish $dishId: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get all ratings/reviews for a specific dish
+     */
+    suspend fun getRatingsForDish(dishId: String): Result<List<Review>> {
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter { eq("dish_id", dishId) }
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<RatingDto>()
+
+            val reviews = ratings.map { rating ->
+                val profile = postgrest["profiles"]
+                    .select {
+                        filter { eq("id", rating.userId) }
+                    }
+                    .decodeSingleOrNull<ProfileDto>()
+
+                val restaurant = postgrest["restaurants"]
+                    .select {
+                        filter { eq("id", rating.restaurantId) }
+                    }
+                    .decodeSingleOrNull<RestaurantDto>()
+
+                Review(
+                    id = rating.id ?: "",
+                    userId = rating.userId,
+                    userName = profile?.name ?: "Unknown",
+                    userProfileUrl = profile?.profilePhotoUrl,
+                    dishId = rating.dishId,
+                    dishName = "",
+                    dishImageUrl = rating.imageUrl,
+                    restaurantName = restaurant?.name ?: "",
+                    rating = rating.rating,
+                    comment = rating.comment,
+                    likesCount = rating.likesCount,
+                    createdAt = 0L
+                )
+            }
+
+            Result.success(reviews)
+        } catch (e: Exception) {
+            println("DatabaseRepository: Error fetching ratings for dish $dishId: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Get top-rated dishes across all restaurants
      */
     suspend fun getTopRatedDishes(limit: Int = 10): Result<List<Dish>> {

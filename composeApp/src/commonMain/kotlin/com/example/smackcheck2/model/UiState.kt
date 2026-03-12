@@ -77,6 +77,7 @@ data class DishRatingUiState(
     val imageBytes: ByteArray? = null,
     val rating: Float = 0f,
     val comment: String = "",
+    val tags: List<String> = emptyList(),
     val isSubmitting: Boolean = false,
     val isSuccess: Boolean = false,
     val errorMessage: String? = null,
@@ -106,6 +107,19 @@ data class RestaurantDetailUiState(
     val restaurant: Restaurant? = null,
     val dishes: List<Dish> = emptyList(),
     val reviews: List<Review> = emptyList(),
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Dish detail UI state
+ */
+data class DishDetailUiState(
+    val dish: Dish? = null,
+    val restaurant: Restaurant? = null,
+    val reviews: List<Review> = emptyList(),
+    val relatedDishes: List<Dish> = emptyList(),
+    val isFavorite: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
@@ -274,6 +288,9 @@ data class FollowListUiState(
 data class DishCaptureUiState(
     val imageUri: String? = null,
     val imageBytes: ByteArray? = null,
+    // Support for multiple images
+    val additionalImages: List<CapturedImage> = emptyList(),
+    val selectedImageIndex: Int = 0, // Which image is currently displayed/being analyzed
     val isAnalyzing: Boolean = false,
     val detectedDishName: String? = null,
     val detectedCuisine: String? = null,
@@ -288,6 +305,17 @@ data class DishCaptureUiState(
     val showConfirmation: Boolean = false,
     val showNotDishError: Boolean = false
 ) {
+    /** Total number of images (primary + additional) */
+    val totalImages: Int get() = if (imageUri != null) 1 + additionalImages.size else additionalImages.size
+    
+    /** Get all images as a list */
+    val allImages: List<CapturedImage> get() = buildList {
+        if (imageUri != null && imageBytes != null) {
+            add(CapturedImage(imageUri, imageBytes))
+        }
+        addAll(additionalImages)
+    }
+    
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other == null || this::class != other::class) return false
@@ -299,6 +327,8 @@ data class DishCaptureUiState(
             if (other.imageBytes == null) return false
             if (!imageBytes.contentEquals(other.imageBytes)) return false
         } else if (other.imageBytes != null) return false
+        if (additionalImages != other.additionalImages) return false
+        if (selectedImageIndex != other.selectedImageIndex) return false
         if (isAnalyzing != other.isAnalyzing) return false
         if (detectedDishName != other.detectedDishName) return false
         if (detectedCuisine != other.detectedCuisine) return false
@@ -319,6 +349,8 @@ data class DishCaptureUiState(
     override fun hashCode(): Int {
         var result = imageUri?.hashCode() ?: 0
         result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
+        result = 31 * result + additionalImages.hashCode()
+        result = 31 * result + selectedImageIndex
         result = 31 * result + isAnalyzing.hashCode()
         result = 31 * result + (detectedDishName?.hashCode() ?: 0)
         result = 31 * result + (detectedCuisine?.hashCode() ?: 0)
@@ -332,6 +364,29 @@ data class DishCaptureUiState(
         result = 31 * result + (debugInfo?.hashCode() ?: 0)
         result = 31 * result + showConfirmation.hashCode()
         result = 31 * result + showNotDishError.hashCode()
+        return result
+    }
+}
+
+/**
+ * Represents a captured image with its URI and bytes
+ */
+data class CapturedImage(
+    val uri: String,
+    val bytes: ByteArray
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other == null || this::class != other::class) return false
+        other as CapturedImage
+        if (uri != other.uri) return false
+        if (!bytes.contentEquals(other.bytes)) return false
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = uri.hashCode()
+        result = 31 * result + bytes.contentHashCode()
         return result
     }
 }

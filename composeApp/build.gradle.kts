@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.googleServices)
 }
 
 // Load local.properties
@@ -93,6 +94,9 @@ kotlin {
             implementation(libs.kotlinx.coroutines.play.services)
             // DataStore for preferences
             implementation("androidx.datastore:datastore-preferences:1.1.1")
+            // Firebase (FCM for push notification token)
+            implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+            implementation("com.google.firebase:firebase-messaging-ktx")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

@@ -68,4 +68,7 @@ sealed class Screen(val route: String) {
         fun createRoute(ratingId: String) = "comments/$ratingId"
     }
     data object NotificationsList : Screen("notifications_list")
+    
+    // Social Map (Snapchat-style map with nearby users)
+    data object SocialMap : Screen("social_map")
 }

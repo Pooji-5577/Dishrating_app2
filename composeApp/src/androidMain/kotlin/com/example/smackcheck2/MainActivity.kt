@@ -34,6 +34,9 @@ class MainActivity : ComponentActivity() {
         // Handle deep link if app was launched via OAuth redirect
         SupabaseClientProvider.client.handleDeeplinks(intent)
 
+        // Set app context for push notification channels
+        com.example.smackcheck2.notifications.SmackCheckNotificationHelper.appContext = applicationContext
+
         // ImagePicker must be created before setContent for ActivityResult registration
         imagePicker = ImagePicker(this)
 

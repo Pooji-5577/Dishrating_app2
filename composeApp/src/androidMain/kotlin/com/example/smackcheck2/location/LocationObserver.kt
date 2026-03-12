@@ -1,12 +1,10 @@
 package com.example.smackcheck2.location
 
-import android.app.Activity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
 import com.example.smackcheck2.viewmodel.LocationHomeViewModel
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -41,27 +39,24 @@ fun LocationObserver(locationHomeViewModel: LocationHomeViewModel) {
 }
 
 /**
- * Composable helper to trigger location permission request from the UI.
+ * Composable helper to trigger location detection from the UI.
  *
  * Call this when the user taps "Use Current Location" or "Allow Location".
- * It finds the hosting Activity and calls [MainActivity.requestLocationPermissions].
+ * If permission is already granted, it will detect location immediately.
+ * If permission is not granted, use RequestLocationPermission composable instead.
  */
 @Composable
 fun rememberLocationPermissionRequester(): () -> Unit {
-    val context = LocalContext.current
-    return remember(context) {
+    return remember {
         {
-            val activity = context as? com.example.smackcheck2.MainActivity
-            if (activity != null) {
-                if (AppLocationManager.hasPermission()) {
-                    // Already have permission – just detect
-                    MainScope().launch {
-                        AppLocationManager.detectLocation()
-                    }
-                } else {
-                    activity.requestLocationPermissions()
+            if (AppLocationManager.hasPermission()) {
+                // Already have permission – just detect
+                MainScope().launch {
+                    AppLocationManager.detectLocation()
                 }
             }
+            // If permission is not granted, use RequestLocationPermission composable
+            // from PermissionHandler.android.kt to request permission properly
         }
     }
 }
