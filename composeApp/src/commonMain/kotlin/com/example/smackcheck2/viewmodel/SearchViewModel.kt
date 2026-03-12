@@ -115,6 +115,7 @@ class SearchViewModel(
 
             try {
                 val currentState = _uiState.value
+                println("SearchViewModel: Starting search with query='${currentState.query}'")
 
                 // Fetch restaurants from database
                 val result = databaseRepository.searchRestaurants(
@@ -125,73 +126,99 @@ class SearchViewModel(
                     restaurantsAndCafesOnly = currentState.restaurantsAndCafesOnly
                 )
 
-                // Fetch nearby restaurants from Google Places API with filters
-                val nearbyRestaurants = if (placesService != null && locationService != null) {
+                // Fetch restaurants from Google Places - either by text search or nearby search
+                val placesRestaurants = if (placesService != null) {
                     try {
-                        // Use geocoding for selected city, or GPS for current location
-                        val currentLoc = if (currentState.selectedCity != null) {
-                            // Use geocoding for selected city
-                            locationService.getCoordinatesForCity(currentState.selectedCity)
-                        } else {
-                            // Use GPS for current location with detailed error handling
-                            when (val locationResult = locationService.getCurrentLocationWithDetails()) {
-                                is LocationOperationResult.Success -> locationResult.location
-                                is LocationOperationResult.Error -> {
-                                    val errorMessage = getLocationErrorMessage(locationResult.reason, locationResult.isEmulator)
-                                    _uiState.update { it.copy(locationError = errorMessage) }
-                                    null
+                        // If user typed a query, use text search (doesn't require location)
+                        if (currentState.query.isNotBlank()) {
+                            println("SearchViewModel: Using text search for query: ${currentState.query}")
+                            val textResults = placesService.searchRestaurantsByText(currentState.query)
+                            println("SearchViewModel: Text search returned ${textResults.size} results")
+                            
+                            // Convert NearbyRestaurant to Restaurant and apply filters
+                            textResults.mapNotNull { nearbyRestaurant ->
+                                // Apply rating filter
+                                if (currentState.selectedRating != null) {
+                                    val rating = nearbyRestaurant.rating?.toFloat() ?: 0f
+                                    if (rating < currentState.selectedRating) return@mapNotNull null
                                 }
-                            }
-                        }
-
-                        if (currentLoc != null) {
-                            // If cuisines are selected, search for each cuisine separately
-                            val allNearby = if (currentState.selectedCuisines.isNotEmpty()) {
-                                // Make a separate API call for each selected cuisine
-                                currentState.selectedCuisines.flatMap { cuisine ->
-                                    try {
-                                        placesService.findNearbyRestaurants(
-                                            latitude = currentLoc.latitude,
-                                            longitude = currentLoc.longitude,
-                                            radiusInMeters = 5000,
-                                            keyword = cuisine,
-                                            minRating = currentState.selectedRating?.toDouble()
-                                        )
-                                    } catch (e: Exception) {
-                                        println("SearchViewModel: Failed to load $cuisine restaurants: ${e.message}")
-                                        emptyList()
-                                    }
-                                }.distinctBy { it.id }
-                            } else {
-                                // No cuisine filter, just get all nearby restaurants
-                                placesService.findNearbyRestaurants(
-                                    latitude = currentLoc.latitude,
-                                    longitude = currentLoc.longitude,
-                                    radiusInMeters = 5000,
-                                    keyword = currentState.query.takeIf { it.isNotBlank() },
-                                    minRating = currentState.selectedRating?.toDouble()
-                                )
-                            }
-
-                            // Convert NearbyRestaurant to Restaurant
-                            allNearby.map { nearbyRestaurant ->
+                                
                                 Restaurant(
                                     id = nearbyRestaurant.id,
                                     name = nearbyRestaurant.name,
                                     city = nearbyRestaurant.address ?: "Unknown",
-                                    cuisine = "Restaurant", // Places API doesn't return cuisine type
+                                    cuisine = "Restaurant",
                                     imageUrls = emptyList(),
                                     averageRating = nearbyRestaurant.rating?.toFloat() ?: 0f,
                                     reviewCount = nearbyRestaurant.userRatingsTotal ?: 0,
                                     latitude = nearbyRestaurant.latitude,
-                                    longitude = nearbyRestaurant.longitude
+                                    longitude = nearbyRestaurant.longitude,
+                                    googlePlaceId = nearbyRestaurant.id
                                 )
+                            }
+                        } else if (locationService != null) {
+                            // No query - use location-based nearby search
+                            val currentLoc = if (currentState.selectedCity != null) {
+                                locationService.getCoordinatesForCity(currentState.selectedCity)
+                            } else {
+                                when (val locationResult = locationService.getCurrentLocationWithDetails()) {
+                                    is LocationOperationResult.Success -> locationResult.location
+                                    is LocationOperationResult.Error -> {
+                                        val errorMessage = getLocationErrorMessage(locationResult.reason, locationResult.isEmulator)
+                                        _uiState.update { it.copy(locationError = errorMessage) }
+                                        null
+                                    }
+                                }
+                            }
+
+                            if (currentLoc != null) {
+                                val allNearby = if (currentState.selectedCuisines.isNotEmpty()) {
+                                    currentState.selectedCuisines.flatMap { cuisine ->
+                                        try {
+                                            placesService.findNearbyRestaurants(
+                                                latitude = currentLoc.latitude,
+                                                longitude = currentLoc.longitude,
+                                                radiusInMeters = 5000,
+                                                keyword = cuisine,
+                                                minRating = currentState.selectedRating?.toDouble()
+                                            )
+                                        } catch (e: Exception) {
+                                            println("SearchViewModel: Failed to load $cuisine restaurants: ${e.message}")
+                                            emptyList()
+                                        }
+                                    }.distinctBy { it.id }
+                                } else {
+                                    placesService.findNearbyRestaurants(
+                                        latitude = currentLoc.latitude,
+                                        longitude = currentLoc.longitude,
+                                        radiusInMeters = 5000,
+                                        keyword = null,
+                                        minRating = currentState.selectedRating?.toDouble()
+                                    )
+                                }
+
+                                allNearby.map { nearbyRestaurant ->
+                                    Restaurant(
+                                        id = nearbyRestaurant.id,
+                                        name = nearbyRestaurant.name,
+                                        city = nearbyRestaurant.address ?: "Unknown",
+                                        cuisine = "Restaurant",
+                                        imageUrls = emptyList(),
+                                        averageRating = nearbyRestaurant.rating?.toFloat() ?: 0f,
+                                        reviewCount = nearbyRestaurant.userRatingsTotal ?: 0,
+                                        latitude = nearbyRestaurant.latitude,
+                                        longitude = nearbyRestaurant.longitude,
+                                        googlePlaceId = nearbyRestaurant.id
+                                    )
+                                }
+                            } else {
+                                emptyList()
                             }
                         } else {
                             emptyList()
                         }
                     } catch (e: Exception) {
-                        println("SearchViewModel: Failed to load nearby restaurants: ${e.message}")
+                        println("SearchViewModel: Failed to load Places restaurants: ${e.message}")
                         emptyList()
                     }
                 } else {
@@ -200,11 +227,11 @@ class SearchViewModel(
 
                 result.fold(
                     onSuccess = { databaseRestaurants ->
-                        // Combine database and nearby restaurants
-                        // Database restaurants are already filtered by the database query
-                        // Nearby restaurants are already filtered by the Places API
-                        val combinedRestaurants = (databaseRestaurants + nearbyRestaurants)
+                        println("SearchViewModel: Database returned ${databaseRestaurants.size} results")
+                        // Combine database and Places restaurants
+                        val combinedRestaurants = (databaseRestaurants + placesRestaurants)
                             .distinctBy { it.id }
+                        println("SearchViewModel: Combined total: ${combinedRestaurants.size} results")
 
                         _uiState.update {
                             it.copy(
@@ -214,12 +241,13 @@ class SearchViewModel(
                         }
                     },
                     onFailure = { error ->
-                        // Even if database fails, show nearby restaurants if available
+                        println("SearchViewModel: Database search failed: ${error.message}")
+                        // Even if database fails, show Places restaurants if available
                         _uiState.update {
                             it.copy(
-                                results = nearbyRestaurants,
+                                results = placesRestaurants,
                                 isLoading = false,
-                                errorMessage = if (nearbyRestaurants.isEmpty())
+                                errorMessage = if (placesRestaurants.isEmpty())
                                     error.message ?: "Search failed"
                                 else null
                             )
@@ -227,6 +255,7 @@ class SearchViewModel(
                     }
                 )
             } catch (e: Exception) {
+                println("SearchViewModel: Search exception: ${e.message}")
                 _uiState.update {
                     it.copy(
                         isLoading = false,
