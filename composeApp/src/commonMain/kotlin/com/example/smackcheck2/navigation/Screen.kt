@@ -43,4 +43,7 @@ sealed class Screen(val route: String) {
     data object DishDetail : Screen("dish_detail/{dishId}") {
         fun createRoute(dishId: String) = "dish_detail/$dishId"
     }
+    
+    // Notifications screen
+    data object Notifications : Screen("notifications")
 }

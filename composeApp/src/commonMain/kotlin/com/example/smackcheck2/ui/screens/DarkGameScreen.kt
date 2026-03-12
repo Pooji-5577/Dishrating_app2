@@ -65,12 +65,12 @@ import com.example.smackcheck2.ui.theme.LocalThemeState
 import com.example.smackcheck2.ui.screens.Achievement
 import com.example.smackcheck2.ui.screens.Challenge
 import com.example.smackcheck2.ui.screens.LeaderboardEntry
-import com.example.smackcheck2.viewmodel.GameViewModel
+import com.example.smackcheck2.gamification.GamificationViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DarkGameScreen(
-    viewModel: GameViewModel,
+    viewModel: GamificationViewModel,
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()

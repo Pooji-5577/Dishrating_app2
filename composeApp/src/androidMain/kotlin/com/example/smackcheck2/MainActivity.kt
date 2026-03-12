@@ -13,6 +13,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.lifecycleScope
 import com.example.smackcheck2.location.AppLocationManager
 import com.example.smackcheck2.location.LocationState
+import com.example.smackcheck2.util.ImageProcessorContext
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -58,6 +59,9 @@ class MainActivity : ComponentActivity() {
 
         // ─── Step 2: Initialize the AppLocationManager with application context ───
         AppLocationManager.initialize(this)
+
+        // ─── Step 2b: Initialize ImageProcessor context for EXIF orientation fix ───
+        ImageProcessorContext.appContext = applicationContext
 
         // ─── Step 3: If permissions are already granted, auto-detect location on app start ───
         if (AppLocationManager.hasPermission()) {

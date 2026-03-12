@@ -50,6 +50,7 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.ktor.client.okhttp)
             implementation(libs.play.services.location)
+            implementation(libs.androidx.exifinterface)
             implementation(libs.kotlinx.coroutines.play.services)
         }
         iosMain.dependencies {

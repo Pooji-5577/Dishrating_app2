@@ -1,5 +1,7 @@
 package com.example.smackcheck2.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -7,6 +9,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.smackcheck2.location.CommonLocationState
 import com.example.smackcheck2.location.SharedLocationState
@@ -43,9 +48,11 @@ import com.example.smackcheck2.ui.screens.SplashScreen
 import com.example.smackcheck2.ui.screens.TopDishesScreen
 import com.example.smackcheck2.ui.screens.TopRestaurantsScreen
 import com.example.smackcheck2.ui.screens.UserProgressScreen
+import com.example.smackcheck2.gamification.GamificationViewModel
+import com.example.smackcheck2.gamification.PointsEarnedEvent
+import com.example.smackcheck2.ui.components.PointsEarnedPopup
 import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.DishRatingViewModel
-import com.example.smackcheck2.viewmodel.GameViewModel
 import com.example.smackcheck2.viewmodel.LocationHomeViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
 import com.example.smackcheck2.viewmodel.ManualDishEntryViewModel
@@ -53,8 +60,11 @@ import com.example.smackcheck2.viewmodel.ManualRestaurantViewModel
 import com.example.smackcheck2.viewmodel.ProfileViewModel
 import com.example.smackcheck2.viewmodel.RegisterViewModel
 import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import com.example.smackcheck2.viewmodel.SearchViewModel
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
+import com.example.smackcheck2.notifications.NotificationViewModel
+import com.example.smackcheck2.ui.screens.NotificationsScreen
 
 /**
  * Navigation state holder for managing current screen with Compose state
@@ -123,6 +133,23 @@ fun SmackCheckNavHost() {
     
     // ── Shared LocationHomeViewModel (single instance for the whole app) ──
     val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
+
+    // ── Shared RestaurantPhotoViewModel for Google Places photos ──
+    val restaurantPhotoViewModel: RestaurantPhotoViewModel = viewModel { RestaurantPhotoViewModel() }
+
+    // ── Shared GamificationViewModel (single instance for the whole app) ──
+    val gamificationViewModel: GamificationViewModel = viewModel { GamificationViewModel() }
+
+    // ── Shared NotificationViewModel (single instance for the whole app) ──
+    val notificationViewModel: NotificationViewModel = viewModel { NotificationViewModel() }
+
+    // ── Points-earned popup state ──
+    var pointsEvent by remember { mutableStateOf<PointsEarnedEvent?>(null) }
+    LaunchedEffect(Unit) {
+        gamificationViewModel.pointsEarned.collect { event ->
+            pointsEvent = event
+        }
+    }
     
     // ── Observe SharedLocationState and auto-update the LocationHomeViewModel ──
     val locationState by SharedLocationState.locationState.collectAsState()
@@ -146,7 +173,17 @@ fun SmackCheckNavHost() {
         is AuthState.Unauthenticated -> false
         is AuthState.Unknown -> null
     }
+
+    // ── Initialize push notifications when authenticated ──
+    LaunchedEffect(isAuthenticated) {
+        if (isAuthenticated == true) {
+            notificationViewModel.initializePushNotifications()
+            notificationViewModel.refresh()
+        }
+    }
     
+    // ── Main content with points popup overlay ──
+    Box(modifier = Modifier.fillMaxSize()) {
     when (navigationState.currentScreen) {
         is Screen.Splash -> {
             DarkSplashScreen(
@@ -243,7 +280,13 @@ fun SmackCheckNavHost() {
                 dishName = navigationState.dishName,
                 imageUri = navigationState.imageUri,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitSuccess = { navigationState.popToRoot() }
+                onSubmitSuccess = {
+                    gamificationViewModel.recordAction(
+                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
+                        actionLabel = "Dish Rated"
+                    )
+                    navigationState.popToRoot()
+                }
             )
         }
         
@@ -252,7 +295,13 @@ fun SmackCheckNavHost() {
             ManualRestaurantEntryScreen(
                 viewModel = manualRestaurantViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSaveSuccess = { navigationState.navigateBack() }
+                onSaveSuccess = {
+                    gamificationViewModel.recordAction(
+                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_ADD_RESTAURANT,
+                        actionLabel = "Restaurant Added"
+                    )
+                    navigationState.navigateBack()
+                }
             )
         }
         
@@ -267,6 +316,7 @@ fun SmackCheckNavHost() {
             val searchViewModel: SearchViewModel = viewModel { SearchViewModel() }
             DarkSearchScreen(
                 viewModel = searchViewModel,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
                     navigationState.navigateToWithArgs(
@@ -281,6 +331,7 @@ fun SmackCheckNavHost() {
             val restaurantDetailViewModel: RestaurantDetailViewModel = viewModel { RestaurantDetailViewModel() }
             RestaurantDetailScreen(
                 viewModel = restaurantDetailViewModel,
+                photoViewModel = restaurantPhotoViewModel,
                 restaurantId = navigationState.restaurantId,
                 onNavigateBack = { navigationState.navigateBack() }
             )
@@ -378,9 +429,8 @@ fun SmackCheckNavHost() {
         }
         
         is Screen.Game -> {
-            val gameViewModel: GameViewModel = viewModel { GameViewModel() }
             DarkGameScreen(
-                viewModel = gameViewModel,
+                viewModel = gamificationViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
             )
         }
@@ -417,6 +467,11 @@ fun SmackCheckNavHost() {
             DarkDishCaptureScreen(
                 onNavigateBack = { navigationState.navigateBack() },
                 onImageCaptured = { imageUri, dishName ->
+                    // Award points for photo upload
+                    gamificationViewModel.recordAction(
+                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_UPLOAD_PHOTO,
+                        actionLabel = "Photo Uploaded"
+                    )
                     navigationState.navigateToWithArgs(
                         Screen.DarkDishRating,
                         "imageUri" to imageUri,
@@ -439,7 +494,18 @@ fun SmackCheckNavHost() {
                 viewModel = manualDishViewModel,
                 imageUri = navigationState.imageUri,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitSuccess = { navigationState.popToRoot() }
+                onSubmitSuccess = {
+                    // Award points for manual dish entry (photo + review)
+                    gamificationViewModel.recordAction(
+                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_UPLOAD_PHOTO,
+                        actionLabel = "Dish Added"
+                    )
+                    gamificationViewModel.recordAction(
+                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_WRITE_REVIEW,
+                        actionLabel = "Review Written"
+                    )
+                    navigationState.popToRoot()
+                }
             )
         }
         
@@ -449,7 +515,11 @@ fun SmackCheckNavHost() {
                 imageUri = navigationState.imageUri,
                 onNavigateBack = { navigationState.navigateBack() },
                 onSubmitRating = { _, _, _ ->
-                    // Rating submitted - will show success screen then navigate back
+                    // Award points for rating a dish
+                    gamificationViewModel.recordAction(
+                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
+                        actionLabel = "Dish Rated"
+                    )
                 }
             )
         }
@@ -467,5 +537,35 @@ fun SmackCheckNavHost() {
                 }
             )
         }
+
+        is Screen.Notifications -> {
+            NotificationsScreen(
+                viewModel = notificationViewModel,
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavigateTo = { screen, params ->
+                    when (screen) {
+                        "DishDetail" -> {
+                            val dishId = params["dishId"] ?: ""
+                            if (dishId.isNotEmpty()) {
+                                navigationState.navigateToWithArgs(
+                                    Screen.DishDetail,
+                                    "dishId" to dishId
+                                )
+                            }
+                        }
+                        "GameScreen" -> navigationState.navigateTo(Screen.Game)
+                        "SocialFeed" -> navigationState.navigateTo(Screen.SocialFeed)
+                    }
+                }
+            )
+        }
     }
+
+    // ── Points earned popup overlay (always on top) ──
+    PointsEarnedPopup(
+        event = pointsEvent,
+        onDismissed = { pointsEvent = null },
+        modifier = Modifier.align(Alignment.TopCenter).zIndex(100f)
+    )
+    } // end Box
 }

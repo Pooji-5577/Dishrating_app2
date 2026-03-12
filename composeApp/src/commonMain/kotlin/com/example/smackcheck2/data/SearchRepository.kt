@@ -123,7 +123,8 @@ class SearchRepository {
                     reviewCount = row.ratingCount ?: 0,
                     latitude = row.latitude,
                     longitude = row.longitude,
-                    imageUrls = images
+                    imageUrls = images,
+                    googlePlaceId = row.googlePlaceId
                 )
             }
         } catch (e: Exception) {

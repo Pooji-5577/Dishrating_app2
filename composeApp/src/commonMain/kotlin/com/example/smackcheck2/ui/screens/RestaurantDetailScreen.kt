@@ -47,7 +47,9 @@ import com.example.smackcheck2.ui.components.LoadingState
 import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
+import com.example.smackcheck2.viewmodel.PhotoState
 import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 
 /**
  * Restaurant Detail Screen composable
@@ -61,10 +63,13 @@ import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
 @Composable
 fun RestaurantDetailScreen(
     viewModel: RestaurantDetailViewModel,
+    photoViewModel: RestaurantPhotoViewModel? = null,
     restaurantId: String,
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val photoStates by photoViewModel?.photoStates?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyMap()) }
     
     LaunchedEffect(restaurantId) {
         viewModel.loadRestaurant(restaurantId)
@@ -97,6 +102,17 @@ fun RestaurantDetailScreen(
             }
             uiState.restaurant != null -> {
                 val restaurant = uiState.restaurant!!
+
+                // ── Trigger Google Places full photo load ──
+                val photoState = photoStates[restaurant.id]
+                LaunchedEffect(restaurant.id) {
+                    photoViewModel?.loadFullPhotos(
+                        restaurantId = restaurant.id,
+                        placeId = restaurant.googlePlaceId,
+                        name = restaurant.name,
+                        city = restaurant.city
+                    )
+                }
                 
                 LazyColumn(
                     modifier = Modifier
@@ -111,24 +127,27 @@ fun RestaurantDetailScreen(
                             fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                         )
+
+                        // ── Google Places photos carousel ──
+                        val googlePhotoUrls = (photoState as? PhotoState.FullPhotosLoaded)?.urls
                         
-                        // Build image list: prefer Supabase URLs, fallback to Unsplash
-                        val imageUrls = restaurant.imageUrls.ifEmpty {
-                            // Fallback: generate 3 restaurant images from Unsplash
-                            listOf(
+                        // Build the final image URL list: Google Places → Supabase → Unsplash
+                        val imageUrls = when {
+                            !googlePhotoUrls.isNullOrEmpty() -> googlePhotoUrls
+                            restaurant.imageUrls.isNotEmpty() -> restaurant.imageUrls
+                            else -> listOf(
                                 FoodImages.getRestaurantImageByName(restaurant.name),
                                 FoodImages.getRestaurantImage(restaurant.name.hashCode().let { if (it < 0) -it else it } + 1),
                                 FoodImages.getRestaurantImage(restaurant.name.hashCode().let { if (it < 0) -it else it } + 2)
                             )
                         }
-                        
+
                         LazyRow(
                             modifier = Modifier.fillMaxWidth(),
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             items(imageUrls) { imageUrl ->
-                                // Each photo in the carousel
                                 Box(
                                     modifier = Modifier
                                         .size(width = 200.dp, height = 150.dp)

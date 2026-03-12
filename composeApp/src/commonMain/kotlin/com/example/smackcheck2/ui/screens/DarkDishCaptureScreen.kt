@@ -58,6 +58,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.util.ImagePickerEffect
 import kotlinx.coroutines.delay
 
 /**
@@ -90,6 +92,16 @@ fun DarkDishCaptureScreen(
     // ── AI confidence tracking ──────────────────────────────────────────
     var aiConfidence by remember { mutableStateOf(0f) }
     var showFallback by remember { mutableStateOf(false) }  // true when AI fails
+
+    // ── Real camera + gallery integration with EXIF fix ────────────────
+    // ImagePickerEffect registers ActivityResult launchers (on Android) and
+    // applies EXIF orientation correction before returning the URI.
+    val imagePickerActions = ImagePickerEffect(
+        onImageReady = { correctedUri ->
+            // The URI already has the correct orientation applied
+            selectedImageUri = correctedUri
+        }
+    )
     
     // Simulate AI detection when image is captured
     LaunchedEffect(selectedImageUri) {
@@ -180,12 +192,12 @@ fun DarkDishCaptureScreen(
                 // Camera View / Capture Mode
                 CameraCaptureView(
                     onCaptureClick = {
-                        // Simulate image capture
-                        selectedImageUri = "captured_image_${(0..999999).random()}"
+                        // Launch real camera with EXIF correction
+                        imagePickerActions.launchCamera()
                     },
                     onGalleryClick = {
-                        // Simulate gallery selection
-                        selectedImageUri = "gallery_image_${(0..999999).random()}"
+                        // Launch real gallery picker with EXIF correction
+                        imagePickerActions.launchGallery()
                     }
                 )
             } else {
@@ -413,27 +425,14 @@ private fun ImagePreviewWithAI(
                 .background(themeColors.Surface),
             contentAlignment = Alignment.Center
         ) {
-            // Simulated image preview
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF3D3D3D),
-                                Color(0xFF252525)
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Restaurant,
-                    contentDescription = null,
-                    tint = themeColors.TextSecondary.copy(alpha = 0.5f),
-                    modifier = Modifier.size(120.dp)
-                )
-            }
+            // ── Real image preview: shows the EXIF-corrected photo ──
+            // The imageUri is a file:// or content:// URI with correct orientation
+            NetworkImage(
+                imageUrl = imageUri,
+                contentDescription = "Captured dish photo",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
             
             // AI analyzing overlay
             if (isAnalyzing) {

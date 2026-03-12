@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.viewmodel.ManualDishEntryViewModel
 
 /**
@@ -288,7 +289,8 @@ fun ManualDishEntryScreen(
 // ── Reusable composables ───────────────────────────────────────────────────
 
 /**
- * Displays the captured photo preview (placeholder since this is KMP).
+ * Displays the captured photo preview.
+ * Shows the real EXIF-corrected image using NetworkImage.
  */
 @Composable
 private fun CapturedPhotoPreview(
@@ -306,37 +308,16 @@ private fun CapturedPhotoPreview(
     ) {
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(
-                            Color(0xFF3D3D3D),
-                            Color(0xFF252525)
-                        )
-                    )
-                ),
+                .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    imageVector = Icons.Default.Restaurant,
-                    contentDescription = null,
-                    tint = themeColors.TextSecondary.copy(alpha = 0.6f),
-                    modifier = Modifier.size(72.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "Captured Photo",
-                    color = themeColors.TextSecondary,
-                    fontSize = 13.sp
-                )
-                Text(
-                    text = imageUri,
-                    color = themeColors.TextTertiary,
-                    fontSize = 11.sp,
-                    maxLines = 1
-                )
-            }
+            // Show the actual captured photo (EXIF-corrected)
+            NetworkImage(
+                imageUrl = imageUri,
+                contentDescription = "Captured dish photo",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop
+            )
         }
     }
 }

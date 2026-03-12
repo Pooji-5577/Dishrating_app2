@@ -56,17 +56,21 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.FoodImages
+import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import com.example.smackcheck2.viewmodel.SearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DarkSearchScreen(
     viewModel: SearchViewModel,
+    photoViewModel: RestaurantPhotoViewModel? = null,
     onNavigateBack: () -> Unit,
     onRestaurantClick: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val photoStates by photoViewModel?.photoStates?.collectAsState() ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyMap()) }
     val themeColors = appColors()
     
     Scaffold(
@@ -356,6 +360,7 @@ fun DarkSearchScreen(
                     items(uiState.results) { restaurant ->
                         DarkRestaurantSearchCard(
                             restaurant = restaurant,
+                            photoViewModel = photoViewModel,
                             onClick = { onRestaurantClick(restaurant.id) }
                         )
                     }
@@ -368,13 +373,25 @@ fun DarkSearchScreen(
 @Composable
 private fun DarkRestaurantSearchCard(
     restaurant: Restaurant,
+    photoViewModel: RestaurantPhotoViewModel? = null,
     onClick: () -> Unit
 ) {
     val themeColors = appColors()
-    
-    // Pick the image URL: prefer Supabase photo_urls, fallback to Unsplash
-    val imageUrl = restaurant.imageUrls.firstOrNull()
-        ?: FoodImages.getRestaurantImageByName(restaurant.name)
+
+    // ── Trigger Google Places thumbnail fetch when card appears ──
+    val photoStates by photoViewModel?.photoStates?.collectAsState()
+        ?: androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(emptyMap()) }
+    val photoState = photoStates[restaurant.id]
+
+    // Request thumbnail on first composition
+    androidx.compose.runtime.LaunchedEffect(restaurant.id) {
+        photoViewModel?.loadThumbnail(
+            restaurantId = restaurant.id,
+            placeId = restaurant.googlePlaceId,
+            name = restaurant.name,
+            city = restaurant.city
+        )
+    }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -390,19 +407,32 @@ private fun DarkRestaurantSearchCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ── Thumbnail Image ──
+            // ── Thumbnail Image: Google Places → Supabase → Unsplash fallback ──
             Box(
                 modifier = Modifier
                     .size(72.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(themeColors.Surface)
             ) {
-                NetworkImage(
-                    imageUrl = imageUrl,
-                    contentDescription = restaurant.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+                // Try Google Places photo first
+                if (photoState != null && photoViewModel != null) {
+                    SmartRestaurantImage(
+                        photoState = photoState,
+                        restaurantName = restaurant.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    // Fallback: Supabase photo_urls → Unsplash
+                    val imageUrl = restaurant.imageUrls.firstOrNull()
+                        ?: FoodImages.getRestaurantImageByName(restaurant.name)
+                    NetworkImage(
+                        imageUrl = imageUrl,
+                        contentDescription = restaurant.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(12.dp))

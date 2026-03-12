@@ -61,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.theme.appColors
 
 /**
@@ -146,26 +147,18 @@ fun DarkDishRatingScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Dish image placeholder
+                        // Dish image — show the real EXIF-corrected captured photo
                         Box(
                             modifier = Modifier
                                 .size(80.dp)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(
-                                    Brush.radialGradient(
-                                        colors = listOf(
-                                            Color(0xFF3D3D3D),
-                                            Color(0xFF252525)
-                                        )
-                                    )
-                                ),
+                                .clip(RoundedCornerShape(16.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Restaurant,
-                                contentDescription = null,
-                                tint = appColors().TextSecondary,
-                                modifier = Modifier.size(32.dp)
+                            NetworkImage(
+                                imageUrl = imageUri,
+                                contentDescription = "Captured dish photo",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop
                             )
                         }
                         
