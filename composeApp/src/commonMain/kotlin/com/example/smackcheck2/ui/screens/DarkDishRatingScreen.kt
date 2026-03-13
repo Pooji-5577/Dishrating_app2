@@ -97,7 +97,7 @@ fun DarkDishRatingScreen(
     xpEarned: Int? = null,
     errorMessage: String? = null,
     onNavigateBack: () -> Unit,
-    onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurantId: String?) -> Unit,
+    onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurant: Restaurant?) -> Unit,
     onDismissError: () -> Unit = {},
     onAddRestaurantManually: (() -> Unit)? = null,
     onSearchRestaurants: ((String) -> Unit)? = null
@@ -483,7 +483,7 @@ fun DarkDishRatingScreen(
                 // Submit button
                 Button(
                     onClick = {
-                        onSubmitRating(rating, comment, selectedTags.toList(), selectedRestaurant?.id)
+                        onSubmitRating(rating, comment, selectedTags.toList(), selectedRestaurant)
                     },
                     enabled = rating > 0 && selectedRestaurant != null && !isSubmitting,
                     modifier = Modifier

@@ -291,6 +291,8 @@ data class DishCaptureUiState(
     // Support for multiple images
     val additionalImages: List<CapturedImage> = emptyList(),
     val selectedImageIndex: Int = 0, // Which image is currently displayed/being analyzed
+    // Per-image detection results keyed by image URI
+    val perImageDetections: Map<String, ImageDetectionResult> = emptyMap(),
     val isAnalyzing: Boolean = false,
     val detectedDishName: String? = null,
     val detectedCuisine: String? = null,
@@ -307,7 +309,7 @@ data class DishCaptureUiState(
 ) {
     /** Total number of images (primary + additional) */
     val totalImages: Int get() = if (imageUri != null) 1 + additionalImages.size else additionalImages.size
-    
+
     /** Get all images as a list */
     val allImages: List<CapturedImage> get() = buildList {
         if (imageUri != null && imageBytes != null) {
@@ -315,7 +317,13 @@ data class DishCaptureUiState(
         }
         addAll(additionalImages)
     }
-    
+
+    /** Get detection result for the currently selected image */
+    val currentDetection: ImageDetectionResult? get() {
+        val selectedImage = allImages.getOrNull(selectedImageIndex)
+        return selectedImage?.let { perImageDetections[it.uri] }
+    }
+
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (other == null || this::class != other::class) return false
@@ -329,6 +337,7 @@ data class DishCaptureUiState(
         } else if (other.imageBytes != null) return false
         if (additionalImages != other.additionalImages) return false
         if (selectedImageIndex != other.selectedImageIndex) return false
+        if (perImageDetections != other.perImageDetections) return false
         if (isAnalyzing != other.isAnalyzing) return false
         if (detectedDishName != other.detectedDishName) return false
         if (detectedCuisine != other.detectedCuisine) return false
@@ -351,6 +360,7 @@ data class DishCaptureUiState(
         result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
         result = 31 * result + additionalImages.hashCode()
         result = 31 * result + selectedImageIndex
+        result = 31 * result + perImageDetections.hashCode()
         result = 31 * result + isAnalyzing.hashCode()
         result = 31 * result + (detectedDishName?.hashCode() ?: 0)
         result = 31 * result + (detectedCuisine?.hashCode() ?: 0)
@@ -390,3 +400,20 @@ data class CapturedImage(
         return result
     }
 }
+
+/**
+ * Per-image AI detection result
+ */
+data class ImageDetectionResult(
+    val dishName: String? = null,
+    val cuisine: String? = null,
+    val confidence: Float = 0f,
+    val alternatives: List<String> = emptyList(),
+    val isAIDetected: Boolean = false,
+    val itemType: String = "unknown",
+    val debugInfo: String? = null,
+    val isAnalyzing: Boolean = false,
+    val editedName: String = "",
+    val showNotDishError: Boolean = false,
+    val isOutage: Boolean = false
+)

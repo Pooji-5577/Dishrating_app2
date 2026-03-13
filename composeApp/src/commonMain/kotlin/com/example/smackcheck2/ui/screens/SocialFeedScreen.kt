@@ -261,6 +261,7 @@ fun SocialFeedCard(
             ) {
                 val imageUrl = item.dishImageUrl?.takeIf { it.isNotBlank() }
                     ?: item.imageUrls.firstOrNull()
+                println("SocialFeedCard: dish='${item.dishName}' imageUrl=$imageUrl")
                 if (imageUrl != null) {
                     com.example.smackcheck2.ui.components.NetworkImage(
                         imageUrl = imageUrl,

@@ -19,6 +19,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import io.ktor.http.Url
 import com.example.smackcheck2.ui.theme.appColors
 
 /**
@@ -40,7 +41,7 @@ object FoodImages {
         "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=400&h=400&fit=crop", // Avocado toast
         "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=400&fit=crop", // Meat dish
     )
-    
+
     // Restaurant images (wider aspect ratio)
     val restaurantImages = listOf(
         "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&h=400&fit=crop", // Restaurant interior
@@ -52,19 +53,19 @@ object FoodImages {
         "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&h=400&fit=crop", // Food on table
         "https://images.unsplash.com/photo-1578474846511-04ba529f0b88?w=600&h=400&fit=crop", // Italian restaurant
     )
-    
+
     // Get a dish image based on index (cycles through available images)
     fun getDishImage(index: Int): String = dishImages[index % dishImages.size]
-    
+
     // Get a restaurant image based on index
     fun getRestaurantImage(index: Int): String = restaurantImages[index % restaurantImages.size]
-    
+
     // Get image based on dish name (creates consistent mapping)
     fun getDishImageByName(name: String): String {
         val hash = name.hashCode().let { if (it < 0) -it else it }
         return dishImages[hash % dishImages.size]
     }
-    
+
     // Get image based on restaurant name
     fun getRestaurantImageByName(name: String): String {
         val hash = name.hashCode().let { if (it < 0) -it else it }
@@ -85,8 +86,9 @@ fun NetworkImage(
     showGradientOnFailure: Boolean = true
 ) {
     val colors = appColors()
+    println("NetworkImage: Loading '$imageUrl'")
     KamelImage(
-        resource = asyncPainterResource(imageUrl),
+        resource = { asyncPainterResource(data = Url(imageUrl)) },
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
@@ -103,7 +105,9 @@ fun NetworkImage(
                 )
             }
         },
-        onFailure = {
+        onFailure = { exception ->
+            println("NetworkImage: FAILED to load '$imageUrl' — ${exception.message}")
+            exception.printStackTrace()
             Box(
                 modifier = Modifier
                     .fillMaxSize()

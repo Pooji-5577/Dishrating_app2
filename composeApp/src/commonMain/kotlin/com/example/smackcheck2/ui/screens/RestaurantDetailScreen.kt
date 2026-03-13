@@ -55,6 +55,7 @@ import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import io.ktor.http.Url
 
 /**
  * Restaurant Detail Screen composable
@@ -482,7 +483,7 @@ fun DishCard(
             ) {
                 if (!dish.imageUrl.isNullOrEmpty()) {
                     KamelImage(
-                        resource = asyncPainterResource(dish.imageUrl),
+                        resource = { asyncPainterResource(data = Url(dish.imageUrl!!)) },
                         contentDescription = dish.name,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),

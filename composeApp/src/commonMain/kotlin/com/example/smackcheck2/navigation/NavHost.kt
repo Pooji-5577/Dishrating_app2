@@ -1049,11 +1049,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 }
             }
 
-            // Navigate back to home on success (after showing reward for 6 seconds)
+            // Navigate to social feed on success (after showing reward for 6 seconds)
             LaunchedEffect(ratingUiState.isSuccess) {
                 if (ratingUiState.isSuccess) {
                     kotlinx.coroutines.delay(6000) // Show XP reward for 6 seconds
                     navigationState.popToRoot()
+                    navigationState.navigateTo(Screen.SocialFeed)
                 }
             }
 
@@ -1071,7 +1072,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 xpEarned = ratingUiState.xpEarned,
                 errorMessage = ratingUiState.errorMessage,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitRating = { rating, comment, tags, restaurantId ->
+                onSubmitRating = { rating, comment, tags, restaurant ->
                     // Award points for rating a dish (from main)
                     gamificationViewModel.recordAction(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
@@ -1080,8 +1081,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     dishRatingViewModel.onRatingChange(rating)
                     dishRatingViewModel.onCommentChange(comment)
                     dishRatingViewModel.onTagsChange(tags)
-                    if (restaurantId != null) {
-                        dishRatingViewModel.setRestaurantId(restaurantId)
+                    if (restaurant != null) {
+                        dishRatingViewModel.setRestaurant(restaurant)
                         dishRatingViewModel.submitRating {
                             // Success is handled by LaunchedEffect above
                         }

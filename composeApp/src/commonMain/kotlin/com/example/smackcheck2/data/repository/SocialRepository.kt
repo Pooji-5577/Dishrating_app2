@@ -519,6 +519,8 @@ class SocialRepository {
                     addAll(additionalImages)
                 }
 
+                println("SocialFeed: Rating ${rating.id} — imageUrl=${rating.imageUrl}, dishImageUrl=${dish?.imageUrl}, allImages=$allImages")
+
                 FeedItem(
                     id = rating.id ?: return@mapNotNull null,
                     userId = rating.userId,

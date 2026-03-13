@@ -6,6 +6,7 @@ import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.model.DishRatingUiState
+import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.service.AchievementService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,7 @@ class DishRatingViewModel : ViewModel() {
     val uiState: StateFlow<DishRatingUiState> = _uiState.asStateFlow()
 
     private var restaurantId: String = ""
+    private var selectedRestaurant: Restaurant? = null
 
     fun initialize(dishName: String, imageUri: String, restaurantId: String = "") {
         this.restaurantId = restaurantId
@@ -44,6 +46,11 @@ class DishRatingViewModel : ViewModel() {
 
     fun setRestaurantId(id: String) {
         this.restaurantId = id
+    }
+
+    fun setRestaurant(restaurant: Restaurant) {
+        this.selectedRestaurant = restaurant
+        this.restaurantId = restaurant.id
     }
 
     fun onRatingChange(rating: Float) {
@@ -90,7 +97,7 @@ class DishRatingViewModel : ViewModel() {
                 // Upload image if available
                 var imageUrl: String? = null
                 if (currentState.imageBytes == null) {
-                    println("DishRatingViewModel: ⚠ No imageBytes — photo will NOT be uploaded")
+                    println("DishRatingViewModel: ⚠ No imageBytes — photo will NOT be uploaded (imageUri=${currentState.imageUri})")
                 } else {
                     val bytes = currentState.imageBytes
                     println("DishRatingViewModel: Uploading image (${bytes.size} bytes)...")
@@ -107,6 +114,29 @@ class DishRatingViewModel : ViewModel() {
                         onFailure = { error ->
                             println("DishRatingViewModel: ✗ Image upload FAILED: ${error.message}")
                             // Don't block the rating — proceed without photo
+                        }
+                    )
+                }
+
+                // Ensure the restaurant exists in DB (e.g. if selected from Google Places)
+                val restaurant = selectedRestaurant
+                if (restaurant != null) {
+                    println("DishRatingViewModel: Ensuring restaurant '${restaurant.name}' (${restaurant.id}) exists in DB...")
+                    val ensureResult = databaseRepository.ensureRestaurantExists(restaurant, dishImageUrl = imageUrl)
+                    ensureResult.fold(
+                        onSuccess = { dbRestaurant ->
+                            restaurantId = dbRestaurant.id
+                            println("DishRatingViewModel: ✓ Restaurant ensured: ${dbRestaurant.id} — ${dbRestaurant.name}")
+                        },
+                        onFailure = { error ->
+                            println("DishRatingViewModel: ✗ Failed to ensure restaurant: ${error.message}")
+                            _uiState.update {
+                                it.copy(
+                                    isSubmitting = false,
+                                    errorMessage = "Failed to save restaurant: ${error.message}"
+                                )
+                            }
+                            return@launch
                         }
                     )
                 }

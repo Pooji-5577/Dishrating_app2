@@ -207,6 +207,7 @@ fun DarkDishCaptureScreen(
                     confidence = uiState.detectionConfidence,
                     cuisine = uiState.detectedCuisine,
                     debugInfo = uiState.debugInfo,
+                    errorMessage = uiState.errorMessage,
                     canAddMoreImages = viewModel.canAddMoreImages(),
                     remainingSlots = viewModel.remainingImageSlots(),
                     onSelectImage = { viewModel.selectImage(it) },
@@ -411,6 +412,7 @@ private fun ImagePreviewWithAI(
     confidence: Float,
     cuisine: String?,
     debugInfo: String?,
+    errorMessage: String?,
     canAddMoreImages: Boolean,
     remainingSlots: Int,
     onSelectImage: (Int) -> Unit,
@@ -568,6 +570,34 @@ private fun ImagePreviewWithAI(
                         .padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
+                    // Outage / error message banner
+                    if (errorMessage != null && !isAIDetected) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    Color(0xFFFFF3E0),
+                                    RoundedCornerShape(8.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFFE65100),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = errorMessage,
+                                color = Color(0xFFE65100),
+                                fontSize = 12.sp
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
                     // AI detected badge
                     Row(
                         modifier = Modifier
@@ -580,7 +610,7 @@ private fun ImagePreviewWithAI(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = Icons.Default.AutoAwesome,
+                            imageVector = if (isAIDetected) Icons.Default.AutoAwesome else Icons.Default.Edit,
                             contentDescription = null,
                             tint = if (isAIDetected) themeColors.Primary else Color.Gray,
                             modifier = Modifier.size(16.dp)
@@ -705,7 +735,8 @@ private fun ImagePreviewWithAI(
                         Button(
                             onClick = onConfirm,
                             modifier = Modifier.weight(1f),
-                            enabled = !(detectedDishName == "Unknown" && !isAIDetected),
+                            enabled = (!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown") ||
+                                    (isEditingName && editedName.isNotBlank()),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = themeColors.Primary,
                                 contentColor = Color.White,
