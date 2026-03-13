@@ -19,7 +19,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
-import io.ktor.http.Url
 import com.example.smackcheck2.ui.theme.appColors
 
 /**
@@ -87,8 +86,41 @@ fun NetworkImage(
 ) {
     val colors = appColors()
     println("NetworkImage: Loading '$imageUrl'")
+    
+    // Validate URL before attempting to load
+    if (imageUrl.isBlank()) {
+        println("NetworkImage: ERROR - Empty URL provided")
+        Box(
+            modifier = modifier
+                .background(
+                    if (showGradientOnFailure)
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF8B4513),
+                                Color(0xFFD2691E),
+                                Color(0xFFA0522D)
+                            )
+                        )
+                    else
+                        Brush.linearGradient(
+                            colors = listOf(colors.Surface, colors.Surface)
+                        )
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = placeholderIcon,
+                contentDescription = null,
+                modifier = Modifier.size(80.dp),
+                tint = colors.TextSecondary.copy(alpha = 0.5f)
+            )
+        }
+        return
+    }
+    
+    // Use string directly - Kamel's stringMapper() will handle the conversion
     KamelImage(
-        resource = { asyncPainterResource(data = Url(imageUrl)) },
+        resource = { asyncPainterResource(data = imageUrl) },
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
@@ -106,7 +138,10 @@ fun NetworkImage(
             }
         },
         onFailure = { exception ->
-            println("NetworkImage: FAILED to load '$imageUrl' — ${exception.message}")
+            println("NetworkImage: FAILED to load '$imageUrl'")
+            println("NetworkImage: Error type: ${exception::class.simpleName}")
+            println("NetworkImage: Error message: ${exception.message}")
+            println("NetworkImage: Error cause: ${exception.cause?.message}")
             exception.printStackTrace()
             Box(
                 modifier = Modifier

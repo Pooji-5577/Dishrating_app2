@@ -91,6 +91,34 @@ class DishRatingViewModel : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+            
+            // Ensure user profile exists before attempting to rate
+            // This handles users who signed up but profile creation failed or was skipped
+            println("DishRatingViewModel: Ensuring user profile exists...")
+            try {
+                val user = authRepository.getCurrentUser()
+                if (user == null) {
+                    println("DishRatingViewModel: ✗ Failed to get/create user profile")
+                    _uiState.update { 
+                        it.copy(
+                            isSubmitting = false, 
+                            errorMessage = "Failed to verify user profile. Please try signing out and back in."
+                        ) 
+                    }
+                    return@launch
+                }
+                println("DishRatingViewModel: ✓ User profile verified: ${user.id}")
+            } catch (e: Exception) {
+                println("DishRatingViewModel: ✗ Error ensuring profile: ${e.message}")
+                _uiState.update { 
+                    it.copy(
+                        isSubmitting = false, 
+                        errorMessage = "Failed to verify user profile: ${e.message}"
+                    ) 
+                }
+                return@launch
+            }
+            
             println("DishRatingViewModel: Validation passed, starting submission...")
 
             try {
