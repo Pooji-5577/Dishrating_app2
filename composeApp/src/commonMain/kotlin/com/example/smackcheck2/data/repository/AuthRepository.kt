@@ -354,10 +354,14 @@ class AuthRepository {
                 val newProfile = ProfileDto(id = userId, name = name, email = email)
                 try {
                     upsertProfile(newProfile)
+                    newProfile.toUser()
                 } catch (e: Exception) {
                     println("AuthRepository: auto-profile creation failed: ${e.message}")
+                    // Return null to indicate profile could not be created
+                    // This forces the caller to handle the error rather than proceeding
+                    // with a user that doesn't exist in the database
+                    null
                 }
-                newProfile.toUser()
             }
         } catch (e: Exception) {
             null
