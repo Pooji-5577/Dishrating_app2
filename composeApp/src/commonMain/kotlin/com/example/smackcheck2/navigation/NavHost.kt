@@ -295,6 +295,18 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             notificationViewModel.refresh()
         }
     }
+    
+    // Track if we've already requested location permission this session
+    var hasRequestedPermission by remember { mutableStateOf(false) }
+    var shouldShowPermissionDialog by remember { mutableStateOf(false) }
+    
+    // Automatically request location permission after authentication
+    LaunchedEffect(isAuthenticated) {
+        if (isAuthenticated == true && !hasRequestedPermission) {
+            hasRequestedPermission = true
+            shouldShowPermissionDialog = true
+        }
+    }
 
     // Main content with points popup overlay (from main)
     Box(modifier = Modifier.fillMaxSize()) {
@@ -1337,6 +1349,41 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         onDismissed = { pointsEvent = null },
         modifier = Modifier.align(Alignment.TopCenter).zIndex(100f)
     )
+    
+    // Automatic location permission request on app startup
+    if (shouldShowPermissionDialog && isAuthenticated == true) {
+        RequestLocationPermission(
+            onPermissionResult = { granted ->
+                shouldShowPermissionDialog = false
+                if (granted) {
+                    // Permission granted - trigger automatic location detection
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        try {
+                            locationService?.getCurrentLocation()?.let { location ->
+                                // Update the shared location state
+                                SharedLocationState.onLocationDetected(
+                                    latitude = location.latitude,
+                                    longitude = location.longitude,
+                                    city = location.cityName ?: "Unknown"
+                                )
+                                
+                                // Sync to database
+                                val repository = com.example.smackcheck2.data.repository.SocialMapRepository()
+                                repository.updateUserLocation(location.latitude, location.longitude)
+                            }
+                        } catch (e: Exception) {
+                            println("Auto location detection error: ${e.message}")
+                        }
+                    }
+                }
+            }
+        ) { requestPermission ->
+            // Automatically trigger permission request
+            LaunchedEffect(Unit) {
+                requestPermission()
+            }
+        }
+    }
     } // end Box
 }
 
