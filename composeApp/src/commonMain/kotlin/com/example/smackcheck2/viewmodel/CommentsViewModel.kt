@@ -47,15 +47,26 @@ class CommentsViewModel(private val ratingId: String) : ViewModel() {
     }
 
     fun addComment(content: String) {
-        val userId = authRepository.getCurrentUserId() ?: return
         val parentId = _uiState.value.replyingTo?.id
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true) }
 
+            // Ensure user profile exists
+            val user = authRepository.getCurrentUser()
+            if (user == null) {
+                _uiState.update {
+                    it.copy(
+                        isSubmitting = false,
+                        errorMessage = "Please sign in to comment"
+                    )
+                }
+                return@launch
+            }
+
             socialRepository.addComment(
                 ratingId = ratingId,
-                userId = userId,
+                userId = user.id,
                 content = content,
                 parentCommentId = parentId
             ).fold(
@@ -80,10 +91,17 @@ class CommentsViewModel(private val ratingId: String) : ViewModel() {
     }
 
     fun deleteComment(commentId: String) {
-        val userId = authRepository.getCurrentUserId() ?: return
-
         viewModelScope.launch {
-            socialRepository.deleteComment(commentId, userId).fold(
+            // Ensure user profile exists
+            val user = authRepository.getCurrentUser()
+            if (user == null) {
+                _uiState.update {
+                    it.copy(errorMessage = "Please sign in to delete comments")
+                }
+                return@launch
+            }
+
+            socialRepository.deleteComment(commentId, user.id).fold(
                 onSuccess = { loadComments() },
                 onFailure = { error ->
                     _uiState.update {

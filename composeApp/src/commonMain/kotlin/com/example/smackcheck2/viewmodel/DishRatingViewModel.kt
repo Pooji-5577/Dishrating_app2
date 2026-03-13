@@ -74,15 +74,8 @@ class DishRatingViewModel : ViewModel() {
 
     fun submitRating(onSuccess: (String) -> Unit) {
         val currentState = _uiState.value
-        val userId = authRepository.getCurrentUserId()
 
-        println("DishRatingViewModel: Starting submitRating - userId=$userId, rating=${currentState.rating}, restaurantId=$restaurantId")
-
-        if (userId == null) {
-            println("DishRatingViewModel: ✗ User not signed in")
-            _uiState.update { it.copy(errorMessage = "Please sign in to submit a rating") }
-            return
-        }
+        println("DishRatingViewModel: Starting submitRating - rating=${currentState.rating}, restaurantId=$restaurantId")
 
         if (currentState.rating == 0f) {
             println("DishRatingViewModel: ✗ No rating provided")
@@ -127,6 +120,21 @@ class DishRatingViewModel : ViewModel() {
             }
             
             println("DishRatingViewModel: Validation passed, starting submission...")
+
+            // Ensure user profile exists in database
+            val user = authRepository.getCurrentUser()
+            if (user == null) {
+                println("DishRatingViewModel: ✗ User not signed in")
+                _uiState.update { 
+                    it.copy(
+                        isSubmitting = false,
+                        errorMessage = "Please sign in to submit a rating"
+                    ) 
+                }
+                return@launch
+            }
+            val userId = user.id
+            println("DishRatingViewModel: ✓ User profile confirmed - userId=$userId")
 
             try {
                 // Upload image if available

@@ -188,24 +188,31 @@ class SocialFeedViewModel : ViewModel() {
     }
 
     fun toggleLike(itemId: String) {
-        val userId = authRepository.getCurrentUserId() ?: return
-        // Capture pre-toggle state so we can revert on failure
-        val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
-
-        // Optimistic update - will be confirmed by real-time subscription
-        _uiState.update { state ->
-            val updatedItems = state.feedItems.map { item ->
-                if (item.id == itemId) {
-                    item.copy(
-                        isLiked = !wasLiked,
-                        likesCount = if (!wasLiked) item.likesCount + 1 else (item.likesCount - 1).coerceAtLeast(0)
-                    )
-                } else item
-            }
-            state.copy(feedItems = updatedItems)
-        }
-
         viewModelScope.launch {
+            // Ensure user profile exists
+            val user = authRepository.getCurrentUser()
+            if (user == null) {
+                println("SocialFeedViewModel: User not signed in, cannot toggle like")
+                return@launch
+            }
+            val userId = user.id
+            
+            // Capture pre-toggle state so we can revert on failure
+            val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
+
+            // Optimistic update - will be confirmed by real-time subscription
+            _uiState.update { state ->
+                val updatedItems = state.feedItems.map { item ->
+                    if (item.id == itemId) {
+                        item.copy(
+                            isLiked = !wasLiked,
+                            likesCount = if (!wasLiked) item.likesCount + 1 else (item.likesCount - 1).coerceAtLeast(0)
+                        )
+                    } else item
+                }
+                state.copy(feedItems = updatedItems)
+            }
+
             val result = realtimeFeedRepository.toggleLike(itemId, userId)
             result.fold(
                 onSuccess = { isNowLiked ->
