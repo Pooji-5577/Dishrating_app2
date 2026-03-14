@@ -1,13 +1,10 @@
 package com.example.smackcheck2.platform
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.interop.UIKitView
 import kotlinx.cinterop.ExperimentalForeignApi
-import kotlinx.cinterop.useContents
 import platform.CoreLocation.CLLocationCoordinate2DMake
 import platform.MapKit.MKAnnotationProtocol
 import platform.MapKit.MKAnnotationView
@@ -29,7 +26,8 @@ class RestaurantAnnotation(
     latitude: Double,
     longitude: Double,
     title: String,
-    subtitle: String?
+    subtitle: String?,
+    val imageUrl: String? = null
 ) : MKPointAnnotation() {
     init {
         setCoordinate(CLLocationCoordinate2DMake(latitude, longitude))
@@ -45,32 +43,30 @@ class RestaurantAnnotation(
 class MapViewDelegate(
     private val onMarkerClick: (String) -> Unit
 ) : NSObject(), MKMapViewDelegateProtocol {
-    
+
     override fun mapView(
         mapView: MKMapView,
         viewForAnnotation: MKAnnotationProtocol
     ): MKAnnotationView? {
-        // Return null for user location annotation
         if (viewForAnnotation === mapView.userLocation) {
             return null
         }
-        
+
         val identifier = "RestaurantMarker"
         var annotationView = mapView.dequeueReusableAnnotationViewWithIdentifier(identifier) as? MKMarkerAnnotationView
-        
+
         if (annotationView == null) {
             annotationView = MKMarkerAnnotationView(viewForAnnotation, identifier)
             annotationView.canShowCallout = true
         } else {
             annotationView.annotation = viewForAnnotation
         }
-        
-        // Customize marker appearance
+
         annotationView.markerTintColor = UIColor.orangeColor
-        
+
         return annotationView
     }
-    
+
     override fun mapView(mapView: MKMapView, didSelectAnnotationView: MKAnnotationView) {
         val annotation = didSelectAnnotationView.annotation
         if (annotation is RestaurantAnnotation) {
@@ -89,35 +85,30 @@ actual fun PlatformMapView(
     onMarkerClick: (String) -> Unit,
     modifier: Modifier
 ) {
-    // Create delegate that persists across recompositions
     val delegate = remember(onMarkerClick) { MapViewDelegate(onMarkerClick) }
-    
-    // Convert zoom level to span distance (approximate)
-    // Zoom level 14 ~ 1000m, each level doubles/halves the distance
+
     val spanDistance = 1000.0 * 2.0.pow((14.0 - zoom).toDouble())
-    
+
     UIKitView(
         factory = {
             MKMapView().apply {
-                // Set initial region
                 val coordinate = CLLocationCoordinate2DMake(latitude, longitude)
                 val region = MKCoordinateRegionMakeWithDistance(coordinate, spanDistance, spanDistance)
                 setRegion(region, animated = false)
-                
-                // Configure map
+
                 this.delegate = delegate
                 this.showsUserLocation = true
                 this.showsCompass = true
                 this.showsScale = true
-                
-                // Add markers
+
                 markers.forEach { marker ->
                     val annotation = RestaurantAnnotation(
                         markerId = marker.id,
                         latitude = marker.latitude,
                         longitude = marker.longitude,
                         title = marker.title,
-                        subtitle = marker.snippet ?: marker.rating?.let { "Rating: ${formatRating(it)}" }
+                        subtitle = marker.snippet ?: marker.rating?.let { "Rating: ${formatRating(it)}" },
+                        imageUrl = marker.imageUrl
                     )
                     addAnnotation(annotation)
                 }
@@ -125,24 +116,21 @@ actual fun PlatformMapView(
         },
         modifier = modifier,
         update = { mapView ->
-            // Update region when coordinates change
             val coordinate = CLLocationCoordinate2DMake(latitude, longitude)
             val region = MKCoordinateRegionMakeWithDistance(coordinate, spanDistance, spanDistance)
             mapView.setRegion(region, animated = true)
-            
-            // Update markers
-            // Remove existing custom annotations
+
             val existingAnnotations = mapView.annotations.filterIsInstance<RestaurantAnnotation>()
             existingAnnotations.forEach { mapView.removeAnnotation(it) }
-            
-            // Add new markers
+
             markers.forEach { marker ->
                 val annotation = RestaurantAnnotation(
                     markerId = marker.id,
                     latitude = marker.latitude,
                     longitude = marker.longitude,
                     title = marker.title,
-                    subtitle = marker.snippet ?: marker.rating?.let { "Rating: ${formatRating(it)}" }
+                    subtitle = marker.snippet ?: marker.rating?.let { "Rating: ${formatRating(it)}" },
+                    imageUrl = marker.imageUrl
                 )
                 mapView.addAnnotation(annotation)
             }
@@ -150,9 +138,6 @@ actual fun PlatformMapView(
     )
 }
 
-/**
- * Format a rating value to one decimal place
- */
 private fun formatRating(value: Float): String {
     val intPart = value.toInt()
     val decimalPart = ((value - intPart) * 10).toInt()

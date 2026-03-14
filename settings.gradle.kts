@@ -1,4 +1,4 @@
-rootProject.name = "Smackcheck2"
+rootProject.name = "SmackCheck"
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

@@ -185,6 +185,45 @@ class SocialMapRepository {
         }
     }
 
+    /**
+     * Get ALL dish posts for world map view, positioned at restaurant coordinates.
+     * Each post becomes its own marker (no grouping by user).
+     */
+    suspend fun getAllDishPosts(limit: Int = 500): Result<List<MapUserMarker>> {
+        return try {
+            val currentUserId = client.auth.currentUserOrNull()?.id
+
+            val result = postgrest.rpc(
+                function = "get_all_dish_posts",
+                parameters = AllDishPostsParams(p_limit = limit)
+            ).decodeList<NearbyDishPostDto>()
+
+            val markers = result.map { dto ->
+                MapUserMarker(
+                    userId = dto.user_id,
+                    username = dto.username ?: "Unknown",
+                    avatarUrl = dto.avatar_url,
+                    latitude = dto.latitude ?: 0.0,
+                    longitude = dto.longitude ?: 0.0,
+                    latestRatingId = dto.rating_id,
+                    latestDishId = dto.dish_id,
+                    latestDishName = dto.dish_name,
+                    latestDishImage = dto.dish_image,
+                    latestRating = dto.rating,
+                    latestRestaurantId = dto.restaurant_id,
+                    latestRestaurantName = dto.restaurant_name,
+                    latestPostTime = dto.posted_at?.let { parseTimestamp(it) },
+                    isCurrentUser = dto.user_id == currentUserId
+                )
+            }
+
+            Result.success(markers)
+        } catch (e: Exception) {
+            println("SocialMapRepository: Error fetching all dish posts: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     private fun parseTimestamp(timestamp: String): Long {
         return try {
             kotlinx.datetime.Instant.parse(timestamp).toEpochMilliseconds()
@@ -215,6 +254,11 @@ private data class UpdateLocationParams(
 @Serializable
 private data class ToggleLocationParams(
     val p_enabled: Boolean
+)
+
+@Serializable
+private data class AllDishPostsParams(
+    val p_limit: Int
 )
 
 @Serializable

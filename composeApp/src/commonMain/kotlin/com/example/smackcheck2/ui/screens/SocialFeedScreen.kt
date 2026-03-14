@@ -197,8 +197,9 @@ fun SocialFeedCard(
     modifier: Modifier = Modifier
 ) {
     val colors = appColors()
-    var isLiked by remember(item.isLiked) { mutableStateOf(item.isLiked) }
-    var likesCount by remember(item.likesCount) { mutableStateOf(item.likesCount) }
+    // Driven by ViewModel state — no local copy to avoid triple-update bugs
+    val isLiked = item.isLiked
+    val likesCount = item.likesCount
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -336,11 +337,7 @@ fun SocialFeedCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        isLiked = !isLiked
-                        likesCount = if (isLiked) likesCount + 1 else likesCount - 1
-                        onLikeClick()
-                    }
+                    modifier = Modifier.clickable { onLikeClick() }
                 ) {
                     Icon(
                         imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,

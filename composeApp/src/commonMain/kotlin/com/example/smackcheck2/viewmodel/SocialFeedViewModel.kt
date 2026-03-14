@@ -73,30 +73,34 @@ class SocialFeedViewModel : ViewModel() {
                     state.copy(feedItems = state.feedItems.filter { it.id != update.ratingId })
                 }
                 is FeedUpdate.LikeAdded -> {
-                    // Update like count for the post
-                    val userId = authRepository.getCurrentUserId()
-                    val updatedItems = state.feedItems.map { item ->
-                        if (item.id == update.ratingId) {
-                            item.copy(
-                                likesCount = item.likesCount + 1,
-                                isLiked = if (update.userId == userId) true else item.isLiked
-                            )
-                        } else item
+                    val currentUserId = authRepository.getCurrentUserId()
+                    // Skip count update for own likes — already handled by optimistic update in toggleLike()
+                    if (update.userId == currentUserId) {
+                        println("[DEBUG][SocialFeed] Ignoring own LikeAdded real-time event (already optimistic)")
+                        state
+                    } else {
+                        val updatedItems = state.feedItems.map { item ->
+                            if (item.id == update.ratingId) {
+                                item.copy(likesCount = item.likesCount + 1)
+                            } else item
+                        }
+                        state.copy(feedItems = updatedItems)
                     }
-                    state.copy(feedItems = updatedItems)
                 }
                 is FeedUpdate.LikeRemoved -> {
-                    // Update like count for the post
-                    val userId = authRepository.getCurrentUserId()
-                    val updatedItems = state.feedItems.map { item ->
-                        if (item.id == update.ratingId) {
-                            item.copy(
-                                likesCount = maxOf(0, item.likesCount - 1),
-                                isLiked = if (update.userId == userId) false else item.isLiked
-                            )
-                        } else item
+                    val currentUserId = authRepository.getCurrentUserId()
+                    // Skip count update for own unlikes — already handled by optimistic update in toggleLike()
+                    if (update.userId == currentUserId) {
+                        println("[DEBUG][SocialFeed] Ignoring own LikeRemoved real-time event (already optimistic)")
+                        state
+                    } else {
+                        val updatedItems = state.feedItems.map { item ->
+                            if (item.id == update.ratingId) {
+                                item.copy(likesCount = maxOf(0, item.likesCount - 1))
+                            } else item
+                        }
+                        state.copy(feedItems = updatedItems)
                     }
-                    state.copy(feedItems = updatedItems)
                 }
                 is FeedUpdate.CommentAdded -> {
                     // Update comment count for the post
@@ -188,11 +192,16 @@ class SocialFeedViewModel : ViewModel() {
     }
 
     fun toggleLike(itemId: String) {
-        val userId = authRepository.getCurrentUserId() ?: return
+        val userId = authRepository.getCurrentUserId()
+        if (userId == null) {
+            println("[DEBUG][SocialFeed] toggleLike: No user ID — user not logged in")
+            return
+        }
         // Capture pre-toggle state so we can revert on failure
         val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
+        println("[DEBUG][SocialFeed] toggleLike: itemId=$itemId, wasLiked=$wasLiked, userId=$userId")
 
-        // Optimistic update - will be confirmed by real-time subscription
+        // Optimistic update
         _uiState.update { state ->
             val updatedItems = state.feedItems.map { item ->
                 if (item.id == itemId) {
@@ -209,11 +218,11 @@ class SocialFeedViewModel : ViewModel() {
             val result = realtimeFeedRepository.toggleLike(itemId, userId)
             result.fold(
                 onSuccess = { isNowLiked ->
-                    // Real-time subscription will handle the update, but verify consistency
-                    println("SocialFeedViewModel: Like toggled successfully for $itemId, isLiked=$isNowLiked")
+                    println("[DEBUG][SocialFeed] toggleLike SUCCESS: itemId=$itemId, isNowLiked=$isNowLiked")
                 },
                 onFailure = { e ->
-                    println("SocialFeedViewModel: toggleLike failed for $itemId: ${e.message}")
+                    println("[DEBUG][SocialFeed] toggleLike FAILED: itemId=$itemId, error=${e::class.simpleName} - ${e.message}")
+                    e.printStackTrace()
                     // Revert optimistic UI toggle
                     _uiState.update { state ->
                         val revertedItems = state.feedItems.map { item ->
