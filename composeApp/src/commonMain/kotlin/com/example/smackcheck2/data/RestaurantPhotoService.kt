@@ -63,21 +63,25 @@ class RestaurantPhotoService {
             // Step 1: Check if photos are already cached in Supabase
             val cached = getCachedPhotos(restaurantId)
             if (cached.isNotEmpty()) {
+                println("[DEBUG][PhotoService] Supabase cache hit for '$restaurantName' (id=$restaurantId): ${cached.size} photos")
                 return cached
             }
+            println("[DEBUG][PhotoService] No cache for '$restaurantName' — calling Edge Function (placeId=$placeId, city=$city)")
 
             // Step 2: Call Edge Function to fetch from Google Places API
             val fetched = fetchPhotosFromEdgeFunction(restaurantName, city, placeId)
             if (fetched.isNotEmpty()) {
+                println("[DEBUG][PhotoService] Edge Function returned ${fetched.size} photos for '$restaurantName'")
                 // Step 3: Cache URLs in Supabase for future requests
                 cachePhotoUrls(restaurantId, fetched)
                 return fetched
             }
 
             // Step 4: Fallback — return empty (UI will show placeholder)
+            println("[DEBUG][PhotoService] No photos found anywhere for '$restaurantName' (id=$restaurantId, placeId=$placeId)")
             emptyList()
         } catch (e: Exception) {
-            println("RestaurantPhotoService error: ${e.message}")
+            println("[DEBUG][PhotoService] ERROR for '$restaurantName': ${e::class.simpleName} - ${e.message}")
             emptyList()
         }
     }

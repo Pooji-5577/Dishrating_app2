@@ -3,18 +3,12 @@ package com.example.smackcheck2.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrokenImage
-import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import io.kamel.image.KamelImage
@@ -81,15 +75,13 @@ fun NetworkImage(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
-    placeholderIcon: ImageVector = Icons.Filled.Restaurant,
     showGradientOnFailure: Boolean = true
 ) {
     val colors = appColors()
-    println("NetworkImage: Loading '$imageUrl'")
-    
+
     // Validate URL before attempting to load
     if (imageUrl.isBlank()) {
-        println("NetworkImage: ERROR - Empty URL provided")
+        println("[DEBUG][NetworkImage] Empty URL for '$contentDescription'")
         Box(
             modifier = modifier
                 .background(
@@ -107,14 +99,7 @@ fun NetworkImage(
                         )
                 ),
             contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = placeholderIcon,
-                contentDescription = null,
-                modifier = Modifier.size(80.dp),
-                tint = colors.TextSecondary.copy(alpha = 0.5f)
-            )
-        }
+        ){}
         return
     }
     
@@ -138,11 +123,9 @@ fun NetworkImage(
             }
         },
         onFailure = { exception ->
-            println("NetworkImage: FAILED to load '$imageUrl'")
-            println("NetworkImage: Error type: ${exception::class.simpleName}")
-            println("NetworkImage: Error message: ${exception.message}")
-            println("NetworkImage: Error cause: ${exception.cause?.message}")
-            exception.printStackTrace()
+            println("[DEBUG][NetworkImage] FAILED to load '$imageUrl' for '$contentDescription'")
+            println("[DEBUG][NetworkImage] Error: ${exception::class.simpleName} - ${exception.message}")
+            println("[DEBUG][NetworkImage] Cause: ${exception.cause?.message}")
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -161,14 +144,7 @@ fun NetworkImage(
                             )
                     ),
                 contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = placeholderIcon,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = colors.TextSecondary.copy(alpha = 0.5f)
-                )
-            }
+            ){}
         }
     )
 }

@@ -88,8 +88,18 @@ fun SmartRestaurantImage(
             }
         }
 
-        is PhotoState.NoPhotos, is PhotoState.Error, null -> {
-            // Fallback to Unsplash placeholder
+        is PhotoState.NoPhotos -> {
+            println("[DEBUG][SmartRestaurantImage] No Google Places photos for '$restaurantName' — using Unsplash fallback")
+            PlaceholderRestaurantImage(restaurantName, modifier, contentScale)
+        }
+
+        is PhotoState.Error -> {
+            println("[DEBUG][SmartRestaurantImage] Error loading photo for '$restaurantName': ${photoState.message} — using Unsplash fallback")
+            PlaceholderRestaurantImage(restaurantName, modifier, contentScale)
+        }
+
+        null -> {
+            println("[DEBUG][SmartRestaurantImage] PhotoState is null for '$restaurantName' (loadThumbnail not called?) — using Unsplash fallback")
             PlaceholderRestaurantImage(restaurantName, modifier, contentScale)
         }
     }

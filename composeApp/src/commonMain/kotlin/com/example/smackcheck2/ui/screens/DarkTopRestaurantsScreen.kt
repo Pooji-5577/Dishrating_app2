@@ -44,7 +44,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
+import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.layout.ContentScale
 
 /**
  * Dark themed Top Restaurants Screen - Shows top rated restaurants
@@ -54,6 +60,7 @@ import com.example.smackcheck2.ui.theme.appColors
 fun DarkTopRestaurantsScreen(
     location: String,
     restaurants: List<Restaurant>,
+    photoViewModel: RestaurantPhotoViewModel,
     onNavigateBack: () -> Unit,
     onRestaurantClick: (String) -> Unit
 ) {
@@ -138,6 +145,7 @@ fun DarkTopRestaurantsScreen(
                     DarkTopRestaurantCard(
                         rank = index + 1,
                         restaurant = restaurant,
+                        photoViewModel = photoViewModel,
                         onClick = { onRestaurantClick(restaurant.id) }
                     )
                 }
@@ -150,8 +158,21 @@ fun DarkTopRestaurantsScreen(
 private fun DarkTopRestaurantCard(
     rank: Int,
     restaurant: Restaurant,
+    photoViewModel: RestaurantPhotoViewModel,
     onClick: () -> Unit
 ) {
+    val photoStates by photoViewModel.photoStates.collectAsState()
+    val photoState = photoStates[restaurant.id]
+
+    LaunchedEffect(restaurant.id) {
+        photoViewModel.loadThumbnail(
+            restaurantId = restaurant.id,
+            placeId = restaurant.googlePlaceId,
+            name = restaurant.name,
+            city = restaurant.city
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -203,28 +224,12 @@ private fun DarkTopRestaurantCard(
             
             Spacer(modifier = Modifier.width(16.dp))
             
-            // Restaurant image placeholder
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.radialGradient(
-                            colors = listOf(
-                                appColors().Primary.copy(alpha = 0.2f),
-                                appColors().Surface
-                            )
-                        )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Restaurant,
-                    contentDescription = null,
-                    tint = appColors().Primary,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
+            SmartRestaurantImage(
+                photoState = photoState,
+                restaurantName = restaurant.name,
+                modifier = Modifier.size(60.dp).clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
             
             Spacer(modifier = Modifier.width(16.dp))
             

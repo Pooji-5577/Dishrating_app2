@@ -22,8 +22,11 @@ import com.example.smackcheck2.platform.NearbyRestaurant
 import com.example.smackcheck2.platform.PlatformMapView
 import com.example.smackcheck2.ui.components.EmptyState
 import com.example.smackcheck2.ui.components.LoadingState
+import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.viewmodel.NearbyRestaurantsUiState
 import com.example.smackcheck2.viewmodel.NearbyRestaurantsViewModel
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
+import androidx.compose.ui.layout.ContentScale
 
 /**
  * Nearby Restaurants Screen
@@ -33,6 +36,7 @@ import com.example.smackcheck2.viewmodel.NearbyRestaurantsViewModel
 @Composable
 fun NearbyRestaurantsScreen(
     viewModel: NearbyRestaurantsViewModel,
+    photoViewModel: RestaurantPhotoViewModel,
     onNavigateBack: () -> Unit,
     onRestaurantClick: (NearbyRestaurant) -> Unit
 ) {
@@ -164,6 +168,7 @@ fun NearbyRestaurantsScreen(
                                 // List view
                                 RestaurantsList(
                                     restaurants = state.restaurants,
+                                    photoViewModel = photoViewModel,
                                     onRestaurantClick = onRestaurantClick
                                 )
                             }
@@ -251,6 +256,7 @@ private fun GeofencingStatusBar(monitoredCount: Int) {
 @Composable
 private fun RestaurantsList(
     restaurants: List<NearbyRestaurant>,
+    photoViewModel: RestaurantPhotoViewModel,
     onRestaurantClick: (NearbyRestaurant) -> Unit
 ) {
     LazyColumn(
@@ -261,6 +267,7 @@ private fun RestaurantsList(
         items(restaurants) { restaurant ->
             RestaurantCard(
                 restaurant = restaurant,
+                photoViewModel = photoViewModel,
                 onClick = { onRestaurantClick(restaurant) }
             )
         }
@@ -273,8 +280,20 @@ private fun RestaurantsList(
 @Composable
 private fun RestaurantCard(
     restaurant: NearbyRestaurant,
+    photoViewModel: RestaurantPhotoViewModel,
     onClick: () -> Unit
 ) {
+    val photoStates by photoViewModel.photoStates.collectAsState()
+    val photoState = photoStates[restaurant.id]
+
+    LaunchedEffect(restaurant.id) {
+        photoViewModel.loadThumbnail(
+            restaurantId = restaurant.id,
+            placeId = restaurant.id,
+            name = restaurant.name
+        )
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -290,21 +309,12 @@ private fun RestaurantCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Restaurant icon
-            Box(
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.size(32.dp)
-                )
-            }
+            SmartRestaurantImage(
+                photoState = photoState,
+                restaurantName = restaurant.name,
+                modifier = Modifier.size(56.dp).clip(RoundedCornerShape(8.dp)),
+                contentScale = ContentScale.Crop
+            )
 
             Spacer(modifier = Modifier.width(16.dp))
 

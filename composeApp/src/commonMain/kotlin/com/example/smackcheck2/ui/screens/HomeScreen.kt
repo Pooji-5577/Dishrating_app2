@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
+import com.example.smackcheck2.ui.components.DishImage
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -220,22 +221,13 @@ fun FeedCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Dish image placeholder
-            Box(
+            DishImage(
+                dishName = item.dishName,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
                     .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    modifier = Modifier.size(64.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-            }
+            )
             
             Spacer(modifier = Modifier.height(12.dp))
             

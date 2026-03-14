@@ -54,7 +54,12 @@ import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.components.LoadingState
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
+import com.example.smackcheck2.ui.components.DishImage
+import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.viewmodel.LocationHomeViewModel
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.layout.ContentScale
 
 /**
  * Enhanced Home Screen with Location-based content
@@ -63,6 +68,7 @@ import com.example.smackcheck2.viewmodel.LocationHomeViewModel
 @Composable
 fun LocationHomeScreen(
     viewModel: LocationHomeViewModel,
+    photoViewModel: RestaurantPhotoViewModel,
     onNavigateToAddDish: () -> Unit,
     onNavigateToProfile: () -> Unit,
     onNavigateToSearch: () -> Unit,
@@ -178,6 +184,7 @@ fun LocationHomeScreen(
                         items(uiState.topRestaurants) { restaurant ->
                             TopRestaurantCard(
                                 restaurant = restaurant,
+                                photoViewModel = photoViewModel,
                                 onClick = { onNavigateToRestaurant(restaurant.id) }
                             )
                         }
@@ -220,6 +227,7 @@ fun LocationHomeScreen(
                 items(uiState.allRestaurants.take(5)) { restaurant ->
                     RestaurantListItem(
                         restaurant = restaurant,
+                        photoViewModel = photoViewModel,
                         onClick = { onNavigateToRestaurant(restaurant.id) },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
@@ -332,9 +340,22 @@ fun SectionHeader(
 @Composable
 fun TopRestaurantCard(
     restaurant: Restaurant,
+    photoViewModel: RestaurantPhotoViewModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val photoStates by photoViewModel.photoStates.collectAsState()
+    val photoState = photoStates[restaurant.id]
+
+    LaunchedEffect(restaurant.id) {
+        photoViewModel.loadThumbnail(
+            restaurantId = restaurant.id,
+            placeId = restaurant.googlePlaceId,
+            name = restaurant.name,
+            city = restaurant.city
+        )
+    }
+
     Card(
         modifier = modifier
             .width(180.dp)
@@ -343,21 +364,12 @@ fun TopRestaurantCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // Image placeholder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-            }
+            SmartRestaurantImage(
+                photoState = photoState,
+                restaurantName = restaurant.name,
+                modifier = Modifier.fillMaxWidth().height(100.dp),
+                contentScale = ContentScale.Crop
+            )
             
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
@@ -409,22 +421,12 @@ fun TopDishCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column {
-            // Image placeholder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    modifier = Modifier.size(40.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
-                )
-            }
-            
+            DishImage(
+                dishName = dish.name,
+                modifier = Modifier.fillMaxWidth().height(100.dp),
+                contentScale = ContentScale.Crop
+            )
+
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     text = dish.name,
@@ -452,9 +454,22 @@ fun TopDishCard(
 @Composable
 fun RestaurantListItem(
     restaurant: Restaurant,
+    photoViewModel: RestaurantPhotoViewModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val photoStates by photoViewModel.photoStates.collectAsState()
+    val photoState = photoStates[restaurant.id]
+
+    LaunchedEffect(restaurant.id) {
+        photoViewModel.loadThumbnail(
+            restaurantId = restaurant.id,
+            placeId = restaurant.googlePlaceId,
+            name = restaurant.name,
+            city = restaurant.city
+        )
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -471,21 +486,12 @@ fun RestaurantListItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Image placeholder
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-            }
+            SmartRestaurantImage(
+                photoState = photoState,
+                restaurantName = restaurant.name,
+                modifier = Modifier.size(60.dp).clip(MaterialTheme.shapes.medium),
+                contentScale = ContentScale.Crop
+            )
             
             Spacer(modifier = Modifier.width(12.dp))
             

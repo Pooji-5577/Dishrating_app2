@@ -12,9 +12,9 @@ import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
 import platform.UIKit.UIApplication
 import platform.UIKit.UIApplicationWillEnterForegroundNotification
-import platform.darwin.NSObject
-import platform.darwin.dispatch_async
-import platform.darwin.dispatch_get_main_queue
+import platform.Foundation.NSDate
+import platform.Foundation.timeIntervalSince1970
+import platform.darwin.NSObjectProtocol
 
 /**
  * iOS implementation of AutoLocationManager
@@ -33,7 +33,7 @@ actual class AutoLocationManager {
     private var lastDetectionTime: Long = 0
     
     private var isObserving = false
-    private var observer: NSObject? = null
+    private var observer: NSObjectProtocol? = null
     
     /**
      * Start observing app lifecycle events for automatic location detection
@@ -92,7 +92,7 @@ actual class AutoLocationManager {
      */
     actual suspend fun checkAndDetectLocation(): Boolean {
         // Check if debounce interval has passed
-        val currentTime = platform.Foundation.NSDate().timeIntervalSince1970.toLong() * 1000
+        val currentTime = (NSDate().timeIntervalSince1970 * 1000).toLong()
         if (currentTime - lastDetectionTime < DEBOUNCE_INTERVAL_MS) {
             val remainingMinutes = ((DEBOUNCE_INTERVAL_MS - (currentTime - lastDetectionTime)) / 60000).toInt()
             println("$TAG: Skipping location detection - debounce active ($remainingMinutes min remaining)")
