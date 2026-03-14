@@ -458,25 +458,30 @@ class DatabaseRepository {
         restaurantId: String,
         rating: Float,
         comment: String,
-        imageUrl: String? = null
-    ): Result<Unit> {
+        imageUrl: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null
+    ): Result<String> {
         return try {
             @OptIn(ExperimentalUuidApi::class)
+            val ratingId = Uuid.random().toString()
             val dto = RatingDto(
-                id = Uuid.random().toString(),
+                id = ratingId,
                 userId = userId,
                 dishId = dishId,
                 restaurantId = restaurantId,
                 rating = rating,
                 comment = comment,
-                imageUrl = imageUrl
+                imageUrl = imageUrl,
+                latitude = latitude,
+                longitude = longitude
             )
             postgrest["ratings"].insert(dto)
 
             // Update restaurant average rating
             updateRestaurantRating(restaurantId)
 
-            Result.success(Unit)
+            Result.success(ratingId)
         } catch (e: Exception) {
             Result.failure(e)
         }

@@ -120,6 +120,14 @@ class SocialFeedViewModel : ViewModel() {
         }
     }
 
+    fun setScrollToRatingId(ratingId: String?) {
+        _uiState.update { it.copy(scrollToRatingId = ratingId) }
+    }
+
+    fun clearScrollTarget() {
+        _uiState.update { it.copy(scrollToRatingId = null, scrollToIndex = null) }
+    }
+
     fun loadFeed() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
@@ -143,11 +151,16 @@ class SocialFeedViewModel : ViewModel() {
 
             result.fold(
                 onSuccess = { feedItems ->
+                    val targetId = _uiState.value.scrollToRatingId
+                    val scrollIndex = if (targetId != null) {
+                        feedItems.indexOfFirst { it.id == targetId }.takeIf { it >= 0 }
+                    } else null
                     _uiState.update {
                         it.copy(
                             feedItems = feedItems,
                             isLoading = false,
-                            isRefreshing = false
+                            isRefreshing = false,
+                            scrollToIndex = scrollIndex
                         )
                     }
                 },

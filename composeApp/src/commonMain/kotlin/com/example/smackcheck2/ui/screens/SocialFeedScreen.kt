@@ -37,7 +37,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,9 +68,18 @@ fun SocialFeedScreen(
     onCommentClick: (String) -> Unit,
     onShareClick: (FeedItem) -> Unit,
     onUserClick: (String) -> Unit,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    onScrollComplete: () -> Unit = {}
 ) {
     val colors = appColors()
+    val listState = rememberLazyListState()
+
+    // Auto-scroll to newly created post
+    LaunchedEffect(uiState.scrollToIndex) {
+        val index = uiState.scrollToIndex ?: return@LaunchedEffect
+        listState.animateScrollToItem(index)
+        onScrollComplete()
+    }
 
     Scaffold(
         containerColor = colors.Background,
@@ -155,6 +166,7 @@ fun SocialFeedScreen(
 
                 else -> {
                     LazyColumn(
+                        state = listState,
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(16.dp)

@@ -34,6 +34,7 @@ import io.kamel.core.config.uriMapper
 import io.kamel.core.config.fileFetcher
 import io.kamel.core.config.fileUrlFetcher
 import io.kamel.image.config.LocalKamelConfig
+import io.kamel.image.config.imageBitmapDecoder
 
 /**
  * Main App composable
@@ -72,6 +73,7 @@ fun App(
             httpUrlFetcher {
                 httpCache(10 * 1024 * 1024)
             }
+            imageBitmapDecoder()
         }
     }
 

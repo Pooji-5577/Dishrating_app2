@@ -481,6 +481,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 }
             }
 
+            // Capture GPS location for the rating
+            LaunchedEffect(Unit) {
+                val location = locationService?.getCurrentLocation()
+                dishRatingViewModel.setRatingLocation(location?.latitude, location?.longitude)
+            }
+
             // Load restaurants when screen opens
             LaunchedEffect(Unit) {
                 val result = databaseRepository.getRestaurants()
@@ -495,12 +501,16 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 imageUri = navigationState.imageUri,
                 restaurants = allRestaurants,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitSuccess = {
+                onSubmitSuccess = { ratingId ->
                     gamificationViewModel.recordAction(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
                         actionLabel = "Dish Rated"
                     )
                     navigationState.popToRoot()
+                    navigationState.navigateToWithArgs(
+                        Screen.SocialFeed,
+                        "ratingId" to ratingId
+                    )
                 }
             )
         }
@@ -525,7 +535,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             val socialFeedState by socialFeedViewModel.uiState.collectAsState()
             val shareService = LocalShareService.current
 
+            // Set scroll target if navigated from rating submission
             LaunchedEffect(Unit) {
+                val scrollToId = navigationState.ratingId
+                if (scrollToId.isNotBlank()) {
+                    socialFeedViewModel.setScrollToRatingId(scrollToId)
+                }
                 socialFeedViewModel.loadFeed()
             }
 
@@ -552,7 +567,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         "userId" to userId
                     )
                 },
-                onRefresh = { socialFeedViewModel.refresh() }
+                onRefresh = { socialFeedViewModel.refresh() },
+                onScrollComplete = { socialFeedViewModel.clearScrollTarget() }
             )
         }
         
@@ -1049,12 +1065,22 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 }
             }
 
+            // Capture GPS location for the rating
+            LaunchedEffect(Unit) {
+                val location = locationService?.getCurrentLocation()
+                dishRatingViewModel.setRatingLocation(location?.latitude, location?.longitude)
+            }
+
             // Navigate to social feed on success (after showing reward for 6 seconds)
             LaunchedEffect(ratingUiState.isSuccess) {
                 if (ratingUiState.isSuccess) {
                     kotlinx.coroutines.delay(6000) // Show XP reward for 6 seconds
+                    val ratingId = ratingUiState.submittedRatingId ?: ""
                     navigationState.popToRoot()
-                    navigationState.navigateTo(Screen.SocialFeed)
+                    navigationState.navigateToWithArgs(
+                        Screen.SocialFeed,
+                        "ratingId" to ratingId
+                    )
                 }
             }
 
@@ -1083,7 +1109,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     dishRatingViewModel.onTagsChange(tags)
                     if (restaurant != null) {
                         dishRatingViewModel.setRestaurant(restaurant)
-                        dishRatingViewModel.submitRating {
+                        dishRatingViewModel.submitRating { _ ->
                             // Success is handled by LaunchedEffect above
                         }
                     }

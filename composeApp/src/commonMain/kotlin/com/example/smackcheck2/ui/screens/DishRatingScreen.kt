@@ -80,7 +80,7 @@ fun DishRatingScreen(
     imageUri: String,
     restaurants: List<Restaurant> = emptyList(),
     onNavigateBack: () -> Unit,
-    onSubmitSuccess: () -> Unit
+    onSubmitSuccess: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -375,7 +375,7 @@ fun DishRatingScreen(
             // Submit button
             Button(
                 onClick = {
-                    viewModel.submitRating(onSubmitSuccess)
+                    viewModel.submitRating { ratingId -> onSubmitSuccess(ratingId) }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

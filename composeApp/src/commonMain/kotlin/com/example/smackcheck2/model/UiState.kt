@@ -82,7 +82,8 @@ data class DishRatingUiState(
     val isSuccess: Boolean = false,
     val errorMessage: String? = null,
     val xpEarned: Int? = null,
-    val showXpNotification: Boolean = false
+    val showXpNotification: Boolean = false,
+    val submittedRatingId: String? = null
 )
 
 /**
@@ -235,7 +236,9 @@ data class SocialFeedUiState(
     val isLoading: Boolean = false,
     val isRefreshing: Boolean = false,
     val filter: FeedFilter = FeedFilter.ALL,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val scrollToRatingId: String? = null,
+    val scrollToIndex: Int? = null
 )
 
 enum class FeedFilter { ALL, FOLLOWING, NEARBY }

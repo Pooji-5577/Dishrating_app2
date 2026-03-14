@@ -29,6 +29,8 @@ class DishRatingViewModel : ViewModel() {
 
     private var restaurantId: String = ""
     private var selectedRestaurant: Restaurant? = null
+    private var ratingLatitude: Double? = null
+    private var ratingLongitude: Double? = null
 
     fun initialize(dishName: String, imageUri: String, restaurantId: String = "") {
         this.restaurantId = restaurantId
@@ -53,6 +55,11 @@ class DishRatingViewModel : ViewModel() {
         this.restaurantId = restaurant.id
     }
 
+    fun setRatingLocation(lat: Double?, lng: Double?) {
+        ratingLatitude = lat
+        ratingLongitude = lng
+    }
+
     fun onRatingChange(rating: Float) {
         _uiState.update { it.copy(rating = rating) }
     }
@@ -65,7 +72,7 @@ class DishRatingViewModel : ViewModel() {
         _uiState.update { it.copy(tags = tags) }
     }
 
-    fun submitRating(onSuccess: () -> Unit) {
+    fun submitRating(onSuccess: (String) -> Unit) {
         val currentState = _uiState.value
         val userId = authRepository.getCurrentUserId()
 
@@ -198,12 +205,14 @@ class DishRatingViewModel : ViewModel() {
                     restaurantId = restaurantId,
                     rating = currentState.rating,
                     comment = currentState.comment,
-                    imageUrl = imageUrl
+                    imageUrl = imageUrl,
+                    latitude = ratingLatitude,
+                    longitude = ratingLongitude
                 )
 
                 ratingResult.fold(
-                    onSuccess = {
-                        println("DishRatingViewModel: ✓ Rating submitted successfully!")
+                    onSuccess = { ratingId ->
+                        println("DishRatingViewModel: ✓ Rating submitted successfully! ratingId=$ratingId")
 
                         // Calculate variable XP rewards
                         // Unified formula: base 10 + photo 5 + comment(>50 chars) 10 + tags * 2
@@ -254,9 +263,9 @@ class DishRatingViewModel : ViewModel() {
                             )
                         }
 
-                        _uiState.update { it.copy(isSubmitting = false, isSuccess = true, xpEarned = totalXp, showXpNotification = true) }
-                        println("DishRatingViewModel: ✓ Complete! Calling onSuccess callback")
-                        onSuccess()
+                        _uiState.update { it.copy(isSubmitting = false, isSuccess = true, xpEarned = totalXp, showXpNotification = true, submittedRatingId = ratingId) }
+                        println("DishRatingViewModel: ✓ Complete! Calling onSuccess callback with ratingId=$ratingId")
+                        onSuccess(ratingId)
                     },
                     onFailure = { error ->
                         println("DishRatingViewModel: ✗ Rating submission failed: ${error.message}")

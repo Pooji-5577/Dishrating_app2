@@ -129,6 +129,12 @@ data class RatingDto(
     val comment: String = "",
     @SerialName("image_url")
     val imageUrl: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val latitude: Double? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val longitude: Double? = null,
     @SerialName("likes_count")
     val likesCount: Int = 0,
     @OptIn(ExperimentalSerializationApi::class)
