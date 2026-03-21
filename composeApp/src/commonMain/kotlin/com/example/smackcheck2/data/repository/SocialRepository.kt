@@ -165,7 +165,7 @@ class SocialRepository {
                         isIn("user_id", followingIds)
                     }
                     order("created_at", Order.DESCENDING)
-                    limit(limit.toLong())
+                    range(offset.toLong(), (offset + limit - 1).toLong())
                 }
                 .decodeList<RatingDto>()
 
@@ -185,7 +185,7 @@ class SocialRepository {
             val ratings = postgrest["ratings"]
                 .select {
                     order("created_at", Order.DESCENDING)
-                    limit(limit.toLong())
+                    range(offset.toLong(), (offset + limit - 1).toLong())
                 }
                 .decodeList<RatingDto>()
 

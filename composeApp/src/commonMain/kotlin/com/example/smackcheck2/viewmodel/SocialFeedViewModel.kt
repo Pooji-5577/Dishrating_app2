@@ -8,7 +8,9 @@ import com.example.smackcheck2.data.repository.RealtimeFeedRepository
 import com.example.smackcheck2.data.repository.FeedUpdate
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.model.FeedFilter
+import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
+import com.example.smackcheck2.notifications.NotificationRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +23,8 @@ class SocialFeedViewModel : ViewModel() {
     private val authRepository = AuthRepository()
     private val databaseRepository = DatabaseRepository()
     private val realtimeFeedRepository = RealtimeFeedRepository()
+
+    private val PAGE_SIZE = 10
 
     private val _uiState = MutableStateFlow(SocialFeedUiState())
     val uiState: StateFlow<SocialFeedUiState> = _uiState.asStateFlow()
@@ -134,24 +138,10 @@ class SocialFeedViewModel : ViewModel() {
 
     fun loadFeed() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, currentOffset = 0, hasMoreItems = true) }
 
             val userId = authRepository.getCurrentUserId()
-
-            val result = when (_uiState.value.filter) {
-                FeedFilter.ALL -> socialRepository.getFeedAll(currentUserId = userId)
-                FeedFilter.FOLLOWING -> {
-                    if (userId != null) {
-                        socialRepository.getFollowingFeed(userId)
-                    } else {
-                        socialRepository.getFeedAll(currentUserId = null)
-                    }
-                }
-                FeedFilter.NEARBY -> {
-                    // For now, same as ALL - will be filtered by location later
-                    socialRepository.getFeedAll(currentUserId = userId)
-                }
-            }
+            val result = fetchPage(offset = 0, userId = userId)
 
             result.fold(
                 onSuccess = { feedItems ->
@@ -164,6 +154,8 @@ class SocialFeedViewModel : ViewModel() {
                             feedItems = feedItems,
                             isLoading = false,
                             isRefreshing = false,
+                            currentOffset = PAGE_SIZE,
+                            hasMoreItems = feedItems.size == PAGE_SIZE,
                             scrollToIndex = scrollIndex
                         )
                     }
@@ -178,6 +170,44 @@ class SocialFeedViewModel : ViewModel() {
                     }
                 }
             )
+        }
+    }
+
+    fun loadMoreFeed() {
+        val state = _uiState.value
+        if (state.isLoadingMore || !state.hasMoreItems || state.isLoading) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingMore = true) }
+            val userId = authRepository.getCurrentUserId()
+            val result = fetchPage(offset = state.currentOffset, userId = userId)
+
+            result.fold(
+                onSuccess = { newItems ->
+                    _uiState.update {
+                        it.copy(
+                            feedItems = it.feedItems + newItems,
+                            isLoadingMore = false,
+                            currentOffset = it.currentOffset + PAGE_SIZE,
+                            hasMoreItems = newItems.size == PAGE_SIZE
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(isLoadingMore = false, errorMessage = error.message) }
+                }
+            )
+        }
+    }
+
+    private suspend fun fetchPage(offset: Int, userId: String?): Result<List<FeedItem>> {
+        return when (_uiState.value.filter) {
+            FeedFilter.ALL -> socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = userId)
+            FeedFilter.FOLLOWING -> {
+                if (userId != null) socialRepository.getFollowingFeed(userId, limit = PAGE_SIZE, offset = offset)
+                else socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = null)
+            }
+            FeedFilter.NEARBY -> socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = userId)
         }
     }
 
@@ -243,6 +273,19 @@ class SocialFeedViewModel : ViewModel() {
             result.fold(
                 onSuccess = { isNowLiked ->
                     println("[DEBUG][SocialFeed] toggleLike SUCCESS: itemId=$itemId, isNowLiked=$isNowLiked")
+                    if (isNowLiked) {
+                        val item = _uiState.value.feedItems.find { it.id == itemId }
+                        if (item != null && item.userId != userId) {
+                            viewModelScope.launch {
+                                NotificationRepository.notifyReviewLiked(
+                                    reviewOwnerId = item.userId,
+                                    likerName = "",
+                                    dishName = item.dishName,
+                                    reviewId = itemId
+                                )
+                            }
+                        }
+                    }
                 },
                 onFailure = { e ->
                     println("[DEBUG][SocialFeed] toggleLike FAILED: itemId=$itemId, error=${e::class.simpleName} - ${e.message}")

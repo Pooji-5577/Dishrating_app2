@@ -60,6 +60,7 @@ import com.example.smackcheck2.ui.screens.NearbyRestaurantsScreen
 import com.example.smackcheck2.ui.screens.RegisterScreen
 import com.example.smackcheck2.ui.screens.RestaurantDetailScreen
 import com.example.smackcheck2.ui.screens.SearchScreen
+import com.example.smackcheck2.ui.screens.PermissionsOnboardingScreen
 import com.example.smackcheck2.ui.screens.SocialFeedScreen
 import com.example.smackcheck2.ui.screens.SplashScreen
 import com.example.smackcheck2.ui.screens.TopDishesScreen
@@ -569,6 +570,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     )
                 },
                 onRefresh = { socialFeedViewModel.refresh() },
+                onLoadMore = { socialFeedViewModel.loadMoreFeed() },
                 onScrollComplete = { socialFeedViewModel.clearScrollTarget() }
             )
         }
@@ -1385,24 +1387,21 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         modifier = Modifier.align(Alignment.TopCenter).zIndex(100f)
     )
     
-    // Automatic location permission request on app startup
+    // Permissions onboarding screen shown on first login (location + camera + notifications)
     if (shouldShowPermissionDialog && isAuthenticated == true) {
-        RequestLocationPermission(
-            onPermissionResult = { granted ->
+        PermissionsOnboardingScreen(
+            onComplete = { locationWasGranted ->
                 shouldShowPermissionDialog = false
-                if (granted) {
-                    // Permission granted - trigger automatic location detection
+                if (locationWasGranted) {
+                    // Location granted - trigger automatic location detection
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
                         try {
                             locationService?.getCurrentLocation()?.let { location ->
-                                // Update the shared location state
                                 SharedLocationState.onLocationDetected(
                                     latitude = location.latitude,
                                     longitude = location.longitude,
                                     city = location.cityName ?: "Unknown"
                                 )
-                                
-                                // Sync to database
                                 val repository = com.example.smackcheck2.data.repository.SocialMapRepository()
                                 repository.updateUserLocation(location.latitude, location.longitude)
                             }
@@ -1412,12 +1411,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     }
                 }
             }
-        ) { requestPermission ->
-            // Automatically trigger permission request
-            LaunchedEffect(Unit) {
-                requestPermission()
-            }
-        }
+        )
     }
     } // end Box
 }

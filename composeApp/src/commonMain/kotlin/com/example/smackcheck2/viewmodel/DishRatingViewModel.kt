@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.StorageRepository
+import com.example.smackcheck2.notifications.NotificationRepository
 import com.example.smackcheck2.model.DishRatingUiState
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.service.AchievementService
@@ -274,6 +275,25 @@ class DishRatingViewModel : ViewModel() {
                         _uiState.update { it.copy(isSubmitting = false, isSuccess = true, xpEarned = totalXp, showXpNotification = true, submittedRatingId = ratingId) }
                         println("DishRatingViewModel: ✓ Complete! Calling onSuccess callback with ratingId=$ratingId")
                         onSuccess(ratingId)
+
+                        // Notify rater of successful submission
+                        viewModelScope.launch {
+                            NotificationRepository.notifyRatingSubmitted(
+                                userId = userId,
+                                dishName = currentState.dishName,
+                                ratingId = ratingId
+                            )
+                        }
+                        // Notify followers of new post
+                        viewModelScope.launch {
+                            NotificationRepository.notifyNewPost(
+                                posterId = userId,
+                                posterName = user.email ?: "",
+                                dishName = currentState.dishName,
+                                restaurantName = selectedRestaurant?.name ?: "",
+                                ratingId = ratingId
+                            )
+                        }
                     },
                     onFailure = { error ->
                         println("DishRatingViewModel: ✗ Rating submission failed: ${error.message}")

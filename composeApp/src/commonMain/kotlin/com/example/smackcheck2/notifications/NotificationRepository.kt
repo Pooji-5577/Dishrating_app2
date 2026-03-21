@@ -173,6 +173,100 @@ object NotificationRepository {
         )
     }
 
+    /**
+     * Notify all followers of a user that they posted a new dish rating.
+     */
+    suspend fun notifyNewPost(
+        posterId: String,
+        posterName: String,
+        dishName: String,
+        restaurantName: String,
+        ratingId: String
+    ): TriggerResult {
+        return try {
+            val followers = client.postgrest["followers"]
+                .select { filter { eq("following_id", posterId) } }
+                .decodeList<FollowerIdDto>()
+
+            if (followers.isEmpty()) return TriggerResult(success = true)
+
+            followers.forEach { follower ->
+                insertNotification(
+                    NotificationInsert(
+                        userId = follower.followerId,
+                        title = "🍽️ New Review!",
+                        body = "$posterName reviewed $dishName at $restaurantName",
+                        eventType = NotificationEventType.NEW_POST.value,
+                        data = mapOf(
+                            "source_id" to "post_${ratingId}_${follower.followerId}",
+                            "screen" to "SocialFeed",
+                            "ratingId" to ratingId
+                        )
+                    )
+                )
+            }
+            TriggerResult(success = true)
+        } catch (e: Exception) {
+            println("Failed to notify new post: ${e.message}")
+            TriggerResult(success = false, error = e.message)
+        }
+    }
+
+    /**
+     * Notify the rater that their dish rating was successfully submitted (self-confirmation).
+     */
+    suspend fun notifyRatingSubmitted(
+        userId: String,
+        dishName: String,
+        ratingId: String
+    ): TriggerResult {
+        return insertNotification(
+            NotificationInsert(
+                userId = userId,
+                title = "✅ Rating Submitted!",
+                body = "Your review of $dishName was posted successfully.",
+                eventType = NotificationEventType.RATING_SUBMITTED.value,
+                data = mapOf(
+                    "source_id" to "rating_confirm_$ratingId",
+                    "screen" to "SocialFeed",
+                    "ratingId" to ratingId
+                )
+            )
+        )
+    }
+
+    /**
+     * Notify the owner of a rating that someone commented on it.
+     * Fetches rating details internally to resolve the owner.
+     */
+    suspend fun notifyCommentOnRating(ratingId: String, commenterId: String): TriggerResult {
+        return try {
+            val rating = client.postgrest["ratings"]
+                .select { filter { eq("id", ratingId) } }
+                .decodeSingleOrNull<RatingBasicDto>()
+                ?: return TriggerResult(success = false, error = "Rating not found")
+
+            if (rating.userId == commenterId) return TriggerResult(success = true)
+
+            insertNotification(
+                NotificationInsert(
+                    userId = rating.userId,
+                    title = "💬 New Comment",
+                    body = "Someone commented on your review",
+                    eventType = NotificationEventType.DISH_COMMENT.value,
+                    data = mapOf(
+                        "source_id" to "comment_${ratingId}_$commenterId",
+                        "screen" to "SocialFeed",
+                        "ratingId" to ratingId
+                    )
+                )
+            )
+        } catch (e: Exception) {
+            println("Failed to notify comment: ${e.message}")
+            TriggerResult(success = false, error = e.message)
+        }
+    }
+
     // ─── Fetch User's Notifications ──────────────────────────────
 
     /**
@@ -318,4 +412,17 @@ object NotificationRepository {
 private data class ProfilePushToken(
     @kotlinx.serialization.SerialName("push_token")
     val pushToken: String? = null
+)
+
+@kotlinx.serialization.Serializable
+private data class FollowerIdDto(
+    @kotlinx.serialization.SerialName("follower_id")
+    val followerId: String
+)
+
+@kotlinx.serialization.Serializable
+private data class RatingBasicDto(
+    val id: String = "",
+    @kotlinx.serialization.SerialName("user_id") val userId: String = "",
+    @kotlinx.serialization.SerialName("dish_id") val dishId: String = ""
 )

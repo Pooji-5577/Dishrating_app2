@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -48,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.FeedFilter
@@ -70,6 +72,7 @@ fun SocialFeedScreen(
     onShareClick: (FeedItem) -> Unit,
     onUserClick: (String) -> Unit,
     onRefresh: () -> Unit,
+    onLoadMore: () -> Unit = {},
     onScrollComplete: () -> Unit = {}
 ) {
     val colors = appColors()
@@ -80,6 +83,18 @@ fun SocialFeedScreen(
         val index = uiState.scrollToIndex ?: return@LaunchedEffect
         listState.animateScrollToItem(index)
         onScrollComplete()
+    }
+
+    // Trigger load-more when within 3 items of the bottom
+    val shouldLoadMore = remember {
+        derivedStateOf {
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = listState.layoutInfo.totalItemsCount
+            totalItems > 0 && lastVisible >= totalItems - 3
+        }
+    }
+    LaunchedEffect(shouldLoadMore.value) {
+        if (shouldLoadMore.value) onLoadMore()
     }
 
     Scaffold(
@@ -175,6 +190,30 @@ fun SocialFeedScreen(
                                 onShareClick = { onShareClick(item) },
                                 onUserClick = { onUserClick(item.userId) }
                             )
+                        }
+                        if (uiState.isLoadingMore) {
+                            item(key = "loading_more") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                                }
+                            }
+                        } else if (!uiState.hasMoreItems) {
+                            item(key = "end_of_feed") {
+                                Text(
+                                    text = "You're all caught up!",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    textAlign = TextAlign.Center,
+                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                    color = colors.TextSecondary
+                                )
+                            }
                         }
                     }
                 }

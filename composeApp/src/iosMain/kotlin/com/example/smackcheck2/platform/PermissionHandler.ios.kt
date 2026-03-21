@@ -19,6 +19,10 @@ import platform.CoreLocation.CLLocationManagerDelegateProtocol
 import platform.CoreLocation.kCLAuthorizationStatusAuthorizedAlways
 import platform.CoreLocation.kCLAuthorizationStatusAuthorizedWhenInUse
 import platform.CoreLocation.kCLAuthorizationStatusNotDetermined
+import platform.UserNotifications.UNAuthorizationOptionAlert
+import platform.UserNotifications.UNAuthorizationOptionBadge
+import platform.UserNotifications.UNAuthorizationOptionSound
+import platform.UserNotifications.UNUserNotificationCenter
 import platform.darwin.NSObject
 import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
@@ -128,6 +132,34 @@ actual fun RequestCameraPermission(
                 // Permission was previously denied or restricted
                 onPermissionResult(false)
             }
+        }
+    }
+}
+
+/**
+ * Composable for requesting notification permission on iOS.
+ */
+@OptIn(ExperimentalForeignApi::class)
+@Composable
+actual fun RequestNotificationPermission(
+    onPermissionResult: (Boolean) -> Unit,
+    content: @Composable (requestPermission: () -> Unit) -> Unit
+) {
+    var requested by remember { mutableStateOf(false) }
+
+    content {
+        if (!requested) {
+            requested = true
+            UNUserNotificationCenter.currentNotificationCenter()
+                .requestAuthorizationWithOptions(
+                    options = UNAuthorizationOptionAlert or
+                              UNAuthorizationOptionBadge or
+                              UNAuthorizationOptionSound
+                ) { granted, _ ->
+                    dispatch_async(dispatch_get_main_queue()) {
+                        onPermissionResult(granted)
+                    }
+                }
         }
     }
 }

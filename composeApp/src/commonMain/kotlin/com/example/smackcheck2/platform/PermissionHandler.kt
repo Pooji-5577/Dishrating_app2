@@ -29,3 +29,12 @@ expect fun RequestCameraPermission(
     onPermissionResult: (Boolean) -> Unit,
     content: @Composable (requestPermission: () -> Unit) -> Unit
 )
+
+/**
+ * Expected composable for requesting notification permission
+ */
+@Composable
+expect fun RequestNotificationPermission(
+    onPermissionResult: (Boolean) -> Unit,
+    content: @Composable (requestPermission: () -> Unit) -> Unit
+)
