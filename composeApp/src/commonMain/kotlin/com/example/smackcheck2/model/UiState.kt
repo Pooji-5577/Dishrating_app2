@@ -78,6 +78,7 @@ data class DishRatingUiState(
     val rating: Float = 0f,
     val comment: String = "",
     val tags: List<String> = emptyList(),
+    val price: String = "",
     val isSubmitting: Boolean = false,
     val isSuccess: Boolean = false,
     val errorMessage: String? = null,

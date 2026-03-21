@@ -460,7 +460,8 @@ class DatabaseRepository {
         comment: String,
         imageUrl: String? = null,
         latitude: Double? = null,
-        longitude: Double? = null
+        longitude: Double? = null,
+        price: Double? = null
     ): Result<String> {
         return try {
             @OptIn(ExperimentalUuidApi::class)
@@ -474,7 +475,8 @@ class DatabaseRepository {
                 comment = comment,
                 imageUrl = imageUrl,
                 latitude = latitude,
-                longitude = longitude
+                longitude = longitude,
+                price = price
             )
             postgrest["ratings"].insert(dto)
 

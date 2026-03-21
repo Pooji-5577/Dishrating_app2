@@ -21,8 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -336,6 +339,26 @@ fun DishRatingScreen(
                     .height(120.dp),
                 shape = TextFieldShape,
                 maxLines = 4
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Price field
+            OutlinedTextField(
+                value = uiState.price,
+                onValueChange = viewModel::onPriceChange,
+                label = { Text("Price paid (optional)") },
+                placeholder = { Text("e.g. 250") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.AttachMoney,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = TextFieldShape,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
             )
 
             Spacer(modifier = Modifier.height(16.dp))

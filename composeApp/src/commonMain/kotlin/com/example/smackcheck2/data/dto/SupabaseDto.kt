@@ -135,6 +135,9 @@ data class RatingDto(
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val longitude: Double? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val price: Double? = null,
     @SerialName("likes_count")
     val likesCount: Int = 0,
     @OptIn(ExperimentalSerializationApi::class)

@@ -73,6 +73,13 @@ class DishRatingViewModel : ViewModel() {
         _uiState.update { it.copy(tags = tags) }
     }
 
+    fun onPriceChange(price: String) {
+        // Only allow digits and a single decimal point
+        val filtered = price.filter { it.isDigit() || it == '.' }
+            .let { if (it.count { c -> c == '.' } > 1) it.dropLast(1) else it }
+        _uiState.update { it.copy(price = filtered) }
+    }
+
     fun submitRating(onSuccess: (String) -> Unit) {
         val currentState = _uiState.value
 
@@ -216,7 +223,8 @@ class DishRatingViewModel : ViewModel() {
                     comment = currentState.comment,
                     imageUrl = imageUrl,
                     latitude = ratingLatitude,
-                    longitude = ratingLongitude
+                    longitude = ratingLongitude,
+                    price = currentState.price.toDoubleOrNull()
                 )
 
                 ratingResult.fold(
