@@ -313,6 +313,14 @@ private fun getNotificationIcon(eventType: NotificationEventType?): Notification
             icon = Icons.Filled.LocalFireDepartment,
             backgroundColor = Color(0xFFFF6B35) // SmackCheck brand
         )
+        NotificationEventType.NEW_POST -> NotificationIconData(
+            icon = Icons.Filled.Stars,
+            backgroundColor = Color(0xFF9C27B0) // Purple
+        )
+        NotificationEventType.RATING_SUBMITTED -> NotificationIconData(
+            icon = Icons.Filled.CheckCircle,
+            backgroundColor = Color(0xFF4CAF50) // Green
+        )
         null -> NotificationIconData(
             icon = Icons.Filled.Notifications,
             backgroundColor = Color(0xFF9E9E9E) // Grey

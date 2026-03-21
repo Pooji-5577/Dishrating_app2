@@ -1,7 +1,9 @@
 package com.example.smackcheck2.data.dto
 
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.EncodeDefault
 
 /**
  * User profile DTO for Supabase
@@ -53,11 +55,15 @@ data class BadgeDto(
  */
 @Serializable
 data class UserBadgeDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("user_id")
     val userId: String,
     @SerialName("badge_id")
     val badgeId: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("earned_at")
     val earnedAt: String? = null
 )
@@ -68,6 +74,8 @@ data class UserBadgeDto(
  */
 @Serializable
 data class RestaurantDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     val name: String,
     val city: String,
@@ -94,6 +102,8 @@ data class RestaurantDto(
  */
 @Serializable
 data class DishDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     val name: String,
     @SerialName("image_url")
@@ -110,6 +120,8 @@ data class DishDto(
  */
 @Serializable
 data class RatingDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("user_id")
     val userId: String,
@@ -121,8 +133,19 @@ data class RatingDto(
     val comment: String = "",
     @SerialName("image_url")
     val imageUrl: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val latitude: Double? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val longitude: Double? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val price: Double? = null,
     @SerialName("likes_count")
     val likesCount: Int = 0,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("created_at")
     val createdAt: String? = null
 )
@@ -133,11 +156,15 @@ data class RatingDto(
  */
 @Serializable
 data class LikeDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("user_id")
     val userId: String,
     @SerialName("rating_id")
     val ratingId: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("created_at")
     val createdAt: String? = null
 )
@@ -176,11 +203,15 @@ data class FeedItemDto(
  */
 @Serializable
 data class FollowerDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("follower_id")
     val followerId: String,
     @SerialName("following_id")
     val followingId: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("created_at")
     val createdAt: String? = null
 )
@@ -191,6 +222,8 @@ data class FollowerDto(
  */
 @Serializable
 data class CommentDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("rating_id")
     val ratingId: String,
@@ -199,8 +232,12 @@ data class CommentDto(
     @SerialName("parent_comment_id")
     val parentCommentId: String? = null,
     val content: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("created_at")
     val createdAt: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("updated_at")
     val updatedAt: String? = null
 )
@@ -211,6 +248,8 @@ data class CommentDto(
  */
 @Serializable
 data class NotificationDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("user_id")
     val userId: String,
@@ -220,6 +259,8 @@ data class NotificationDto(
     val data: String = "{}",
     @SerialName("is_read")
     val isRead: Boolean = false,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("created_at")
     val createdAt: String? = null
 )
@@ -230,6 +271,8 @@ data class NotificationDto(
  */
 @Serializable
 data class RestaurantVisitDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("user_id")
     val userId: String,
@@ -251,6 +294,8 @@ data class RestaurantVisitDto(
  */
 @Serializable
 data class RatingImageDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     @SerialName("rating_id")
     val ratingId: String,
@@ -258,6 +303,8 @@ data class RatingImageDto(
     val imageUrl: String,
     @SerialName("sort_order")
     val sortOrder: Int = 0,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("created_at")
     val createdAt: String? = null
 )

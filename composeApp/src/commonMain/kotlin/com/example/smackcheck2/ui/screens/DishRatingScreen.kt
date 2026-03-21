@@ -21,8 +21,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Store
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -80,7 +83,7 @@ fun DishRatingScreen(
     imageUri: String,
     restaurants: List<Restaurant> = emptyList(),
     onNavigateBack: () -> Unit,
-    onSubmitSuccess: () -> Unit
+    onSubmitSuccess: (String) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -340,6 +343,26 @@ fun DishRatingScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // Price field
+            OutlinedTextField(
+                value = uiState.price,
+                onValueChange = viewModel::onPriceChange,
+                label = { Text("Price paid (optional)") },
+                placeholder = { Text("e.g. 250") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.AttachMoney,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = TextFieldShape,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // XP Preview
             if (uiState.rating > 0f) {
                 Card(
@@ -375,7 +398,7 @@ fun DishRatingScreen(
             // Submit button
             Button(
                 onClick = {
-                    viewModel.submitRating(onSubmitSuccess)
+                    viewModel.submitRating { ratingId -> onSubmitSuccess(ratingId) }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

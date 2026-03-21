@@ -38,6 +38,7 @@ class SocialMapViewModel(
 
     init {
         loadCurrentUserProfile()
+        loadNearbyUsers() // Load all world posts immediately, no GPS needed
     }
 
     /**
@@ -123,36 +124,29 @@ class SocialMapViewModel(
      * Load nearby users with dish posts
      */
     fun loadNearbyUsers() {
-        val state = _uiState.value
-        val lat = state.currentLatitude ?: return
-        val lng = state.currentLongitude ?: return
-
         viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true) }
 
-            // Try PostGIS query first, falls back to Haversine
-            repository.getNearbyDishPostsPostGIS(
-                userLat = lat,
-                userLng = lng,
-                radiusMeters = state.radiusMeters,
-                limit = 50
-            ).onSuccess { users ->
-                _uiState.update { currentState ->
-                    currentState.copy(
+            // Load all posts worldwide, each placed at the restaurant's coordinates
+            repository.getAllDishPosts(limit = 500)
+                .onSuccess { posts ->
+                    _uiState.update { currentState ->
+                        currentState.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            nearbyUsers = posts,
+                            lastRefreshTime = Clock.System.now().toEpochMilliseconds(),
+                            errorMessage = null
+                        )
+                    }
+                }
+                .onFailure { error ->
+                    _uiState.update { it.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        nearbyUsers = users,
-                        lastRefreshTime = Clock.System.now().toEpochMilliseconds(),
-                        errorMessage = null
-                    )
+                        errorMessage = "Failed to load dish posts: ${error.message}"
+                    ) }
                 }
-            }.onFailure { error ->
-                _uiState.update { it.copy(
-                    isLoading = false,
-                    isRefreshing = false,
-                    errorMessage = "Failed to load nearby users: ${error.message}"
-                ) }
-            }
         }
     }
 

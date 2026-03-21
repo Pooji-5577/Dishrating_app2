@@ -8,7 +8,9 @@ import com.example.smackcheck2.data.repository.RealtimeFeedRepository
 import com.example.smackcheck2.data.repository.FeedUpdate
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.model.FeedFilter
+import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
+import com.example.smackcheck2.notifications.NotificationRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,6 +23,8 @@ class SocialFeedViewModel : ViewModel() {
     private val authRepository = AuthRepository()
     private val databaseRepository = DatabaseRepository()
     private val realtimeFeedRepository = RealtimeFeedRepository()
+
+    private val PAGE_SIZE = 10
 
     private val _uiState = MutableStateFlow(SocialFeedUiState())
     val uiState: StateFlow<SocialFeedUiState> = _uiState.asStateFlow()
@@ -73,30 +77,34 @@ class SocialFeedViewModel : ViewModel() {
                     state.copy(feedItems = state.feedItems.filter { it.id != update.ratingId })
                 }
                 is FeedUpdate.LikeAdded -> {
-                    // Update like count for the post
-                    val userId = authRepository.getCurrentUserId()
-                    val updatedItems = state.feedItems.map { item ->
-                        if (item.id == update.ratingId) {
-                            item.copy(
-                                likesCount = item.likesCount + 1,
-                                isLiked = if (update.userId == userId) true else item.isLiked
-                            )
-                        } else item
+                    val currentUserId = authRepository.getCurrentUserId()
+                    // Skip count update for own likes — already handled by optimistic update in toggleLike()
+                    if (update.userId == currentUserId) {
+                        println("[DEBUG][SocialFeed] Ignoring own LikeAdded real-time event (already optimistic)")
+                        state
+                    } else {
+                        val updatedItems = state.feedItems.map { item ->
+                            if (item.id == update.ratingId) {
+                                item.copy(likesCount = item.likesCount + 1)
+                            } else item
+                        }
+                        state.copy(feedItems = updatedItems)
                     }
-                    state.copy(feedItems = updatedItems)
                 }
                 is FeedUpdate.LikeRemoved -> {
-                    // Update like count for the post
-                    val userId = authRepository.getCurrentUserId()
-                    val updatedItems = state.feedItems.map { item ->
-                        if (item.id == update.ratingId) {
-                            item.copy(
-                                likesCount = maxOf(0, item.likesCount - 1),
-                                isLiked = if (update.userId == userId) false else item.isLiked
-                            )
-                        } else item
+                    val currentUserId = authRepository.getCurrentUserId()
+                    // Skip count update for own unlikes — already handled by optimistic update in toggleLike()
+                    if (update.userId == currentUserId) {
+                        println("[DEBUG][SocialFeed] Ignoring own LikeRemoved real-time event (already optimistic)")
+                        state
+                    } else {
+                        val updatedItems = state.feedItems.map { item ->
+                            if (item.id == update.ratingId) {
+                                item.copy(likesCount = maxOf(0, item.likesCount - 1))
+                            } else item
+                        }
+                        state.copy(feedItems = updatedItems)
                     }
-                    state.copy(feedItems = updatedItems)
                 }
                 is FeedUpdate.CommentAdded -> {
                     // Update comment count for the post
@@ -120,34 +128,35 @@ class SocialFeedViewModel : ViewModel() {
         }
     }
 
+    fun setScrollToRatingId(ratingId: String?) {
+        _uiState.update { it.copy(scrollToRatingId = ratingId) }
+    }
+
+    fun clearScrollTarget() {
+        _uiState.update { it.copy(scrollToRatingId = null, scrollToIndex = null) }
+    }
+
     fun loadFeed() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null, currentOffset = 0, hasMoreItems = true) }
 
             val userId = authRepository.getCurrentUserId()
-
-            val result = when (_uiState.value.filter) {
-                FeedFilter.ALL -> socialRepository.getFeedAll(currentUserId = userId)
-                FeedFilter.FOLLOWING -> {
-                    if (userId != null) {
-                        socialRepository.getFollowingFeed(userId)
-                    } else {
-                        socialRepository.getFeedAll(currentUserId = null)
-                    }
-                }
-                FeedFilter.NEARBY -> {
-                    // For now, same as ALL - will be filtered by location later
-                    socialRepository.getFeedAll(currentUserId = userId)
-                }
-            }
+            val result = fetchPage(offset = 0, userId = userId)
 
             result.fold(
                 onSuccess = { feedItems ->
+                    val targetId = _uiState.value.scrollToRatingId
+                    val scrollIndex = if (targetId != null) {
+                        feedItems.indexOfFirst { it.id == targetId }.takeIf { it >= 0 }
+                    } else null
                     _uiState.update {
                         it.copy(
                             feedItems = feedItems,
                             isLoading = false,
-                            isRefreshing = false
+                            isRefreshing = false,
+                            currentOffset = PAGE_SIZE,
+                            hasMoreItems = feedItems.size == PAGE_SIZE,
+                            scrollToIndex = scrollIndex
                         )
                     }
                 },
@@ -164,6 +173,44 @@ class SocialFeedViewModel : ViewModel() {
         }
     }
 
+    fun loadMoreFeed() {
+        val state = _uiState.value
+        if (state.isLoadingMore || !state.hasMoreItems || state.isLoading) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingMore = true) }
+            val userId = authRepository.getCurrentUserId()
+            val result = fetchPage(offset = state.currentOffset, userId = userId)
+
+            result.fold(
+                onSuccess = { newItems ->
+                    _uiState.update {
+                        it.copy(
+                            feedItems = it.feedItems + newItems,
+                            isLoadingMore = false,
+                            currentOffset = it.currentOffset + PAGE_SIZE,
+                            hasMoreItems = newItems.size == PAGE_SIZE
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(isLoadingMore = false, errorMessage = error.message) }
+                }
+            )
+        }
+    }
+
+    private suspend fun fetchPage(offset: Int, userId: String?): Result<List<FeedItem>> {
+        return when (_uiState.value.filter) {
+            FeedFilter.ALL -> socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = userId)
+            FeedFilter.FOLLOWING -> {
+                if (userId != null) socialRepository.getFollowingFeed(userId, limit = PAGE_SIZE, offset = offset)
+                else socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = null)
+            }
+            FeedFilter.NEARBY -> socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = userId)
+        }
+    }
+
     fun setFilter(filter: FeedFilter) {
         _uiState.update { it.copy(filter = filter) }
         loadFeed()
@@ -175,11 +222,16 @@ class SocialFeedViewModel : ViewModel() {
     }
 
     fun toggleLike(itemId: String) {
-        val userId = authRepository.getCurrentUserId() ?: return
+        val userId = authRepository.getCurrentUserId()
+        if (userId == null) {
+            println("[DEBUG][SocialFeed] toggleLike: No user ID — user not logged in")
+            return
+        }
         // Capture pre-toggle state so we can revert on failure
         val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
+        println("[DEBUG][SocialFeed] toggleLike: itemId=$itemId, wasLiked=$wasLiked, userId=$userId")
 
-        // Optimistic update - will be confirmed by real-time subscription
+        // Optimistic update
         _uiState.update { state ->
             val updatedItems = state.feedItems.map { item ->
                 if (item.id == itemId) {
@@ -193,14 +245,51 @@ class SocialFeedViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
+            // Ensure user profile exists
+            val user = authRepository.getCurrentUser()
+            if (user == null) {
+                println("SocialFeedViewModel: User not signed in, cannot toggle like")
+                return@launch
+            }
+            val userId = user.id
+            
+            // Capture pre-toggle state so we can revert on failure
+            val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
+
+            // Optimistic update - will be confirmed by real-time subscription
+            _uiState.update { state ->
+                val updatedItems = state.feedItems.map { item ->
+                    if (item.id == itemId) {
+                        item.copy(
+                            isLiked = !wasLiked,
+                            likesCount = if (!wasLiked) item.likesCount + 1 else (item.likesCount - 1).coerceAtLeast(0)
+                        )
+                    } else item
+                }
+                state.copy(feedItems = updatedItems)
+            }
+
             val result = realtimeFeedRepository.toggleLike(itemId, userId)
             result.fold(
                 onSuccess = { isNowLiked ->
-                    // Real-time subscription will handle the update, but verify consistency
-                    println("SocialFeedViewModel: Like toggled successfully for $itemId, isLiked=$isNowLiked")
+                    println("[DEBUG][SocialFeed] toggleLike SUCCESS: itemId=$itemId, isNowLiked=$isNowLiked")
+                    if (isNowLiked) {
+                        val item = _uiState.value.feedItems.find { it.id == itemId }
+                        if (item != null && item.userId != userId) {
+                            viewModelScope.launch {
+                                NotificationRepository.notifyReviewLiked(
+                                    reviewOwnerId = item.userId,
+                                    likerName = "",
+                                    dishName = item.dishName,
+                                    reviewId = itemId
+                                )
+                            }
+                        }
+                    }
                 },
                 onFailure = { e ->
-                    println("SocialFeedViewModel: toggleLike failed for $itemId: ${e.message}")
+                    println("[DEBUG][SocialFeed] toggleLike FAILED: itemId=$itemId, error=${e::class.simpleName} - ${e.message}")
+                    e.printStackTrace()
                     // Revert optimistic UI toggle
                     _uiState.update { state ->
                         val revertedItems = state.feedItems.map { item ->

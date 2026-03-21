@@ -24,6 +24,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -257,11 +259,15 @@ fun LargeDishCard(
  */
 @Composable
 fun RestaurantCardDark(
+    restaurantId: String = "",
     restaurantName: String,
     cuisine: String,
     rating: Float,
     reviewCount: Int,
     deliveryTime: String,
+    googlePlaceId: String? = null,
+    city: String = "",
+    photoViewModel: com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel? = null,
     isFavorite: Boolean,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
@@ -269,6 +275,20 @@ fun RestaurantCardDark(
     photoUrl: String? = null,  // Google Places photo URL
     photoState: PhotoState? = null
 ) {
+    val photoStatesMap = photoViewModel?.photoStates?.collectAsState()
+    val photoState = photoStatesMap?.value?.get(restaurantId)
+
+    if (photoViewModel != null && restaurantId.isNotEmpty()) {
+        LaunchedEffect(restaurantId) {
+            photoViewModel.loadThumbnail(
+                restaurantId = restaurantId,
+                placeId = googlePlaceId,
+                name = restaurantName,
+                city = city
+            )
+        }
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -293,7 +313,8 @@ fun RestaurantCardDark(
                         SmartRestaurantImage(
                             photoState = photoState,
                             restaurantName = restaurantName,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
                         )
                     }
 

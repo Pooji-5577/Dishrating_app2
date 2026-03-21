@@ -10,6 +10,8 @@ import io.github.jan.supabase.realtime.channel
 import io.github.jan.supabase.realtime.postgresChangeFlow
 import io.github.jan.supabase.realtime.realtime
 import io.github.jan.supabase.realtime.PostgresAction
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -439,6 +441,7 @@ class RealtimeFeedRepository {
      */
     suspend fun toggleLike(ratingId: String, userId: String): Result<Boolean> {
         return try {
+            println("[DEBUG][RealtimeRepo] toggleLike: ratingId=$ratingId, userId=$userId")
             // Check if already liked
             val existingLike = try {
                 postgrest["likes"]
@@ -449,10 +452,14 @@ class RealtimeFeedRepository {
                         }
                     }
                     .decodeSingleOrNull<LikeDto>()
-            } catch (e: Exception) { null }
+            } catch (e: Exception) {
+                println("[DEBUG][RealtimeRepo] toggleLike: Query existing like failed: ${e::class.simpleName} - ${e.message}")
+                null
+            }
 
             if (existingLike != null) {
                 // Unlike — remove from likes table
+                println("[DEBUG][RealtimeRepo] toggleLike: Existing like found (id=${existingLike.id}), deleting...")
                 postgrest["likes"].delete {
                     filter {
                         eq("user_id", userId)
@@ -461,16 +468,22 @@ class RealtimeFeedRepository {
                 }
                 // Decrement likes_count on ratings table so count persists across reloads
                 updateLikesCount(ratingId, delta = -1)
+                println("[DEBUG][RealtimeRepo] toggleLike: DELETE success — unliked")
                 Result.success(false)
             } else {
-                // Like — insert into likes table
-                val dto = LikeDto(userId = userId, ratingId = ratingId)
+                // Like — generate UUID for id since the DB column has no default
+                println("[DEBUG][RealtimeRepo] toggleLike: No existing like, inserting...")
+                @OptIn(ExperimentalUuidApi::class)
+                val dto = LikeDto(id = Uuid.random().toString(), userId = userId, ratingId = ratingId)
                 postgrest["likes"].insert(dto)
                 // Increment likes_count on ratings table so count persists across reloads
                 updateLikesCount(ratingId, delta = 1)
+                println("[DEBUG][RealtimeRepo] toggleLike: INSERT success — liked")
                 Result.success(true)
             }
         } catch (e: Exception) {
+            println("[DEBUG][RealtimeRepo] toggleLike FAILED: ${e::class.simpleName} - ${e.message}")
+            e.printStackTrace()
             println("RealtimeFeed: toggleLike error: ${e.message}")
             Result.failure(e)
         }

@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,6 +14,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -87,15 +88,41 @@ fun NetworkImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     placeholderIcon: ImageVector = Icons.Filled.Restaurant,
-    fallbackUrl: String? = null
+    fallbackUrl: String? = null,
+    showGradientOnFailure: Boolean = true
 ) {
     val colors = appColors()
+
+    // Validate URL before attempting to load
+    if (imageUrl.isBlank()) {
+        println("[DEBUG][NetworkImage] Empty URL for '$contentDescription'")
+        Box(
+            modifier = modifier
+                .background(
+                    if (showGradientOnFailure)
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF8B4513),
+                                Color(0xFFD2691E),
+                                Color(0xFFA0522D)
+                            )
+                        )
+                    else
+                        Brush.linearGradient(
+                            colors = listOf(colors.Surface, colors.Surface)
+                        )
+                ),
+            contentAlignment = Alignment.Center
+        ){}
+        return
+    }
+
     // Track whether the primary URL failed so we can retry with fallbackUrl
     var useFallback by remember(imageUrl) { mutableStateOf(false) }
     val urlToLoad = if (useFallback && fallbackUrl != null) fallbackUrl else imageUrl
 
     KamelImage(
-        resource = asyncPainterResource(urlToLoad),
+        resource = { asyncPainterResource(data = urlToLoad) },
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
@@ -112,16 +139,32 @@ fun NetworkImage(
                 )
             }
         },
-        onFailure = {
+        onFailure = { exception ->
+            println("[DEBUG][NetworkImage] FAILED to load '$urlToLoad' for '$contentDescription'")
+            println("[DEBUG][NetworkImage] Error: ${exception::class.simpleName} - ${exception.message}")
+            println("[DEBUG][NetworkImage] Cause: ${exception.cause?.message}")
             if (!useFallback && fallbackUrl != null) {
-                // Primary URL failed — retry once with the Unsplash fallback
+                // Primary URL failed — retry once with the fallback
                 useFallback = true
             } else {
-                // No fallback available (or fallback also failed) — show placeholder icon
+                // No fallback available (or fallback also failed)
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(colors.SurfaceVariant),
+                        .background(
+                            if (showGradientOnFailure)
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        Color(0xFF8B4513),
+                                        Color(0xFFD2691E),
+                                        Color(0xFFA0522D)
+                                    )
+                                )
+                            else
+                                Brush.linearGradient(
+                                    colors = listOf(colors.Surface, colors.Surface)
+                                )
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(

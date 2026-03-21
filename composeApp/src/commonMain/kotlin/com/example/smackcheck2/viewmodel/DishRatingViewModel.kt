@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.StorageRepository
+import com.example.smackcheck2.notifications.NotificationRepository
 import com.example.smackcheck2.model.DishRatingUiState
+import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.service.AchievementService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +29,9 @@ class DishRatingViewModel : ViewModel() {
     val uiState: StateFlow<DishRatingUiState> = _uiState.asStateFlow()
 
     private var restaurantId: String = ""
+    private var selectedRestaurant: Restaurant? = null
+    private var ratingLatitude: Double? = null
+    private var ratingLongitude: Double? = null
 
     fun initialize(dishName: String, imageUri: String, restaurantId: String = "") {
         this.restaurantId = restaurantId
@@ -46,6 +51,16 @@ class DishRatingViewModel : ViewModel() {
         this.restaurantId = id
     }
 
+    fun setRestaurant(restaurant: Restaurant) {
+        this.selectedRestaurant = restaurant
+        this.restaurantId = restaurant.id
+    }
+
+    fun setRatingLocation(lat: Double?, lng: Double?) {
+        ratingLatitude = lat
+        ratingLongitude = lng
+    }
+
     fun onRatingChange(rating: Float) {
         _uiState.update { it.copy(rating = rating) }
     }
@@ -58,17 +73,17 @@ class DishRatingViewModel : ViewModel() {
         _uiState.update { it.copy(tags = tags) }
     }
 
-    fun submitRating(onSuccess: () -> Unit) {
+    fun onPriceChange(price: String) {
+        // Only allow digits and a single decimal point
+        val filtered = price.filter { it.isDigit() || it == '.' }
+            .let { if (it.count { c -> c == '.' } > 1) it.dropLast(1) else it }
+        _uiState.update { it.copy(price = filtered) }
+    }
+
+    fun submitRating(onSuccess: (String) -> Unit) {
         val currentState = _uiState.value
-        val userId = authRepository.getCurrentUserId()
 
-        println("DishRatingViewModel: Starting submitRating - userId=$userId, rating=${currentState.rating}, restaurantId=$restaurantId")
-
-        if (userId == null) {
-            println("DishRatingViewModel: ✗ User not signed in")
-            _uiState.update { it.copy(errorMessage = "Please sign in to submit a rating") }
-            return
-        }
+        println("DishRatingViewModel: Starting submitRating - rating=${currentState.rating}, restaurantId=$restaurantId")
 
         if (currentState.rating == 0f) {
             println("DishRatingViewModel: ✗ No rating provided")
@@ -84,13 +99,56 @@ class DishRatingViewModel : ViewModel() {
 
         viewModelScope.launch {
             _uiState.update { it.copy(isSubmitting = true, errorMessage = null) }
+            
+            // Ensure user profile exists before attempting to rate
+            // This handles users who signed up but profile creation failed or was skipped
+            println("DishRatingViewModel: Ensuring user profile exists...")
+            try {
+                val user = authRepository.getCurrentUser()
+                if (user == null) {
+                    println("DishRatingViewModel: ✗ Failed to get/create user profile")
+                    _uiState.update { 
+                        it.copy(
+                            isSubmitting = false, 
+                            errorMessage = "Failed to verify user profile. Please try signing out and back in."
+                        ) 
+                    }
+                    return@launch
+                }
+                println("DishRatingViewModel: ✓ User profile verified: ${user.id}")
+            } catch (e: Exception) {
+                println("DishRatingViewModel: ✗ Error ensuring profile: ${e.message}")
+                _uiState.update { 
+                    it.copy(
+                        isSubmitting = false, 
+                        errorMessage = "Failed to verify user profile: ${e.message}"
+                    ) 
+                }
+                return@launch
+            }
+            
             println("DishRatingViewModel: Validation passed, starting submission...")
+
+            // Ensure user profile exists in database
+            val user = authRepository.getCurrentUser()
+            if (user == null) {
+                println("DishRatingViewModel: ✗ User not signed in")
+                _uiState.update { 
+                    it.copy(
+                        isSubmitting = false,
+                        errorMessage = "Please sign in to submit a rating"
+                    ) 
+                }
+                return@launch
+            }
+            val userId = user.id
+            println("DishRatingViewModel: ✓ User profile confirmed - userId=$userId")
 
             try {
                 // Upload image if available
                 var imageUrl: String? = null
                 if (currentState.imageBytes == null) {
-                    println("DishRatingViewModel: ⚠ No imageBytes — photo will NOT be uploaded")
+                    println("DishRatingViewModel: ⚠ No imageBytes — photo will NOT be uploaded (imageUri=${currentState.imageUri})")
                 } else {
                     val bytes = currentState.imageBytes
                     println("DishRatingViewModel: Uploading image (${bytes.size} bytes)...")
@@ -107,6 +165,29 @@ class DishRatingViewModel : ViewModel() {
                         onFailure = { error ->
                             println("DishRatingViewModel: ✗ Image upload FAILED: ${error.message}")
                             // Don't block the rating — proceed without photo
+                        }
+                    )
+                }
+
+                // Ensure the restaurant exists in DB (e.g. if selected from Google Places)
+                val restaurant = selectedRestaurant
+                if (restaurant != null) {
+                    println("DishRatingViewModel: Ensuring restaurant '${restaurant.name}' (${restaurant.id}) exists in DB...")
+                    val ensureResult = databaseRepository.ensureRestaurantExists(restaurant, dishImageUrl = imageUrl)
+                    ensureResult.fold(
+                        onSuccess = { dbRestaurant ->
+                            restaurantId = dbRestaurant.id
+                            println("DishRatingViewModel: ✓ Restaurant ensured: ${dbRestaurant.id} — ${dbRestaurant.name}")
+                        },
+                        onFailure = { error ->
+                            println("DishRatingViewModel: ✗ Failed to ensure restaurant: ${error.message}")
+                            _uiState.update {
+                                it.copy(
+                                    isSubmitting = false,
+                                    errorMessage = "Failed to save restaurant: ${error.message}"
+                                )
+                            }
+                            return@launch
                         }
                     )
                 }
@@ -140,12 +221,15 @@ class DishRatingViewModel : ViewModel() {
                     restaurantId = restaurantId,
                     rating = currentState.rating,
                     comment = currentState.comment,
-                    imageUrl = imageUrl
+                    imageUrl = imageUrl,
+                    latitude = ratingLatitude,
+                    longitude = ratingLongitude,
+                    price = currentState.price.toDoubleOrNull()
                 )
 
                 ratingResult.fold(
-                    onSuccess = {
-                        println("DishRatingViewModel: ✓ Rating submitted successfully!")
+                    onSuccess = { ratingId ->
+                        println("DishRatingViewModel: ✓ Rating submitted successfully! ratingId=$ratingId")
 
                         // Calculate variable XP rewards
                         // Unified formula: base 10 + photo 5 + comment(>50 chars) 10 + tags * 2
@@ -196,9 +280,28 @@ class DishRatingViewModel : ViewModel() {
                             )
                         }
 
-                        _uiState.update { it.copy(isSubmitting = false, isSuccess = true, xpEarned = totalXp, showXpNotification = true) }
-                        println("DishRatingViewModel: ✓ Complete! Calling onSuccess callback")
-                        onSuccess()
+                        _uiState.update { it.copy(isSubmitting = false, isSuccess = true, xpEarned = totalXp, showXpNotification = true, submittedRatingId = ratingId) }
+                        println("DishRatingViewModel: ✓ Complete! Calling onSuccess callback with ratingId=$ratingId")
+                        onSuccess(ratingId)
+
+                        // Notify rater of successful submission
+                        viewModelScope.launch {
+                            NotificationRepository.notifyRatingSubmitted(
+                                userId = userId,
+                                dishName = currentState.dishName,
+                                ratingId = ratingId
+                            )
+                        }
+                        // Notify followers of new post
+                        viewModelScope.launch {
+                            NotificationRepository.notifyNewPost(
+                                posterId = userId,
+                                posterName = user.email ?: "",
+                                dishName = currentState.dishName,
+                                restaurantName = selectedRestaurant?.name ?: "",
+                                ratingId = ratingId
+                            )
+                        }
                     },
                     onFailure = { error ->
                         println("DishRatingViewModel: ✗ Rating submission failed: ${error.message}")

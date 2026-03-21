@@ -60,6 +60,7 @@ import com.example.smackcheck2.ui.screens.NearbyRestaurantsScreen
 import com.example.smackcheck2.ui.screens.RegisterScreen
 import com.example.smackcheck2.ui.screens.RestaurantDetailScreen
 import com.example.smackcheck2.ui.screens.SearchScreen
+import com.example.smackcheck2.ui.screens.PermissionsOnboardingScreen
 import com.example.smackcheck2.ui.screens.SocialFeedScreen
 import com.example.smackcheck2.ui.screens.SplashScreen
 import com.example.smackcheck2.ui.screens.TopDishesScreen
@@ -234,6 +235,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     // Shared NotificationViewModel for push notifications (from main)
     val notificationViewModel: NotificationViewModel = viewModel { NotificationViewModel() }
 
+    // Shared SocialFeedViewModel — created early so feed pre-loads on auth
+    val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel() }
+
     // Points-earned popup state (from main)
     var pointsEvent by remember { mutableStateOf<PointsEarnedEvent?>(null) }
     LaunchedEffect(Unit) {
@@ -288,11 +292,24 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is AuthState.Unknown -> null
     }
 
-    // Initialize push notifications when authenticated (from main)
+    // Initialize push notifications and pre-load feed when authenticated
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated == true) {
             notificationViewModel.initializePushNotifications()
             notificationViewModel.refresh()
+            socialFeedViewModel.loadFeed()
+        }
+    }
+    
+    // Track if we've already requested location permission this session
+    var hasRequestedPermission by remember { mutableStateOf(false) }
+    var shouldShowPermissionDialog by remember { mutableStateOf(false) }
+    
+    // Automatically request location permission after authentication
+    LaunchedEffect(isAuthenticated) {
+        if (isAuthenticated == true && !hasRequestedPermission) {
+            hasRequestedPermission = true
+            shouldShowPermissionDialog = true
         }
     }
 
@@ -330,6 +347,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.Home -> {
             LocationHomeScreen(
                 viewModel = locationHomeViewModel,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateToAddDish = { navigationState.navigateTo(Screen.DishCapture) },
                 onNavigateToProfile = { navigationState.navigateTo(Screen.Profile) },
                 onNavigateToSearch = { navigationState.navigateTo(Screen.Search) },
@@ -469,6 +487,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 }
             }
 
+            // Capture GPS location for the rating
+            LaunchedEffect(Unit) {
+                val location = locationService?.getCurrentLocation()
+                dishRatingViewModel.setRatingLocation(location?.latitude, location?.longitude)
+            }
+
             // Load restaurants when screen opens
             LaunchedEffect(Unit) {
                 val result = databaseRepository.getRestaurants()
@@ -483,12 +507,16 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 imageUri = navigationState.imageUri,
                 restaurants = allRestaurants,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitSuccess = {
+                onSubmitSuccess = { ratingId ->
                     gamificationViewModel.recordAction(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
                         actionLabel = "Dish Rated"
                     )
                     navigationState.popToRoot()
+                    navigationState.navigateToWithArgs(
+                        Screen.SocialFeed,
+                        "ratingId" to ratingId
+                    )
                 }
             )
         }
@@ -509,12 +537,16 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         }
         
         is Screen.SocialFeed -> {
-            val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel() }
             val socialFeedState by socialFeedViewModel.uiState.collectAsState()
             val shareService = LocalShareService.current
 
+            // Set scroll target if navigated from rating submission
             LaunchedEffect(Unit) {
-                socialFeedViewModel.loadFeed()
+                val scrollToId = navigationState.ratingId
+                if (scrollToId.isNotBlank()) {
+                    socialFeedViewModel.setScrollToRatingId(scrollToId)
+                }
+                // loadFeed() already called on auth — no need to call again here
             }
 
             SocialFeedScreen(
@@ -540,7 +572,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         "userId" to userId
                     )
                 },
-                onRefresh = { socialFeedViewModel.refresh() }
+                onRefresh = { socialFeedViewModel.refresh() },
+                onLoadMore = { socialFeedViewModel.loadMoreFeed() },
+                onScrollComplete = { socialFeedViewModel.clearScrollTarget() }
             )
         }
         
@@ -681,7 +715,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     reviewCount = nearby.userRatingsTotal ?: 0,
                     latitude = nearby.latitude,
                     longitude = nearby.longitude,
-                    googlePlaceId = nearby.id,
+                    googlePlaceId = nearby.id,  // nearby.id is the Google Place ID
                     photoUrl = nearby.photoUrl
                 )
             }
@@ -692,6 +726,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             AllRestaurantsScreen(
                 location = uiState.selectedLocation ?: "Unknown",
                 restaurants = combinedRestaurants,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
                     navigationState.navigateToWithArgs(
@@ -722,6 +757,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             DarkTopRestaurantsScreen(
                 location = uiState.selectedLocation ?: "New York, NY",
                 restaurants = uiState.topRestaurants,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
                     navigationState.navigateToWithArgs(
@@ -754,6 +790,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             }
             NearbyRestaurantsScreen(
                 viewModel = nearbyRestaurantsViewModel,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurant ->
                     // Navigate to restaurant detail or handle restaurant click
@@ -784,7 +821,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     reviewCount = 0,      // SmackCheck reviews - 0 until users review it
                     latitude = nearby.latitude,
                     longitude = nearby.longitude,
-                    googlePlaceId = nearby.id,
+                    googlePlaceId = nearby.id,  // nearby.id is the Google Place ID
                     photoUrl = nearby.photoUrl  // Pass the Google Places photo URL
                 )
             }
@@ -811,16 +848,17 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         requestPermission()
                     }
                 }
-                
+
                 DarkHomeScreen(
                     currentLocation = uiState.selectedLocation ?: "Select Location",
+                    isLoading = uiState.isLoading,
                     allRestaurants = combinedRestaurants,
                     allDishes = uiState.topDishes,
                     noRestaurantsFound = uiState.noRestaurantsFound,
                     photoViewModel = restaurantPhotoViewModel,
-                    onLocationClick = { 
+                    onLocationClick = {
                         println("NavHost: Location clicked, navigating to LocationSelection")
-                        navigationState.navigateTo(Screen.LocationSelection) 
+                        navigationState.navigateTo(Screen.LocationSelection)
                     },
                     onDishClick = { dishId ->
                         navigationState.navigateToWithArgs(
@@ -1062,11 +1100,22 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 }
             }
 
-            // Navigate back to home on success (after showing reward for 6 seconds)
+            // Capture GPS location for the rating
+            LaunchedEffect(Unit) {
+                val location = locationService?.getCurrentLocation()
+                dishRatingViewModel.setRatingLocation(location?.latitude, location?.longitude)
+            }
+
+            // Navigate to social feed on success (after showing reward for 6 seconds)
             LaunchedEffect(ratingUiState.isSuccess) {
                 if (ratingUiState.isSuccess) {
                     kotlinx.coroutines.delay(6000) // Show XP reward for 6 seconds
+                    val ratingId = ratingUiState.submittedRatingId ?: ""
                     navigationState.popToRoot()
+                    navigationState.navigateToWithArgs(
+                        Screen.SocialFeed,
+                        "ratingId" to ratingId
+                    )
                 }
             }
 
@@ -1084,7 +1133,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 xpEarned = ratingUiState.xpEarned,
                 errorMessage = ratingUiState.errorMessage,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitRating = { rating, comment, tags, restaurantId ->
+                onSubmitRating = { rating, comment, tags, restaurant ->
                     // Award points for rating a dish (from main)
                     gamificationViewModel.recordAction(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
@@ -1093,9 +1142,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     dishRatingViewModel.onRatingChange(rating)
                     dishRatingViewModel.onCommentChange(comment)
                     dishRatingViewModel.onTagsChange(tags)
-                    if (restaurantId != null) {
-                        dishRatingViewModel.setRestaurantId(restaurantId)
-                        dishRatingViewModel.submitRating {
+                    if (restaurant != null) {
+                        dishRatingViewModel.setRestaurant(restaurant)
+                        dishRatingViewModel.submitRating { _ ->
                             // Success is handled by LaunchedEffect above
                         }
                     }
@@ -1362,6 +1411,33 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         onDismissed = { pointsEvent = null },
         modifier = Modifier.align(Alignment.TopCenter).zIndex(100f)
     )
+    
+    // Permissions onboarding screen shown on first login (location + camera + notifications)
+    if (shouldShowPermissionDialog && isAuthenticated == true) {
+        PermissionsOnboardingScreen(
+            onComplete = { locationWasGranted ->
+                shouldShowPermissionDialog = false
+                if (locationWasGranted) {
+                    // Location granted - trigger automatic location detection
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                        try {
+                            locationService?.getCurrentLocation()?.let { location ->
+                                SharedLocationState.onLocationDetected(
+                                    latitude = location.latitude,
+                                    longitude = location.longitude,
+                                    city = location.cityName ?: "Unknown"
+                                )
+                                val repository = com.example.smackcheck2.data.repository.SocialMapRepository()
+                                repository.updateUserLocation(location.latitude, location.longitude)
+                            }
+                        } catch (e: Exception) {
+                            println("Auto location detection error: ${e.message}")
+                        }
+                    }
+                }
+            }
+        )
+    }
     } // end Box
 }
 

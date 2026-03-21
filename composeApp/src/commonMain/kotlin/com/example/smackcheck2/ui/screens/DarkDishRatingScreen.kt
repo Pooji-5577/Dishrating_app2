@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -68,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -97,7 +99,7 @@ fun DarkDishRatingScreen(
     xpEarned: Int? = null,
     errorMessage: String? = null,
     onNavigateBack: () -> Unit,
-    onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurantId: String?) -> Unit,
+    onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurant: Restaurant?) -> Unit,
     onDismissError: () -> Unit = {},
     onAddRestaurantManually: (() -> Unit)? = null,
     onSearchRestaurants: ((String) -> Unit)? = null
@@ -190,8 +192,10 @@ fun DarkDishRatingScreen(
                                 imageBytes = imageBytes,
                                 contentDescription = dishName,
                                 modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(RoundedCornerShape(16.dp))
+                                    .width(80.dp)
+                                    .heightIn(max = 100.dp)
+                                    .clip(RoundedCornerShape(16.dp)),
+                                contentScale = ContentScale.Fit
                             )
                         } else {
                             // Fallback to placeholder if no image
@@ -483,7 +487,7 @@ fun DarkDishRatingScreen(
                 // Submit button
                 Button(
                     onClick = {
-                        onSubmitRating(rating, comment, selectedTags.toList(), selectedRestaurant?.id)
+                        onSubmitRating(rating, comment, selectedTags.toList(), selectedRestaurant)
                     },
                     enabled = rating > 0 && selectedRestaurant != null && !isSubmitting,
                     modifier = Modifier

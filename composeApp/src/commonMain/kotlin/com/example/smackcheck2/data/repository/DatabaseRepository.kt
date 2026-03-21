@@ -110,6 +110,53 @@ class DatabaseRepository {
     }
 
     /**
+     * Ensure a restaurant exists in the DB (e.g. when selected from Google Places).
+     * If the restaurant ID is not found, inserts it. Optionally adds a dish photo as the restaurant image.
+     */
+    suspend fun ensureRestaurantExists(restaurant: Restaurant, dishImageUrl: String? = null): Result<Restaurant> {
+        return try {
+            // Check if it already exists
+            val existing = postgrest["restaurants"]
+                .select { filter { eq("id", restaurant.id) } }
+                .decodeSingleOrNull<RestaurantDto>()
+
+            if (existing != null) {
+                // If restaurant has no images yet but we have a dish photo, add it
+                if (existing.imageUrls.isEmpty() && dishImageUrl != null) {
+                    try {
+                        postgrest["restaurants"].update({
+                            set("image_urls", listOf(dishImageUrl))
+                        }) {
+                            filter { eq("id", restaurant.id) }
+                        }
+                        println("DatabaseRepository: Updated restaurant ${restaurant.id} with dish image")
+                    } catch (_: Exception) { /* non-critical */ }
+                }
+                Result.success(existing.toRestaurant())
+            } else {
+                // Insert the restaurant with the user's dish photo as its image
+                val imageUrls = if (dishImageUrl != null) listOf(dishImageUrl) else restaurant.imageUrls
+                val dto = RestaurantDto(
+                    id = restaurant.id,
+                    name = restaurant.name,
+                    city = restaurant.city,
+                    cuisine = restaurant.cuisine,
+                    imageUrls = imageUrls,
+                    latitude = restaurant.latitude,
+                    longitude = restaurant.longitude
+                )
+                val created = postgrest["restaurants"]
+                    .insert(dto) { select() }
+                    .decodeSingle<RestaurantDto>()
+                println("DatabaseRepository: Created new restaurant from Places: ${created.id} — ${created.name}")
+                Result.success(created.toRestaurant())
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Create a new restaurant
      */
     suspend fun createRestaurant(restaurant: Restaurant): Result<Restaurant> {
@@ -411,25 +458,32 @@ class DatabaseRepository {
         restaurantId: String,
         rating: Float,
         comment: String,
-        imageUrl: String? = null
-    ): Result<Unit> {
+        imageUrl: String? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        price: Double? = null
+    ): Result<String> {
         return try {
             @OptIn(ExperimentalUuidApi::class)
+            val ratingId = Uuid.random().toString()
             val dto = RatingDto(
-                id = Uuid.random().toString(),
+                id = ratingId,
                 userId = userId,
                 dishId = dishId,
                 restaurantId = restaurantId,
                 rating = rating,
                 comment = comment,
-                imageUrl = imageUrl
+                imageUrl = imageUrl,
+                latitude = latitude,
+                longitude = longitude,
+                price = price
             )
             postgrest["ratings"].insert(dto)
 
             // Update restaurant average rating
             updateRestaurantRating(restaurantId)
 
-            Result.success(Unit)
+            Result.success(ratingId)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -582,8 +636,9 @@ class DatabaseRepository {
                 updateLikesCount(ratingId, -1)
                 Result.success(false)
             } else {
-                // Like
-                val like = LikeDto(userId = userId, ratingId = ratingId)
+                // Like — generate UUID for id since the DB column has no default
+                @OptIn(ExperimentalUuidApi::class)
+                val like = LikeDto(id = Uuid.random().toString(), userId = userId, ratingId = ratingId)
                 postgrest["likes"].insert(like)
                 // Increment likes count
                 updateLikesCount(ratingId, 1)

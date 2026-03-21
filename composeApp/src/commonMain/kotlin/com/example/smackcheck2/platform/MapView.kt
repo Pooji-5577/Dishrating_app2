@@ -9,7 +9,8 @@ data class MapMarker(
     val longitude: Double,
     val title: String,
     val snippet: String? = null,
-    val rating: Float? = null
+    val rating: Float? = null,
+    val imageUrl: String? = null
 )
 
 @Composable

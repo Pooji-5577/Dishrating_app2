@@ -97,6 +97,7 @@ interface GooglePlaceResult {
   price_level?: number
   photos?: Array<{ photo_reference: string }>
   opening_hours?: { open_now?: boolean }
+  types?: string[]
 }
 
 /**
@@ -205,8 +206,23 @@ async function handleNearbySearch(
     throw new Error(`Google Places API: ${data.error_message ?? data.status}`)
   }
 
+  // Filter out stay-in hotels/lodging — only keep food places
+  const foodPlaces = (data.results ?? []).filter((place: GooglePlaceResult) => {
+    const types = place.types ?? []
+    // Exclude places that are primarily lodging (stay-in hotels)
+    // Keep them only if they also have explicit food service types
+    if (types.includes('lodging')) {
+      const hasFoodService = types.includes('meal_takeaway') || types.includes('meal_delivery') || types.includes('bakery') || types.includes('cafe')
+      if (!hasFoodService) {
+        console.log(`Filtered out lodging: "${place.name}" (types: ${types.join(', ')})`)
+        return false
+      }
+    }
+    return true
+  })
+
   const results: NearbyRestaurant[] = await Promise.all(
-    (data.results ?? []).map(async (place: GooglePlaceResult) => {
+    foodPlaces.map(async (place: GooglePlaceResult) => {
       const photoRef = place.photos?.[0]?.photo_reference ?? null
       const photoUrl = photoRef
         ? buildPhotoProxyUrl(photoRef, 400)
@@ -228,7 +244,7 @@ async function handleNearbySearch(
     })
   )
 
-  console.log(`Nearby search returned ${results.length} restaurants`)
+  console.log(`Nearby search: ${(data.results ?? []).length} total, ${results.length} after filtering lodging`)
 
   const response: PlacesResponse = { results }
   return new Response(
@@ -324,8 +340,21 @@ async function handleTextSearch(
       throw new Error(`Google Places API: ${searchData.error_message ?? searchData.status}`)
     }
 
+    // Filter out stay-in hotels/lodging
+    const foodPlaces = (searchData.results ?? []).filter((place: GooglePlaceResult) => {
+      const types = place.types ?? []
+      if (types.includes('lodging')) {
+        const hasFoodService = types.includes('meal_takeaway') || types.includes('meal_delivery') || types.includes('bakery') || types.includes('cafe')
+        if (!hasFoodService) {
+          console.log(`Filtered out lodging: "${place.name}" (types: ${types.join(', ')})`)
+          return false
+        }
+      }
+      return true
+    })
+
     const results: NearbyRestaurant[] = await Promise.all(
-      (searchData.results ?? []).map(async (place: GooglePlaceResult) => {
+      foodPlaces.map(async (place: GooglePlaceResult) => {
         const photoRef = place.photos?.[0]?.photo_reference ?? null
         const photoUrl = photoRef
           ? buildPhotoProxyUrl(photoRef, 400)
@@ -347,7 +376,7 @@ async function handleTextSearch(
       })
     )
 
-    console.log(`Text search returned ${results.length} restaurants`)
+    console.log(`Text search: ${(searchData.results ?? []).length} total, ${results.length} after filtering lodging`)
 
     const response: PlacesResponse = { results }
     return new Response(

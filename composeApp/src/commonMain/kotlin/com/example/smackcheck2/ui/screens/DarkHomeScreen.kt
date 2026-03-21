@@ -72,6 +72,7 @@ import com.example.smackcheck2.ui.components.FilterChipDark
 import com.example.smackcheck2.ui.components.LargeDishCard
 import com.example.smackcheck2.ui.components.LocationHeader
 import com.example.smackcheck2.ui.components.RestaurantCardDark
+import com.example.smackcheck2.ui.components.HomeScreenSkeleton
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.PhotoState
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
@@ -85,6 +86,7 @@ data class NavItem(
 @Composable
 fun DarkHomeScreen(
     currentLocation: String,
+    isLoading: Boolean = false,
     allRestaurants: List<com.example.smackcheck2.model.Restaurant> = emptyList(),
     allDishes: List<com.example.smackcheck2.model.Dish> = emptyList(),
     noRestaurantsFound: Boolean = false,
@@ -220,6 +222,8 @@ fun DarkHomeScreen(
                     rating = restaurant.averageRating,
                     reviewCount = restaurant.reviewCount,
                     deliveryTime = "30-40 min", // Default delivery time
+                    googlePlaceId = restaurant.googlePlaceId,
+                    city = restaurant.city,
                     photoUrl = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
                 )
             }
@@ -294,6 +298,15 @@ fun DarkHomeScreen(
         },
         modifier = modifier
     ) { paddingValues ->
+        if (isLoading) {
+            HomeScreenSkeleton(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            )
+            return@Scaffold
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -648,11 +661,15 @@ fun DarkHomeScreen(
                 }
 
                 RestaurantCardDark(
+                    restaurantId = restaurant.id,
                     restaurantName = restaurant.name,
                     cuisine = restaurant.cuisine,
                     rating = restaurant.rating,
                     reviewCount = restaurant.reviewCount,
                     deliveryTime = restaurant.deliveryTime,
+                    googlePlaceId = restaurant.googlePlaceId,
+                    city = restaurant.city,
+                    photoViewModel = photoViewModel,
                     isFavorite = isFavorite,
                     onClick = { onRestaurantClick(restaurant.id) },
                     onFavoriteClick = { isFavorite = !isFavorite },
@@ -695,5 +712,7 @@ private data class RestaurantInfo(
     val rating: Float,
     val reviewCount: Int,
     val deliveryTime: String,
+    val googlePlaceId: String? = null,
+    val city: String = "",
     val photoUrl: String? = null  // Google Places photo URL
 )

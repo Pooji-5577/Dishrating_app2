@@ -155,10 +155,10 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Fetch user's push tokens (supports both FCM and Expo)
+    // Fetch user's push token
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('expo_push_token, fcm_token')
+      .select('push_token')
       .eq('id', record.user_id)
       .single()
 
@@ -170,21 +170,9 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Try FCM token first (Android native), then fall back to Expo token
-    const fcmToken = profile?.fcm_token
-    const expoToken = profile?.expo_push_token
-    
-    // Choose which token to use
-    let pushToken: string | null = null
-    let tokenType: TokenType = 'unknown'
-    
-    if (fcmToken) {
-      pushToken = fcmToken
-      tokenType = detectTokenType(fcmToken)
-    } else if (expoToken) {
-      pushToken = expoToken
-      tokenType = detectTokenType(expoToken)
-    }
+    // Use the push_token column (FCM for Android, APNs for iOS)
+    const pushToken: string | null = profile?.push_token || null
+    const tokenType: TokenType = pushToken ? detectTokenType(pushToken) : 'unknown'
 
     if (!pushToken) {
       console.warn(`No push token for user ${record.user_id}, skipping notification`)
@@ -303,13 +291,13 @@ async function sendFCMNotification(
       console.error('FCM API error:', result)
       
       // Handle invalid token errors
-      if (result.error?.message?.includes('not found') || 
+      if (result.error?.message?.includes('not found') ||
           result.error?.message?.includes('not registered')) {
         console.warn(`Removing invalid FCM token for user`)
         await supabase
           .from('profiles')
-          .update({ fcm_token: null })
-          .eq('fcm_token', token)
+          .update({ push_token: null })
+          .eq('push_token', token)
       }
       
       return {
@@ -482,8 +470,8 @@ async function sendExpoNotification(
       if (ticket.details?.error === 'DeviceNotRegistered') {
         await supabase
           .from('profiles')
-          .update({ expo_push_token: null })
-          .eq('expo_push_token', token)
+          .update({ push_token: null })
+          .eq('push_token', token)
       }
 
       return {

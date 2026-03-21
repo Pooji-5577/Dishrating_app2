@@ -26,6 +26,15 @@ import com.example.smackcheck2.ui.theme.LightThemeColors
 import com.example.smackcheck2.ui.theme.LocalThemeState
 import com.example.smackcheck2.ui.theme.SmackCheckTheme
 import com.example.smackcheck2.ui.theme.ThemeState
+import io.kamel.core.config.KamelConfig
+import io.kamel.core.config.httpUrlFetcher
+import io.kamel.core.config.stringMapper
+import io.kamel.core.config.urlMapper
+import io.kamel.core.config.uriMapper
+import io.kamel.core.config.fileFetcher
+import io.kamel.core.config.fileUrlFetcher
+import io.kamel.image.config.LocalKamelConfig
+import io.kamel.image.config.imageBitmapDecoder
 
 /**
  * Main App composable
@@ -50,7 +59,26 @@ fun App(
         )
     }
 
+    val kamelConfig = remember {
+        KamelConfig {
+            imageBitmapCacheSize = 100
+            imageVectorCacheSize = 100
+            svgCacheSize = 100
+            animatedImageCacheSize = 100
+            stringMapper()
+            urlMapper()
+            uriMapper()
+            fileFetcher()
+            fileUrlFetcher()
+            httpUrlFetcher {
+                httpCache(10 * 1024 * 1024)
+            }
+            imageBitmapDecoder()
+        }
+    }
+
     CompositionLocalProvider(
+        LocalKamelConfig provides kamelConfig,
         LocalThemeState provides themeState,
         LocalLocationService provides locationService,
         LocalImagePicker provides imagePicker,

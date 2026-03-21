@@ -19,7 +19,8 @@ data class DishDetectionResult(
     val cuisine: String?,
     val isAIDetected: Boolean,
     val itemType: String = "unknown", // "food", "beverage", or "unknown"
-    val debugInfo: String? = null
+    val debugInfo: String? = null,
+    val isOutage: Boolean = false // true when AI service is unavailable
 )
 
 /**
@@ -89,17 +90,19 @@ class AIDetectionRepository {
                 println("AIDetection: Edge Function error: $errorText")
 
                 // Handle specific HTTP errors
+                val isServerOutage = response.status.value in listOf(500, 502, 503, 504, 429)
                 val errorMessage = when (response.status.value) {
                     401 -> "Authentication required. Please log in."
                     403 -> "Access denied. Check your permissions."
                     429 -> "Rate limit exceeded. Please try again in a few moments."
-                    500, 503 -> "Server error. Please try again later."
+                    500, 502, 503, 504 -> "AI service is temporarily unavailable. Please enter dish name manually."
                     else -> "Error: ${response.status.value}"
                 }
 
                 return createFallbackResult("Unknown").copy(
                     alternatives = listOf(errorMessage),
-                    debugInfo = "HTTP ${response.status.value}: ${errorText.take(100)}"
+                    debugInfo = "HTTP ${response.status.value}: ${errorText.take(100)}",
+                    isOutage = isServerOutage
                 )
             }
 
@@ -171,8 +174,9 @@ class AIDetectionRepository {
             println("AIDetection: Exception: ${e::class.simpleName} - ${e.message}")
             e.printStackTrace()
             createFallbackResult("Unknown").copy(
-                alternatives = listOf("Error: ${e.message?.take(40) ?: "Unknown"}"),
-                debugInfo = "Exception: ${e::class.simpleName} - ${e.message?.take(80)}"
+                alternatives = listOf("AI service unavailable. Please enter dish name manually."),
+                debugInfo = "Exception: ${e::class.simpleName} - ${e.message?.take(80)}",
+                isOutage = true
             )
         }
     }

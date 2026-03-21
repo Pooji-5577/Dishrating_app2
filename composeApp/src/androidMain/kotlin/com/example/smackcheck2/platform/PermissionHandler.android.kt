@@ -3,6 +3,7 @@ package com.example.smackcheck2.platform
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -129,6 +130,48 @@ actual fun RequestCameraPermission(
         } else {
             pendingCameraRequest = true
             permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+}
+
+/**
+ * Composable for requesting notification permission on Android (API 33+).
+ * On older versions, notifications are always enabled without a runtime permission.
+ */
+@Composable
+actual fun RequestNotificationPermission(
+    onPermissionResult: (Boolean) -> Unit,
+    content: @Composable (requestPermission: () -> Unit) -> Unit
+) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        content { onPermissionResult(true) }
+        return
+    }
+
+    val context = LocalContext.current
+    var pendingNotifRequest by remember { mutableStateOf(false) }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.d(TAG, "Notification permission result: granted=$granted")
+        if (pendingNotifRequest) {
+            pendingNotifRequest = false
+            onPermissionResult(granted)
+        }
+    }
+
+    content {
+        val hasPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            onPermissionResult(true)
+        } else {
+            pendingNotifRequest = true
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 }
