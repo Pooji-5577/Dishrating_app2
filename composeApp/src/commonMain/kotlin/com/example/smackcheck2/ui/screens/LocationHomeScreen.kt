@@ -51,7 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Restaurant
-import com.example.smackcheck2.ui.components.LoadingState
+import com.example.smackcheck2.ui.components.HomeScreenSkeleton
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.ui.components.DishImage
@@ -150,9 +150,8 @@ fun LocationHomeScreen(
         }
     ) { paddingValues ->
         if (uiState.isLoading) {
-            LoadingState(
-                modifier = Modifier.padding(paddingValues),
-                message = "Loading..."
+            HomeScreenSkeleton(
+                modifier = Modifier.padding(paddingValues)
             )
         } else if (uiState.selectedLocation == null) {
             // No location selected state

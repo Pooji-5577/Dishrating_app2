@@ -70,6 +70,7 @@ import com.example.smackcheck2.ui.components.FilterChipDark
 import com.example.smackcheck2.ui.components.LargeDishCard
 import com.example.smackcheck2.ui.components.LocationHeader
 import com.example.smackcheck2.ui.components.RestaurantCardDark
+import com.example.smackcheck2.ui.components.HomeScreenSkeleton
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 
@@ -82,6 +83,7 @@ data class NavItem(
 @Composable
 fun DarkHomeScreen(
     currentLocation: String,
+    isLoading: Boolean = false,
     allRestaurants: List<com.example.smackcheck2.model.Restaurant> = emptyList(),
     allDishes: List<com.example.smackcheck2.model.Dish> = emptyList(),
     noRestaurantsFound: Boolean = false,
@@ -290,6 +292,15 @@ fun DarkHomeScreen(
         },
         modifier = modifier
     ) { paddingValues ->
+        if (isLoading) {
+            HomeScreenSkeleton(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
+            )
+            return@Scaffold
+        }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()

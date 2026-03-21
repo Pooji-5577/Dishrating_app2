@@ -48,7 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.ui.components.EmptyState
-import com.example.smackcheck2.ui.components.LoadingState
+import com.example.smackcheck2.ui.components.HomeScreenSkeleton
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.viewmodel.HomeViewModel
@@ -123,9 +123,8 @@ fun HomeScreen(
     ) { paddingValues ->
         when {
             uiState.isLoading && uiState.feedItems.isEmpty() -> {
-                LoadingState(
-                    modifier = Modifier.padding(paddingValues),
-                    message = "Loading feed..."
+                HomeScreenSkeleton(
+                    modifier = Modifier.padding(paddingValues)
                 )
             }
             uiState.feedItems.isEmpty() -> {

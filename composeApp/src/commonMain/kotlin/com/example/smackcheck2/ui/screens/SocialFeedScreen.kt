@@ -54,6 +54,7 @@ import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
 import com.example.smackcheck2.ui.components.EmptyState
+import com.example.smackcheck2.ui.components.SocialFeedSkeleton
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.ui.theme.appColors
@@ -145,12 +146,7 @@ fun SocialFeedScreen(
 
             when {
                 uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = colors.Primary)
-                    }
+                    SocialFeedSkeleton()
                 }
 
                 uiState.feedItems.isEmpty() -> {

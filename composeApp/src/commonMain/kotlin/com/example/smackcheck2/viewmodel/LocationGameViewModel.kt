@@ -37,7 +37,7 @@ import kotlinx.coroutines.launch
  * UI State for Location-based Home Screen
  */
 data class LocationHomeUiState(
-    val isLoading: Boolean = false,
+    val isLoading: Boolean = true,
     val isDetectingLocation: Boolean = false,
     val selectedLocation: String? = null,
     val currentLatitude: Double? = null,

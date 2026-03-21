@@ -830,6 +830,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
 
             DarkHomeScreen(
                 currentLocation = uiState.selectedLocation ?: "Select Location",
+                isLoading = uiState.isLoading,
                 allRestaurants = combinedRestaurants,
                 allDishes = uiState.topDishes,
                 noRestaurantsFound = uiState.noRestaurantsFound,
