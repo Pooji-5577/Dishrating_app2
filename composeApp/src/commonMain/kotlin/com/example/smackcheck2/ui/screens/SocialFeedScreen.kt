@@ -54,6 +54,7 @@ import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
 import com.example.smackcheck2.ui.components.EmptyState
+import com.example.smackcheck2.ui.components.SocialFeedSkeleton
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.ui.theme.appColors
@@ -145,12 +146,7 @@ fun SocialFeedScreen(
 
             when {
                 uiState.isLoading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        CircularProgressIndicator(color = colors.Primary)
-                    }
+                    SocialFeedSkeleton()
                 }
 
                 uiState.feedItems.isEmpty() -> {
@@ -197,8 +193,9 @@ fun SocialFeedCard(
     modifier: Modifier = Modifier
 ) {
     val colors = appColors()
-    var isLiked by remember(item.isLiked) { mutableStateOf(item.isLiked) }
-    var likesCount by remember(item.likesCount) { mutableStateOf(item.likesCount) }
+    // Driven by ViewModel state — no local copy to avoid triple-update bugs
+    val isLiked = item.isLiked
+    val likesCount = item.likesCount
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -336,11 +333,7 @@ fun SocialFeedCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable {
-                        isLiked = !isLiked
-                        likesCount = if (isLiked) likesCount + 1 else likesCount - 1
-                        onLikeClick()
-                    }
+                    modifier = Modifier.clickable { onLikeClick() }
                 ) {
                     Icon(
                         imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,

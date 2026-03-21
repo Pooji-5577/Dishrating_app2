@@ -472,74 +472,107 @@ class SocialRepository {
         ratings: List<RatingDto>,
         currentUserId: String?
     ): List<FeedItem> {
-        return ratings.mapNotNull { rating ->
+        if (ratings.isEmpty()) return emptyList()
+
+        // Batch fetch all profiles, dishes, and restaurants in parallel instead of N+1 queries
+        val userIds = ratings.map { it.userId }.distinct()
+        val dishIds = ratings.map { it.dishId }.distinct()
+        val restaurantIds = ratings.map { it.restaurantId }.distinct()
+        val ratingIds = ratings.mapNotNull { it.id }
+
+        // Batch fetch all related data (6 bulk queries instead of N*6 individual ones)
+        val profilesMap = try {
+            postgrest["profiles"]
+                .select { filter { isIn("id", userIds) } }
+                .decodeList<ProfileDto>()
+                .associateBy { it.id }
+        } catch (_: Exception) { emptyMap() }
+
+        val dishesMap = try {
+            postgrest["dishes"]
+                .select { filter { isIn("id", dishIds) } }
+                .decodeList<DishDto>()
+                .associateBy { it.id ?: "" }
+        } catch (_: Exception) { emptyMap() }
+
+        val restaurantsMap = try {
+            postgrest["restaurants"]
+                .select { filter { isIn("id", restaurantIds) } }
+                .decodeList<RestaurantDto>()
+                .associateBy { it.id ?: "" }
+        } catch (_: Exception) { emptyMap() }
+
+        // Batch fetch all comments counts
+        val commentsCountMap = try {
+            if (ratingIds.isNotEmpty()) {
+                postgrest["comments"]
+                    .select { filter { isIn("rating_id", ratingIds) } }
+                    .decodeList<CommentDto>()
+                    .groupBy { it.ratingId }
+                    .mapValues { it.value.size }
+            } else emptyMap()
+        } catch (_: Exception) { emptyMap() }
+
+        // Batch fetch user's likes for all ratings
+        val likedRatingIds = if (currentUserId != null && ratingIds.isNotEmpty()) {
             try {
-                val profile = postgrest["profiles"]
-                    .select { filter { eq("id", rating.userId) } }
-                    .decodeSingleOrNull<ProfileDto>()
-
-                val dish = postgrest["dishes"]
-                    .select { filter { eq("id", rating.dishId) } }
-                    .decodeSingleOrNull<DishDto>()
-
-                val restaurant = postgrest["restaurants"]
-                    .select { filter { eq("id", rating.restaurantId) } }
-                    .decodeSingleOrNull<RestaurantDto>()
-
-                val commentsCount = getCommentsCount(rating.id ?: "")
-
-                val isLiked = if (currentUserId != null && rating.id != null) {
-                    try {
-                        val existing = postgrest["likes"]
-                            .select {
-                                filter {
-                                    eq("user_id", currentUserId)
-                                    eq("rating_id", rating.id)
-                                }
-                            }
-                            .decodeSingleOrNull<LikeDto>()
-                        existing != null
-                    } catch (_: Exception) { false }
-                } else false
-
-                // Fetch additional images
-                val additionalImages = try {
-                    postgrest["rating_images"]
-                        .select {
-                            filter { eq("rating_id", rating.id ?: "") }
-                            order("sort_order", Order.ASCENDING)
+                postgrest["likes"]
+                    .select {
+                        filter {
+                            eq("user_id", currentUserId)
+                            isIn("rating_id", ratingIds)
                         }
-                        .decodeList<RatingImageDto>()
-                        .map { it.imageUrl }
-                } catch (_: Exception) { emptyList() }
+                    }
+                    .decodeList<LikeDto>()
+                    .map { it.ratingId }
+                    .toSet()
+            } catch (_: Exception) { emptySet() }
+        } else emptySet()
 
-                val allImages = buildList {
-                    rating.imageUrl?.let { add(it) }
-                    dish?.imageUrl?.let { if (rating.imageUrl == null) add(it) }
-                    addAll(additionalImages)
-                }
+        // Batch fetch all additional images
+        val additionalImagesMap = try {
+            if (ratingIds.isNotEmpty()) {
+                postgrest["rating_images"]
+                    .select {
+                        filter { isIn("rating_id", ratingIds) }
+                        order("sort_order", Order.ASCENDING)
+                    }
+                    .decodeList<RatingImageDto>()
+                    .groupBy { it.ratingId }
+                    .mapValues { entry -> entry.value.map { it.imageUrl } }
+            } else emptyMap()
+        } catch (_: Exception) { emptyMap() }
 
-                println("SocialFeed: Rating ${rating.id} — imageUrl=${rating.imageUrl}, dishImageUrl=${dish?.imageUrl}, allImages=$allImages")
+        // Now map ratings to feed items using the pre-fetched data (no more network calls)
+        return ratings.mapNotNull { rating ->
+            val ratingId = rating.id ?: return@mapNotNull null
+            val profile = profilesMap[rating.userId]
+            val dish = dishesMap[rating.dishId]
+            val restaurant = restaurantsMap[rating.restaurantId]
+            val additionalImages = additionalImagesMap[ratingId] ?: emptyList()
 
-                FeedItem(
-                    id = rating.id ?: return@mapNotNull null,
-                    userId = rating.userId,
-                    userProfileImageUrl = profile?.profilePhotoUrl,
-                    userName = profile?.name ?: "Unknown",
-                    dishImageUrl = allImages.firstOrNull(),
-                    dishName = dish?.name ?: "Unknown Dish",
-                    restaurantName = restaurant?.name ?: "Unknown Restaurant",
-                    rating = rating.rating,
-                    likesCount = rating.likesCount,
-                    commentsCount = commentsCount,
-                    isLiked = isLiked,
-                    timestamp = parseTimestamp(rating.createdAt),
-                    comment = rating.comment,
-                    imageUrls = allImages
-                )
-            } catch (e: Exception) {
-                null
+            val allImages = buildList {
+                rating.imageUrl?.let { add(it) }
+                dish?.imageUrl?.let { if (rating.imageUrl == null) add(it) }
+                addAll(additionalImages)
             }
+
+            FeedItem(
+                id = ratingId,
+                userId = rating.userId,
+                userProfileImageUrl = profile?.profilePhotoUrl,
+                userName = profile?.name ?: "Unknown",
+                dishImageUrl = allImages.firstOrNull(),
+                dishName = dish?.name ?: "Unknown Dish",
+                restaurantName = restaurant?.name ?: "Unknown Restaurant",
+                rating = rating.rating,
+                likesCount = rating.likesCount,
+                commentsCount = commentsCountMap[ratingId] ?: 0,
+                isLiked = likedRatingIds.contains(ratingId),
+                timestamp = parseTimestamp(rating.createdAt),
+                comment = rating.comment,
+                imageUrls = allImages
+            )
         }
     }
 

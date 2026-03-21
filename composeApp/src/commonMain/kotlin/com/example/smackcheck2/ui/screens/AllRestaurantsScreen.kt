@@ -45,8 +45,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.Restaurant
+import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.layout.ContentScale
 
 /**
  * All Restaurants Screen - Shows all restaurants from selected location
@@ -56,6 +61,7 @@ import com.example.smackcheck2.ui.theme.CardShape
 fun AllRestaurantsScreen(
     location: String,
     restaurants: List<Restaurant>,
+    photoViewModel: RestaurantPhotoViewModel,
     onNavigateBack: () -> Unit,
     onRestaurantClick: (String) -> Unit
 ) {
@@ -167,6 +173,7 @@ fun AllRestaurantsScreen(
                 items(filteredRestaurants) { restaurant ->
                     RestaurantListCard(
                         restaurant = restaurant,
+                        photoViewModel = photoViewModel,
                         onClick = { onRestaurantClick(restaurant.id) }
                     )
                 }
@@ -178,9 +185,22 @@ fun AllRestaurantsScreen(
 @Composable
 fun RestaurantListCard(
     restaurant: Restaurant,
+    photoViewModel: RestaurantPhotoViewModel,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val photoStates by photoViewModel.photoStates.collectAsState()
+    val photoState = photoStates[restaurant.id]
+
+    LaunchedEffect(restaurant.id) {
+        photoViewModel.loadThumbnail(
+            restaurantId = restaurant.id,
+            placeId = restaurant.googlePlaceId,
+            name = restaurant.name,
+            city = restaurant.city
+        )
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -194,21 +214,12 @@ fun RestaurantListCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Restaurant image placeholder
-            Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    modifier = Modifier.size(32.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                )
-            }
+            SmartRestaurantImage(
+                photoState = photoState,
+                restaurantName = restaurant.name,
+                modifier = Modifier.size(80.dp).clip(MaterialTheme.shapes.medium),
+                contentScale = ContentScale.Crop
+            )
             
             Spacer(modifier = Modifier.width(16.dp))
             

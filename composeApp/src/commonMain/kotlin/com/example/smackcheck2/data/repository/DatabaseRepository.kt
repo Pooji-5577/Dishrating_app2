@@ -634,8 +634,9 @@ class DatabaseRepository {
                 updateLikesCount(ratingId, -1)
                 Result.success(false)
             } else {
-                // Like
-                val like = LikeDto(userId = userId, ratingId = ratingId)
+                // Like — generate UUID for id since the DB column has no default
+                @OptIn(ExperimentalUuidApi::class)
+                val like = LikeDto(id = Uuid.random().toString(), userId = userId, ratingId = ratingId)
                 postgrest["likes"].insert(like)
                 // Increment likes count
                 updateLikesCount(ratingId, 1)

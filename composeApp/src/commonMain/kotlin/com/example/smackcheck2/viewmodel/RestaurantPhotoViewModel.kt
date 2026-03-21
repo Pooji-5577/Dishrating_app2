@@ -48,9 +48,12 @@ class RestaurantPhotoViewModel : ViewModel() {
 
         // Check cache first
         thumbnailUrlCache[restaurantId]?.let { url ->
+            println("[DEBUG][PhotoVM] Cache hit for '$name' (id=$restaurantId)")
             updateState(restaurantId, PhotoState.ThumbnailLoaded(url))
             return
         }
+
+        println("[DEBUG][PhotoVM] Loading thumbnail for '$name' (id=$restaurantId, placeId=$placeId, city=$city)")
 
         viewModelScope.launch {
             updateState(restaurantId, PhotoState.Loading)
@@ -64,13 +67,15 @@ class RestaurantPhotoViewModel : ViewModel() {
                 )
 
                 if (url != null) {
+                    println("[DEBUG][PhotoVM] Got thumbnail for '$name': $url")
                     thumbnailUrlCache[restaurantId] = url
                     updateState(restaurantId, PhotoState.ThumbnailLoaded(url))
                 } else {
+                    println("[DEBUG][PhotoVM] No photos found for '$name' (id=$restaurantId, placeId=$placeId)")
                     updateState(restaurantId, PhotoState.NoPhotos)
                 }
             } catch (e: Exception) {
-                println("loadThumbnail error for $name: ${e.message}")
+                println("[DEBUG][PhotoVM] ERROR loading thumbnail for '$name': ${e::class.simpleName} - ${e.message}")
                 updateState(restaurantId, PhotoState.Error(e.message ?: "Failed"))
             }
         }
@@ -107,13 +112,15 @@ class RestaurantPhotoViewModel : ViewModel() {
                 )
 
                 if (urls.isNotEmpty()) {
+                    println("[DEBUG][PhotoVM] Got ${urls.size} full photos for '$name'")
                     fullUrlCache[restaurantId] = urls
                     updateState(restaurantId, PhotoState.FullPhotosLoaded(urls))
                 } else {
+                    println("[DEBUG][PhotoVM] No full photos found for '$name' (id=$restaurantId)")
                     updateState(restaurantId, PhotoState.NoPhotos)
                 }
             } catch (e: Exception) {
-                println("loadFullPhotos error for $name: ${e.message}")
+                println("[DEBUG][PhotoVM] ERROR loading full photos for '$name': ${e::class.simpleName} - ${e.message}")
                 updateState(restaurantId, PhotoState.Error(e.message ?: "Failed"))
             }
         }

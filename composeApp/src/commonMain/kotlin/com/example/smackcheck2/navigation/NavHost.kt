@@ -342,6 +342,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.Home -> {
             LocationHomeScreen(
                 viewModel = locationHomeViewModel,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateToAddDish = { navigationState.navigateTo(Screen.DishCapture) },
                 onNavigateToProfile = { navigationState.navigateTo(Screen.Profile) },
                 onNavigateToSearch = { navigationState.navigateTo(Screen.Search) },
@@ -717,7 +718,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     averageRating = nearby.rating?.toFloat() ?: 0f,
                     reviewCount = nearby.userRatingsTotal ?: 0,
                     latitude = nearby.latitude,
-                    longitude = nearby.longitude
+                    longitude = nearby.longitude,
+                    googlePlaceId = nearby.id  // nearby.id is the Google Place ID
                 )
             }
 
@@ -727,6 +729,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             AllRestaurantsScreen(
                 location = uiState.selectedLocation ?: "Unknown",
                 restaurants = combinedRestaurants,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
                     navigationState.navigateToWithArgs(
@@ -757,6 +760,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             DarkTopRestaurantsScreen(
                 location = uiState.selectedLocation ?: "New York, NY",
                 restaurants = uiState.topRestaurants,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
                     navigationState.navigateToWithArgs(
@@ -789,6 +793,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             }
             NearbyRestaurantsScreen(
                 viewModel = nearbyRestaurantsViewModel,
+                photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurant ->
                     // Navigate to restaurant detail or handle restaurant click
@@ -815,7 +820,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     averageRating = 0f,  // SmackCheck rating - 0 until users rate it
                     reviewCount = 0,      // SmackCheck reviews - 0 until users review it
                     latitude = nearby.latitude,
-                    longitude = nearby.longitude
+                    longitude = nearby.longitude,
+                    googlePlaceId = nearby.id  // nearby.id is the Google Place ID
                 )
             }
 
@@ -824,9 +830,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
 
             DarkHomeScreen(
                 currentLocation = uiState.selectedLocation ?: "Select Location",
+                isLoading = uiState.isLoading,
                 allRestaurants = combinedRestaurants,
                 allDishes = uiState.topDishes,
                 noRestaurantsFound = uiState.noRestaurantsFound,
+                photoViewModel = restaurantPhotoViewModel,
                 onLocationClick = { navigationState.navigateTo(Screen.LocationSelection) },
                 onDishClick = { dishId ->
                     navigationState.navigateToWithArgs(

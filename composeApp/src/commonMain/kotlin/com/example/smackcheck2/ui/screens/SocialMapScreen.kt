@@ -241,8 +241,8 @@ fun SocialMapScreen(
                 .padding(paddingValues)
         ) {
             when {
-                uiState.isLoading && uiState.currentLatitude == null -> {
-                    // Loading state
+                uiState.isLoading && uiState.nearbyUsers.isEmpty() -> {
+                    // Loading state — show spinner only while the first batch loads
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -253,7 +253,7 @@ fun SocialMapScreen(
                         ) {
                             CircularProgressIndicator(color = themeColors.Primary)
                             Text(
-                                "Getting your location...",
+                                "Loading dish posts...",
                                 color = themeColors.TextSecondary
                             )
                         }
@@ -296,29 +296,33 @@ fun SocialMapScreen(
                 }
                 
                 else -> {
-                    // Map view
-                    val currentLat = uiState.currentLatitude ?: 0.0
+                    // Map view — centers on user if GPS available, otherwise shows world
+                    val currentLat = uiState.currentLatitude ?: 20.0
                     val currentLng = uiState.currentLongitude ?: 0.0
                     
                     // Convert MapUserMarker to MapMarker for the platform map
+                    // Each post is its own marker, keyed by rating id, positioned at restaurant location
                     val markers = uiState.nearbyUsers.map { user ->
                         MapMarker(
-                            id = user.userId,
+                            id = user.latestRatingId ?: user.userId,
                             latitude = user.latitude,
                             longitude = user.longitude,
-                            title = user.username,
-                            snippet = user.latestDishName ?: "Recent dish post",
-                            rating = user.latestRating
+                            title = user.latestDishName ?: user.username,
+                            snippet = user.latestRestaurantName ?: user.username,
+                            rating = user.latestRating,
+                            imageUrl = user.latestDishImage ?: user.avatarUrl
                         )
                     }
-                    
+
                     PlatformMapView(
                         latitude = currentLat,
                         longitude = currentLng,
-                        zoom = 14f,
+                        zoom = 4f,
                         markers = markers,
                         onMarkerClick = { markerId ->
-                            val user = uiState.nearbyUsers.find { it.userId == markerId }
+                            val user = uiState.nearbyUsers.find {
+                                it.latestRatingId == markerId || it.userId == markerId
+                            }
                             viewModel.selectUser(user)
                         },
                         modifier = Modifier.fillMaxSize()
@@ -347,7 +351,7 @@ fun SocialMapScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "${uiState.nearbyUsers.size} foodies nearby",
+                                "${uiState.nearbyUsers.size} dish posts",
                                 color = themeColors.TextPrimary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
@@ -359,7 +363,7 @@ fun SocialMapScreen(
                     FloatingActionButton(
                         onClick = { viewModel.requestCurrentLocation() },
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
+                            .align(Alignment.BottomStart)
                             .padding(16.dp),
                         containerColor = themeColors.Primary,
                         elevation = FloatingActionButtonDefaults.elevation(6.dp)

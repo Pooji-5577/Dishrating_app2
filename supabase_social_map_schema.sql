@@ -270,6 +270,61 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- ═══════════════════════════════════════════════════════════════════════════════
+-- PART 9: FUNCTION TO GET ALL DISH POSTS FOR WORLD MAP
+-- Returns every post placed at its restaurant's coordinates (world map view)
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+DROP FUNCTION IF EXISTS public.get_all_dish_posts(INTEGER);
+
+CREATE OR REPLACE FUNCTION public.get_all_dish_posts(
+  p_limit INTEGER DEFAULT 500
+)
+RETURNS TABLE (
+  user_id TEXT,
+  username TEXT,
+  avatar_url TEXT,
+  latitude DOUBLE PRECISION,
+  longitude DOUBLE PRECISION,
+  rating_id TEXT,
+  dish_id TEXT,
+  dish_name TEXT,
+  dish_image TEXT,
+  rating REAL,
+  restaurant_id TEXT,
+  restaurant_name TEXT,
+  posted_at TIMESTAMPTZ
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    p.id AS user_id,
+    p.name AS username,
+    p.profile_photo_url AS avatar_url,
+    -- Prefer restaurant location, fall back to where the rating was captured, then user profile
+    COALESCE(rest.latitude, r.latitude, p.latitude) AS latitude,
+    COALESCE(rest.longitude, r.longitude, p.longitude) AS longitude,
+    r.id AS rating_id,
+    r.dish_id,
+    d.name AS dish_name,
+    COALESCE(r.image_url, d.image_url) AS dish_image,
+    r.rating::REAL AS rating,
+    r.restaurant_id,
+    rest.name AS restaurant_name,
+    r.created_at AS posted_at
+  FROM public.ratings r
+  INNER JOIN public.profiles p ON r.user_id = p.id
+  INNER JOIN public.dishes d ON r.dish_id = d.id
+  INNER JOIN public.restaurants rest ON r.restaurant_id = rest.id
+  WHERE
+    -- Only include posts that have resolvable coordinates
+    COALESCE(rest.latitude, r.latitude, p.latitude) IS NOT NULL
+    AND COALESCE(rest.longitude, r.longitude, p.longitude) IS NOT NULL
+  ORDER BY r.created_at DESC
+  LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ═══════════════════════════════════════════════════════════════════════════════
 -- VERIFICATION
 -- ═══════════════════════════════════════════════════════════════════════════════
 
