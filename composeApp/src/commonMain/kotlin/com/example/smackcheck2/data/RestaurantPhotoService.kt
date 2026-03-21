@@ -62,7 +62,7 @@ class RestaurantPhotoService {
         return try {
             // Step 1: Check if photos are already cached in Supabase
             val cached = getCachedPhotos(restaurantId)
-            if (cached.isNotEmpty()) {
+            if (cached.isNotEmpty() && !hasLegacyGooglePhotoEndpoint(cached)) {
                 return cached
             }
 
@@ -79,6 +79,17 @@ class RestaurantPhotoService {
         } catch (e: Exception) {
             println("RestaurantPhotoService error: ${e.message}")
             emptyList()
+        }
+    }
+
+    private fun hasLegacyGooglePhotoEndpoint(urls: List<String>): Boolean {
+        // Treat old cached URLs as stale so they get re-fetched through the new
+        // photo-proxy endpoint.  Stale formats include:
+        //  • Expired Google CDN URLs (lh3.googleusercontent.com)
+        //  • Direct Google Places Photo URLs with the API key embedded
+        return urls.any {
+            it.contains("googleusercontent.com") ||
+            it.contains("maps.googleapis.com/maps/api/place/photo")
         }
     }
 

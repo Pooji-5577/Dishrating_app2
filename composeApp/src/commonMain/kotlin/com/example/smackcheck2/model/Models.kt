@@ -59,7 +59,8 @@ data class Restaurant(
     val reviewCount: Int = 0,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val googlePlaceId: String? = null   // Google Places API place ID for fetching photos
+    val googlePlaceId: String? = null,   // Google Places API place ID for fetching photos
+    val photoUrl: String? = null          // Direct Google Places photo URL
 )
 
 /**

@@ -64,12 +64,15 @@ fun SmartRestaurantImage(
         }
 
         is PhotoState.ThumbnailLoaded -> {
-            // Show the Google Places photo via URL
+            // Show the Google Places photo via URL.
+            // Pass a fallbackUrl so if the Google URL fails (e.g. expired CDN link),
+            // Kamel automatically retries with an Unsplash stock image.
             NetworkImage(
                 imageUrl = photoState.url,
                 contentDescription = restaurantName,
                 modifier = modifier,
-                contentScale = contentScale
+                contentScale = contentScale,
+                fallbackUrl = FoodImages.getRestaurantImageByName(restaurantName)
             )
         }
 
@@ -81,7 +84,8 @@ fun SmartRestaurantImage(
                     imageUrl = firstUrl,
                     contentDescription = restaurantName,
                     modifier = modifier,
-                    contentScale = contentScale
+                    contentScale = contentScale,
+                    fallbackUrl = FoodImages.getRestaurantImageByName(restaurantName)
                 )
             } else {
                 PlaceholderRestaurantImage(restaurantName, modifier, contentScale)

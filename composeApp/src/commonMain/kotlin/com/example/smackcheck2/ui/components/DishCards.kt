@@ -39,6 +39,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.viewmodel.PhotoState
 
 /**
  * Featured Dish Card - Square with image, badges, and info overlay
@@ -264,7 +265,9 @@ fun RestaurantCardDark(
     isFavorite: Boolean,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    photoUrl: String? = null,  // Google Places photo URL
+    photoState: PhotoState? = null
 ) {
     Card(
         modifier = modifier
@@ -283,10 +286,32 @@ fun RestaurantCardDark(
                     .fillMaxWidth()
                     .height(150.dp)
             ) {
-                RestaurantImage(
-                    restaurantName = restaurantName,
-                    modifier = Modifier.fillMaxSize()
-                )
+                when {
+                    photoState is PhotoState.Loading ||
+                        photoState is PhotoState.ThumbnailLoaded ||
+                        photoState is PhotoState.FullPhotosLoaded -> {
+                        SmartRestaurantImage(
+                            photoState = photoState,
+                            restaurantName = restaurantName,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    photoUrl != null -> {
+                        NetworkImage(
+                            imageUrl = photoUrl,
+                            contentDescription = restaurantName,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    else -> {
+                        RestaurantImage(
+                            restaurantName = restaurantName,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
                 
                 // Favorite button
                 FavoriteButton(

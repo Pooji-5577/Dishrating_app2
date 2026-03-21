@@ -3,6 +3,8 @@ package com.example.smackcheck2.platform
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -41,27 +43,20 @@ actual fun RequestLocationPermission(
     content: @Composable (requestPermission: () -> Unit) -> Unit
 ) {
     val context = LocalContext.current
-
-    // Track if we need to trigger location after permission
-    var pendingLocationRequest by remember { mutableStateOf(false) }
+    
+    Log.d(TAG, "RequestLocationPermission composable entered")
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val granted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                 permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        Log.d(TAG, "Permission result: granted=$granted")
-
-        if (granted && pendingLocationRequest) {
-            pendingLocationRequest = false
-            onPermissionResult(true)
-        } else if (!granted) {
-            pendingLocationRequest = false
-            onPermissionResult(false)
-        }
+        Log.d(TAG, "Permission result callback: granted=$granted")
+        onPermissionResult(granted)
     }
-
-    content {
+    
+    // The requestPermission function that will be passed to content
+    val requestPermission: () -> Unit = {
         val hasPermission = ContextCompat.checkSelfPermission(
             context,
             Manifest.permission.ACCESS_FINE_LOCATION
@@ -71,22 +66,32 @@ actual fun RequestLocationPermission(
             Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
-        Log.d(TAG, "requestPermission called, hasPermission=$hasPermission")
+        Log.d(TAG, "requestPermission() invoked, hasPermission=$hasPermission")
 
         if (hasPermission) {
-            // Already have permission, proceed directly
+            Log.d(TAG, "Already have permission, calling onPermissionResult(true)")
             onPermissionResult(true)
         } else {
-            // Need to request permission
-            pendingLocationRequest = true
-            permissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
+            Log.d(TAG, "Launching permission dialog NOW...")
+            // Ensure we're on the main thread for ActivityResultLauncher
+            Handler(Looper.getMainLooper()).post {
+                try {
+                    permissionLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                    Log.d(TAG, "permissionLauncher.launch() called successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error launching permission dialog", e)
+                }
+            }
         }
     }
+    
+    Log.d(TAG, "Calling content() with requestPermission lambda")
+    content(requestPermission)
 }
 
 /**

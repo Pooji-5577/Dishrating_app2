@@ -49,6 +49,8 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -71,6 +73,8 @@ import com.example.smackcheck2.ui.components.LargeDishCard
 import com.example.smackcheck2.ui.components.LocationHeader
 import com.example.smackcheck2.ui.components.RestaurantCardDark
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.viewmodel.PhotoState
+import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 
 data class NavItem(
     val label: String,
@@ -84,6 +88,7 @@ fun DarkHomeScreen(
     allRestaurants: List<com.example.smackcheck2.model.Restaurant> = emptyList(),
     allDishes: List<com.example.smackcheck2.model.Dish> = emptyList(),
     noRestaurantsFound: Boolean = false,
+    photoViewModel: RestaurantPhotoViewModel? = null,
     onLocationClick: () -> Unit,
     onDishClick: (String) -> Unit,
     onRestaurantClick: (String) -> Unit,
@@ -101,6 +106,8 @@ fun DarkHomeScreen(
     modifier: Modifier = Modifier
 ) {
     val themeColors = appColors()
+    val photoStates by photoViewModel?.photoStates?.collectAsState()
+        ?: remember { mutableStateOf(emptyMap<String, PhotoState>()) }
     
     var selectedNavItem by remember { mutableIntStateOf(0) }
     var selectedCategory by remember { mutableStateOf("Healthy") }
@@ -212,7 +219,8 @@ fun DarkHomeScreen(
                     cuisine = restaurant.cuisine,
                     rating = restaurant.averageRating,
                     reviewCount = restaurant.reviewCount,
-                    deliveryTime = "30-40 min" // Default delivery time
+                    deliveryTime = "30-40 min", // Default delivery time
+                    photoUrl = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
                 )
             }
     }
@@ -620,6 +628,25 @@ fun DarkHomeScreen(
             // Restaurant Cards
             items(restaurants) { restaurant ->
                 var isFavorite by remember { mutableStateOf(false) }
+
+                LaunchedEffect(restaurant.id) {
+                    val fullRestaurant = allRestaurants.firstOrNull { it.id == restaurant.id }
+                    val knownPhotoUrl = fullRestaurant?.photoUrl
+                        ?: fullRestaurant?.imageUrls?.firstOrNull()
+                    if (knownPhotoUrl != null) {
+                        // Photo URL already known — use it directly, no edge function call needed
+                        photoViewModel?.setThumbnailUrl(restaurant.id, knownPhotoUrl)
+                    } else {
+                        // No cached URL — fetch from Google Places via edge function
+                        photoViewModel?.loadThumbnail(
+                            restaurantId = restaurant.id,
+                            placeId = fullRestaurant?.googlePlaceId,
+                            name = restaurant.name,
+                            city = fullRestaurant?.city.orEmpty()
+                        )
+                    }
+                }
+
                 RestaurantCardDark(
                     restaurantName = restaurant.name,
                     cuisine = restaurant.cuisine,
@@ -629,7 +656,9 @@ fun DarkHomeScreen(
                     isFavorite = isFavorite,
                     onClick = { onRestaurantClick(restaurant.id) },
                     onFavoriteClick = { isFavorite = !isFavorite },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    photoUrl = restaurant.photoUrl,
+                    photoState = photoStates[restaurant.id]
                 )
             }
             
@@ -665,5 +694,6 @@ private data class RestaurantInfo(
     val cuisine: String,
     val rating: Float,
     val reviewCount: Int,
-    val deliveryTime: String
+    val deliveryTime: String,
+    val photoUrl: String? = null  // Google Places photo URL
 )

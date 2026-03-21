@@ -450,24 +450,53 @@ class RealtimeFeedRepository {
                     }
                     .decodeSingleOrNull<LikeDto>()
             } catch (e: Exception) { null }
-            
+
             if (existingLike != null) {
-                // Unlike
+                // Unlike — remove from likes table
                 postgrest["likes"].delete {
                     filter {
                         eq("user_id", userId)
                         eq("rating_id", ratingId)
                     }
                 }
+                // Decrement likes_count on ratings table so count persists across reloads
+                updateLikesCount(ratingId, delta = -1)
                 Result.success(false)
             } else {
-                // Like
+                // Like — insert into likes table
                 val dto = LikeDto(userId = userId, ratingId = ratingId)
                 postgrest["likes"].insert(dto)
+                // Increment likes_count on ratings table so count persists across reloads
+                updateLikesCount(ratingId, delta = 1)
                 Result.success(true)
             }
         } catch (e: Exception) {
+            println("RealtimeFeed: toggleLike error: ${e.message}")
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Update the likes_count column on the ratings table.
+     * This ensures the count is persisted and correct when the feed reloads.
+     */
+    private suspend fun updateLikesCount(ratingId: String, delta: Int) {
+        try {
+            val rating = postgrest["ratings"]
+                .select {
+                    filter { eq("id", ratingId) }
+                }
+                .decodeSingleOrNull<RatingDto>()
+
+            if (rating != null) {
+                val newCount = (rating.likesCount + delta).coerceAtLeast(0)
+                postgrest["ratings"]
+                    .update(mapOf("likes_count" to newCount)) {
+                        filter { eq("id", ratingId) }
+                    }
+            }
+        } catch (e: Exception) {
+            println("RealtimeFeed: updateLikesCount error: ${e.message}")
         }
     }
     

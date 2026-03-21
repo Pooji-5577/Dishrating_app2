@@ -265,8 +265,7 @@ fun SocialFeedCard(
                     com.example.smackcheck2.ui.components.NetworkImage(
                         imageUrl = imageUrl,
                         contentDescription = item.dishName,
-                        modifier = Modifier.fillMaxSize(),
-                        showGradientOnFailure = false
+                        modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     Icon(

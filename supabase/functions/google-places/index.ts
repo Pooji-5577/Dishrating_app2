@@ -53,6 +53,7 @@ interface NearbyRestaurant {
   userRatingsTotal: number | null
   priceLevel: number | null
   photoReference: string | null
+  photoUrl: string | null  // Direct photo URL for displaying images
   isOpen: boolean | null
 }
 
@@ -98,6 +99,18 @@ interface GooglePlaceResult {
   opening_hours?: { open_now?: boolean }
 }
 
+/**
+ * Build a photo URL that routes through this Edge Function's GET proxy.
+ *
+ * The proxy endpoint (handlePhotoProxy) fetches the image server-side,
+ * so the client sees a simple image response — no redirects, no API key,
+ * and no expiry.
+ */
+function buildPhotoProxyUrl(photoReference: string, maxWidth: number): string {
+  const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+  return `${SUPABASE_URL}/functions/v1/google-places?photo_ref=${encodeURIComponent(photoReference)}&maxwidth=${maxWidth}`
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -110,6 +123,25 @@ Deno.serve(async (req) => {
       throw new Error('GOOGLE_PLACES_API_KEY not configured on server')
     }
 
+    // ── GET request: photo proxy ──
+    // Allows image loaders (Kamel, Coil, etc.) to load photos as a simple URL.
+    // Usage: GET /google-places?photo_ref=XXXX&maxwidth=400
+    if (req.method === 'GET') {
+      const url = new URL(req.url)
+      const photoRef = url.searchParams.get('photo_ref')
+      const maxWidth = parseInt(url.searchParams.get('maxwidth') ?? '400', 10)
+
+      if (photoRef) {
+        return await handlePhotoProxy(photoRef, maxWidth, GOOGLE_PLACES_API_KEY)
+      }
+
+      return new Response(
+        JSON.stringify({ error: 'GET requires ?photo_ref=...' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // ── POST request: existing JSON API ──
     const body: PlacesRequest = await req.json()
 
     if (body.action === 'nearby-search') {
@@ -173,18 +205,28 @@ async function handleNearbySearch(
     throw new Error(`Google Places API: ${data.error_message ?? data.status}`)
   }
 
-  const results: NearbyRestaurant[] = (data.results ?? []).map((place: GooglePlaceResult) => ({
-    id: place.place_id,
-    name: place.name,
-    address: place.vicinity ?? null,
-    latitude: place.geometry.location.lat,
-    longitude: place.geometry.location.lng,
-    rating: place.rating ?? null,
-    userRatingsTotal: place.user_ratings_total ?? null,
-    priceLevel: place.price_level ?? null,
-    photoReference: place.photos?.[0]?.photo_reference ?? null,
-    isOpen: place.opening_hours?.open_now ?? null,
-  }))
+  const results: NearbyRestaurant[] = await Promise.all(
+    (data.results ?? []).map(async (place: GooglePlaceResult) => {
+      const photoRef = place.photos?.[0]?.photo_reference ?? null
+      const photoUrl = photoRef
+        ? buildPhotoProxyUrl(photoRef, 400)
+        : null
+
+      return {
+        id: place.place_id,
+        name: place.name,
+        address: place.vicinity ?? null,
+        latitude: place.geometry.location.lat,
+        longitude: place.geometry.location.lng,
+        rating: place.rating ?? null,
+        userRatingsTotal: place.user_ratings_total ?? null,
+        priceLevel: place.price_level ?? null,
+        photoReference: photoRef,
+        photoUrl,
+        isOpen: place.opening_hours?.open_now ?? null,
+      }
+    })
+  )
 
   console.log(`Nearby search returned ${results.length} restaurants`)
 
@@ -223,6 +265,10 @@ async function handlePlaceDetails(
   }
 
   const place: GooglePlaceResult | undefined = data.result
+  const photoRef = place?.photos?.[0]?.photo_reference ?? null
+  const photoUrl = photoRef
+    ? buildPhotoProxyUrl(photoRef, 400)
+    : null
   const result: NearbyRestaurant | null = place
     ? {
         id: place.place_id,
@@ -233,7 +279,8 @@ async function handlePlaceDetails(
         rating: place.rating ?? null,
         userRatingsTotal: place.user_ratings_total ?? null,
         priceLevel: place.price_level ?? null,
-        photoReference: place.photos?.[0]?.photo_reference ?? null,
+        photoReference: photoRef,
+        photoUrl,
         isOpen: place.opening_hours?.open_now ?? null,
       }
     : null
@@ -277,18 +324,28 @@ async function handleTextSearch(
       throw new Error(`Google Places API: ${searchData.error_message ?? searchData.status}`)
     }
 
-    const results: NearbyRestaurant[] = (searchData.results ?? []).map((place: GooglePlaceResult) => ({
-      id: place.place_id,
-      name: place.name,
-      address: place.formatted_address ?? place.vicinity ?? null,
-      latitude: place.geometry.location.lat,
-      longitude: place.geometry.location.lng,
-      rating: place.rating ?? null,
-      userRatingsTotal: place.user_ratings_total ?? null,
-      priceLevel: place.price_level ?? null,
-      photoReference: place.photos?.[0]?.photo_reference ?? null,
-      isOpen: place.opening_hours?.open_now ?? null,
-    }))
+    const results: NearbyRestaurant[] = await Promise.all(
+      (searchData.results ?? []).map(async (place: GooglePlaceResult) => {
+        const photoRef = place.photos?.[0]?.photo_reference ?? null
+        const photoUrl = photoRef
+          ? buildPhotoProxyUrl(photoRef, 400)
+          : null
+
+        return {
+          id: place.place_id,
+          name: place.name,
+          address: place.formatted_address ?? place.vicinity ?? null,
+          latitude: place.geometry.location.lat,
+          longitude: place.geometry.location.lng,
+          rating: place.rating ?? null,
+          userRatingsTotal: place.user_ratings_total ?? null,
+          priceLevel: place.price_level ?? null,
+          photoReference: photoRef,
+          photoUrl,
+          isOpen: place.opening_hours?.open_now ?? null,
+        }
+      })
+    )
 
     console.log(`Text search returned ${results.length} restaurants`)
 
@@ -380,14 +437,11 @@ async function handleSearchPhotos(
       )
     }
 
-    // Convert photo references to URLs (max 5 photos)
+    // Convert photo references to proxy URLs (max 5 photos)
     const photoUrls: string[] = detailsData.result.photos
       .slice(0, 5)
       .map((photo: { photo_reference: string }) =>
-        `https://maps.googleapis.com/maps/api/place/photo` +
-        `?maxwidth=800` +
-        `&photo_reference=${photo.photo_reference}` +
-        `&key=${apiKey}`
+        buildPhotoProxyUrl(photo.photo_reference, 800)
       )
 
     console.log(`Returning ${photoUrls.length} photo URLs`)
@@ -496,12 +550,66 @@ async function handleGeocodeCity(
         latitude: null, 
         longitude: null, 
         formattedAddress: null, 
-        error: errorMessage 
+        error: errorMessage
       } as GeocodeCityResponse),
       {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     )
+  }
+}
+
+/**
+ * Proxy a Google Places photo — fetches the image server-side and streams
+ * the bytes back to the client.  This avoids:
+ *   - Exposing the API key to the client
+ *   - Client-side redirect-follow issues
+ *   - CDN URL expiry
+ *
+ * The resulting URL can be loaded by any image library as a plain GET.
+ */
+async function handlePhotoProxy(
+  photoReference: string,
+  maxWidth: number,
+  apiKey: string
+): Promise<Response> {
+  const photoUrl =
+    `https://maps.googleapis.com/maps/api/place/photo` +
+    `?maxwidth=${maxWidth}` +
+    `&photo_reference=${photoReference}` +
+    `&key=${apiKey}`
+
+  try {
+    // Follow the redirect and fetch the actual image bytes
+    const imageResponse = await fetch(photoUrl, { redirect: 'follow' })
+
+    if (!imageResponse.ok) {
+      console.error(`Photo proxy error: ${imageResponse.status}`)
+      return new Response('Photo not found', {
+        status: 404,
+        headers: corsHeaders,
+      })
+    }
+
+    const contentType =
+      imageResponse.headers.get('content-type') ?? 'image/jpeg'
+    const imageBytes = await imageResponse.arrayBuffer()
+
+    return new Response(imageBytes, {
+      status: 200,
+      headers: {
+        ...corsHeaders,
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=86400', // 24 h client cache
+      },
+    })
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error'
+    console.error(`Photo proxy fetch error: ${msg}`)
+    return new Response('Failed to fetch photo', {
+      status: 500,
+      headers: corsHeaders,
+    })
   }
 }

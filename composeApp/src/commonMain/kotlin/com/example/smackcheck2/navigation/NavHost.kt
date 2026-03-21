@@ -625,47 +625,38 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         
         is Screen.LocationSelection -> {
             val uiState by locationHomeViewModel.uiState.collectAsState()
-            var locationDetectedAndSelected by remember { mutableStateOf(false) }
-
-            // Navigate back after GPS location is successfully detected and selected
-            androidx.compose.runtime.LaunchedEffect(locationDetectedAndSelected) {
-                if (locationDetectedAndSelected) {
-                    navigationState.navigateBack()
-                }
-            }
 
             RequestLocationPermission(
                 onPermissionResult = { granted ->
+                    println("NavHost: LocationSelection - permission result: $granted")
                     if (granted) {
+                        // Permission granted, now get the location
                         locationHomeViewModel.useCurrentLocation()
                     }
                 }
             ) { requestPermission ->
-                // Watch for successful location detection
-                val wasDetecting = remember { mutableStateOf(false) }
-                if (uiState.isDetectingLocation) {
-                    wasDetecting.value = true
-                } else if (wasDetecting.value && !uiState.isDetectingLocation && uiState.locationError == null) {
-                    // Location was detected successfully
-                    wasDetecting.value = false
-                    locationDetectedAndSelected = true
-                }
-
                 LocationSelectionScreen(
                     currentLocation = uiState.selectedLocation,
                     isDetectingLocation = uiState.isDetectingLocation,
                     locationError = uiState.locationError,
                     searchResults = uiState.searchResults,
-                    onNavigateBack = { navigationState.navigateBack() },
+                    onNavigateBack = { 
+                        println("NavHost: LocationSelection - navigating back")
+                        navigationState.navigateBack() 
+                    },
                     onLocationSelected = { location ->
+                        println("NavHost: LocationSelection - location selected: $location")
                         locationHomeViewModel.selectLocation(location)
                         navigationState.navigateBack()
                     },
                     onUseCurrentLocation = {
-                        // Request permission first, then get location
+                        println("NavHost: LocationSelection - use current location clicked, requesting permission")
+                        // First request permission - if already granted, callback fires immediately
+                        // If not granted, popup shows and callback fires after user responds
                         requestPermission()
                     },
                     onSearchLocation = { query ->
+                        println("NavHost: LocationSelection - searching: $query")
                         locationHomeViewModel.searchLocations(query)
                     },
                     onClearError = {
@@ -689,7 +680,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     averageRating = nearby.rating?.toFloat() ?: 0f,
                     reviewCount = nearby.userRatingsTotal ?: 0,
                     latitude = nearby.latitude,
-                    longitude = nearby.longitude
+                    longitude = nearby.longitude,
+                    googlePlaceId = nearby.id,
+                    photoUrl = nearby.photoUrl
                 )
             }
 
@@ -774,7 +767,10 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
 
         is Screen.DarkHome -> {
             val uiState by locationHomeViewModel.uiState.collectAsState()
-
+            
+            // Track if we've already requested permission on this screen visit
+            var hasRequestedPermission by remember { mutableStateOf(false) }
+            
             // Convert nearby restaurants to Restaurant format
             // Use SmackCheck ratings (0 for new restaurants), NOT Google ratings
             val nearbyAsRestaurants = uiState.nearbyRestaurants.map { nearby ->
@@ -787,43 +783,70 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     averageRating = 0f,  // SmackCheck rating - 0 until users rate it
                     reviewCount = 0,      // SmackCheck reviews - 0 until users review it
                     latitude = nearby.latitude,
-                    longitude = nearby.longitude
+                    longitude = nearby.longitude,
+                    googlePlaceId = nearby.id,
+                    photoUrl = nearby.photoUrl  // Pass the Google Places photo URL
                 )
             }
 
             // Combine database and nearby restaurants
             val combinedRestaurants = (uiState.allRestaurants + nearbyAsRestaurants).distinctBy { it.id }
 
-            DarkHomeScreen(
-                currentLocation = uiState.selectedLocation ?: "Select Location",
-                allRestaurants = combinedRestaurants,
-                allDishes = uiState.topDishes,
-                noRestaurantsFound = uiState.noRestaurantsFound,
-                onLocationClick = { navigationState.navigateTo(Screen.LocationSelection) },
-                onDishClick = { dishId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.DishDetail,
-                        "dishId" to dishId
-                    )
-                },
-                onRestaurantClick = { restaurantId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.RestaurantDetail,
-                        "restaurantId" to restaurantId
-                    )
-                },
-                onSearchClick = { navigationState.navigateTo(Screen.Search) },
-                onMapClick = { navigationState.navigateTo(Screen.SocialMap) },
-                onProfileClick = { navigationState.navigateTo(Screen.Profile) },
-                onGameClick = { navigationState.navigateTo(Screen.Game) },
-                onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
-                onTopDishesClick = { navigationState.navigateTo(Screen.TopDishes) },
-                onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
-                onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) },
-                onSocialFeedClick = { navigationState.navigateTo(Screen.SocialFeed) },
-                onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) },
-                onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) }
-            )
+            RequestLocationPermission(
+                onPermissionResult = { granted ->
+                    println("NavHost: DarkHome - permission result: $granted")
+                    if (granted) {
+                        // Permission granted, auto-detect location
+                        locationHomeViewModel.useCurrentLocation()
+                    }
+                }
+            ) { requestPermission ->
+                // Auto-request permission when screen first loads
+                LaunchedEffect(Unit) {
+                    if (!hasRequestedPermission) {
+                        hasRequestedPermission = true
+                        println("NavHost: DarkHome - auto-requesting location permission")
+                        // Small delay to let the UI settle before showing permission dialog
+                        kotlinx.coroutines.delay(500)
+                        requestPermission()
+                    }
+                }
+                
+                DarkHomeScreen(
+                    currentLocation = uiState.selectedLocation ?: "Select Location",
+                    allRestaurants = combinedRestaurants,
+                    allDishes = uiState.topDishes,
+                    noRestaurantsFound = uiState.noRestaurantsFound,
+                    photoViewModel = restaurantPhotoViewModel,
+                    onLocationClick = { 
+                        println("NavHost: Location clicked, navigating to LocationSelection")
+                        navigationState.navigateTo(Screen.LocationSelection) 
+                    },
+                    onDishClick = { dishId ->
+                        navigationState.navigateToWithArgs(
+                            Screen.DishDetail,
+                            "dishId" to dishId
+                        )
+                    },
+                    onRestaurantClick = { restaurantId ->
+                        navigationState.navigateToWithArgs(
+                            Screen.RestaurantDetail,
+                            "restaurantId" to restaurantId
+                        )
+                    },
+                    onSearchClick = { navigationState.navigateTo(Screen.Search) },
+                    onMapClick = { navigationState.navigateTo(Screen.SocialMap) },
+                    onProfileClick = { navigationState.navigateTo(Screen.Profile) },
+                    onGameClick = { navigationState.navigateTo(Screen.Game) },
+                    onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                    onTopDishesClick = { navigationState.navigateTo(Screen.TopDishes) },
+                    onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
+                    onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) },
+                    onSocialFeedClick = { navigationState.navigateTo(Screen.SocialFeed) },
+                    onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) },
+                    onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) }
+                )
+            }
         }
         
         is Screen.DarkDishCapture -> {
@@ -909,7 +932,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     averageRating = nearby.rating?.toFloat() ?: 0f,
                     reviewCount = nearby.userRatingsTotal ?: 0,
                     latitude = nearby.latitude,
-                    longitude = nearby.longitude
+                    longitude = nearby.longitude,
+                    googlePlaceId = nearby.id,
+                    photoUrl = nearby.photoUrl
                 )
             }
 

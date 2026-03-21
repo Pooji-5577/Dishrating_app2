@@ -1018,7 +1018,9 @@ class DatabaseRepository {
             averageRating = averageRating,
             reviewCount = reviewCount,
             latitude = latitude,
-            longitude = longitude
+            longitude = longitude,
+            googlePlaceId = googlePlaceId,
+            photoUrl = photoUrls.firstOrNull()
         )
     }
 

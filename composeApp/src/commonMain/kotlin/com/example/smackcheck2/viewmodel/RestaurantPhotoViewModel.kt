@@ -77,6 +77,19 @@ class RestaurantPhotoViewModel : ViewModel() {
     }
 
     /**
+     * Directly set a known thumbnail URL (e.g. from Google Places nearby search result).
+     * Avoids calling the edge function when a photo URL is already available.
+     */
+    fun setThumbnailUrl(restaurantId: String, url: String) {
+        // Skip if a better (full) state is already loaded
+        val current = _photoStates.value[restaurantId]
+        if (current is PhotoState.ThumbnailLoaded || current is PhotoState.FullPhotosLoaded) return
+
+        thumbnailUrlCache[restaurantId] = url
+        updateState(restaurantId, PhotoState.ThumbnailLoaded(url))
+    }
+
+    /**
      * Load all photo URLs for the restaurant detail screen carousel.
      */
     fun loadFullPhotos(

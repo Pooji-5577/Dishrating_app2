@@ -5,15 +5,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BrokenImage
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -40,7 +41,7 @@ object FoodImages {
         "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=400&h=400&fit=crop", // Avocado toast
         "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&h=400&fit=crop", // Meat dish
     )
-    
+
     // Restaurant images (wider aspect ratio)
     val restaurantImages = listOf(
         "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&h=400&fit=crop", // Restaurant interior
@@ -52,19 +53,19 @@ object FoodImages {
         "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&h=400&fit=crop", // Food on table
         "https://images.unsplash.com/photo-1578474846511-04ba529f0b88?w=600&h=400&fit=crop", // Italian restaurant
     )
-    
+
     // Get a dish image based on index (cycles through available images)
     fun getDishImage(index: Int): String = dishImages[index % dishImages.size]
-    
+
     // Get a restaurant image based on index
     fun getRestaurantImage(index: Int): String = restaurantImages[index % restaurantImages.size]
-    
+
     // Get image based on dish name (creates consistent mapping)
     fun getDishImageByName(name: String): String {
         val hash = name.hashCode().let { if (it < 0) -it else it }
         return dishImages[hash % dishImages.size]
     }
-    
+
     // Get image based on restaurant name
     fun getRestaurantImageByName(name: String): String {
         val hash = name.hashCode().let { if (it < 0) -it else it }
@@ -73,7 +74,11 @@ object FoodImages {
 }
 
 /**
- * Network image component using Kamel for Kotlin Multiplatform
+ * Network image component using Kamel for Kotlin Multiplatform.
+ *
+ * If [fallbackUrl] is provided and the primary [imageUrl] fails to load,
+ * automatically retries with the fallback URL (e.g. an Unsplash stock image)
+ * instead of showing the orange error gradient.
  */
 @Composable
 fun NetworkImage(
@@ -82,11 +87,15 @@ fun NetworkImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
     placeholderIcon: ImageVector = Icons.Filled.Restaurant,
-    showGradientOnFailure: Boolean = true
+    fallbackUrl: String? = null
 ) {
     val colors = appColors()
+    // Track whether the primary URL failed so we can retry with fallbackUrl
+    var useFallback by remember(imageUrl) { mutableStateOf(false) }
+    val urlToLoad = if (useFallback && fallbackUrl != null) fallbackUrl else imageUrl
+
     KamelImage(
-        resource = asyncPainterResource(imageUrl),
+        resource = asyncPainterResource(urlToLoad),
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = contentScale,
@@ -104,31 +113,24 @@ fun NetworkImage(
             }
         },
         onFailure = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        if (showGradientOnFailure)
-                            Brush.linearGradient(
-                                colors = listOf(
-                                    Color(0xFF8B4513),
-                                    Color(0xFFD2691E),
-                                    Color(0xFFA0522D)
-                                )
-                            )
-                        else
-                            Brush.linearGradient(
-                                colors = listOf(colors.Surface, colors.Surface)
-                            )
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = placeholderIcon,
-                    contentDescription = null,
-                    modifier = Modifier.size(80.dp),
-                    tint = colors.TextSecondary.copy(alpha = 0.5f)
-                )
+            if (!useFallback && fallbackUrl != null) {
+                // Primary URL failed — retry once with the Unsplash fallback
+                useFallback = true
+            } else {
+                // No fallback available (or fallback also failed) — show placeholder icon
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(colors.SurfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = placeholderIcon,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = colors.TextSecondary.copy(alpha = 0.5f)
+                    )
+                }
             }
         }
     )

@@ -20,6 +20,7 @@ data class NearbyRestaurant(
     val userRatingsTotal: Int?,
     val priceLevel: Int?,
     val photoReference: String?,
+    val photoUrl: String?,  // Direct photo URL for displaying images
     val isOpen: Boolean?
 )
 
@@ -308,6 +309,7 @@ private data class RestaurantDto(
     val userRatingsTotal: Int? = null,
     val priceLevel: Int? = null,
     val photoReference: String? = null,
+    val photoUrl: String? = null,
     val isOpen: Boolean? = null
 ) {
     fun toNearbyRestaurant() = NearbyRestaurant(
@@ -320,6 +322,7 @@ private data class RestaurantDto(
         userRatingsTotal = userRatingsTotal,
         priceLevel = priceLevel,
         photoReference = photoReference,
+        photoUrl = photoUrl,
         isOpen = isOpen
     )
 }

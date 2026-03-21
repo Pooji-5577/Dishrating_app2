@@ -80,6 +80,10 @@ data class RestaurantDto(
     val reviewCount: Int = 0,
     val latitude: Double? = null,
     val longitude: Double? = null,
+    @SerialName("google_place_id")
+    val googlePlaceId: String? = null,
+    @SerialName("photo_urls")
+    val photoUrls: List<String> = emptyList(),
     @SerialName("created_at")
     val createdAt: String? = null
 )
