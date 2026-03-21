@@ -235,6 +235,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     // Shared NotificationViewModel for push notifications (from main)
     val notificationViewModel: NotificationViewModel = viewModel { NotificationViewModel() }
 
+    // Shared SocialFeedViewModel — created early so feed pre-loads on auth
+    val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel() }
+
     // Points-earned popup state (from main)
     var pointsEvent by remember { mutableStateOf<PointsEarnedEvent?>(null) }
     LaunchedEffect(Unit) {
@@ -289,11 +292,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is AuthState.Unknown -> null
     }
 
-    // Initialize push notifications when authenticated (from main)
+    // Initialize push notifications and pre-load feed when authenticated
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated == true) {
             notificationViewModel.initializePushNotifications()
             notificationViewModel.refresh()
+            socialFeedViewModel.loadFeed()
         }
     }
     
@@ -533,7 +537,6 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         }
         
         is Screen.SocialFeed -> {
-            val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel() }
             val socialFeedState by socialFeedViewModel.uiState.collectAsState()
             val shareService = LocalShareService.current
 
@@ -543,7 +546,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 if (scrollToId.isNotBlank()) {
                     socialFeedViewModel.setScrollToRatingId(scrollToId)
                 }
-                socialFeedViewModel.loadFeed()
+                // loadFeed() already called on auth — no need to call again here
             }
 
             SocialFeedScreen(
