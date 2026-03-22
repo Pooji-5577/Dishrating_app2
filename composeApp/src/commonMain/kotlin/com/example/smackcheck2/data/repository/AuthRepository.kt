@@ -8,9 +8,13 @@ import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.OAuthProvider
 import io.github.jan.supabase.auth.user.UserInfo
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.postgrest.postgrest
+import io.ktor.client.call.body
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 // Custom OAuth Providers for Facebook and Apple
 private object Facebook : OAuthProvider() {
@@ -34,6 +38,35 @@ class AuthRepository {
      * Uses upsert on id first; if that hits an email conflict, updates the
      * existing row by email instead.
      */
+    @Serializable
+    private data class UsernameCheckRequest(val username: String)
+
+    @Serializable
+    private data class UsernameCheckResponse(
+        val available: Boolean,
+        val error: String? = null
+    )
+
+    private val json = Json { ignoreUnknownKeys = true }
+
+    suspend fun checkUsernameAvailable(username: String): Result<Boolean> {
+        return try {
+            val response = client.functions.invoke(
+                function = "check-username",
+                body = UsernameCheckRequest(username)
+            )
+            val responseText = response.body<String>()
+            val parsed = json.decodeFromString<UsernameCheckResponse>(responseText)
+            if (parsed.available) {
+                Result.success(true)
+            } else {
+                Result.failure(Exception(parsed.error ?: "Username is not available."))
+            }
+        } catch (e: Exception) {
+            Result.failure(Exception("Could not check username availability. Please try again."))
+        }
+    }
+
     private suspend fun upsertProfile(profile: ProfileDto): ProfileDto {
         try {
             // Try upsert on primary key (id)
@@ -42,6 +75,9 @@ class AuthRepository {
             }
             return profile
         } catch (e: Exception) {
+            if (e.message?.contains("profiles_username_lower_idx", ignoreCase = true) == true) {
+                throw Exception("That username is already taken. Please choose a different one.")
+            }
             if (e.message?.contains("profiles_email_key", ignoreCase = true) == true ||
                 e.message?.contains("duplicate key", ignoreCase = true) == true
             ) {
@@ -65,7 +101,7 @@ class AuthRepository {
     /**
      * Sign up a new user with email and password
      */
-    suspend fun signUp(name: String, email: String, password: String): Result<User> {
+    suspend fun signUp(name: String, username: String, email: String, password: String): Result<User> {
         return try {
             auth.signUpWith(Email) {
                 this.email = email
@@ -81,6 +117,7 @@ class AuthRepository {
                     val profile = ProfileDto(
                         id = userId,
                         name = name,
+                        username = username.ifBlank { null },
                         email = email
                     )
                     upsertProfile(profile)
@@ -93,6 +130,7 @@ class AuthRepository {
                     User(
                         id = userId,
                         name = name,
+                        username = username,
                         email = email
                     )
                 )
@@ -562,6 +600,7 @@ class AuthRepository {
         return User(
             id = id,
             name = name,
+            username = username ?: "",
             email = email,
             profilePhotoUrl = profilePhotoUrl,
             level = level,
