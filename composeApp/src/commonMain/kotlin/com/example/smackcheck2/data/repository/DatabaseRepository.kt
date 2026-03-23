@@ -193,6 +193,7 @@ class DatabaseRepository {
                         ilike("city", "%$city%")
                     }
                     order("average_rating", Order.DESCENDING)
+                    limit(10)
                 }
                 .decodeList<RestaurantDto>()
                 .map { it.toRestaurant() }
