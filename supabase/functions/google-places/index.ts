@@ -99,6 +99,40 @@ interface GooglePlaceResult {
   types?: string[]
 }
 
+const FOOD_TYPE_BLACKLIST = new Set([
+  'movie_theater',
+  'stadium',
+  'airport',
+  'shopping_mall',
+])
+
+const FOOD_TYPE_WHITELIST = new Set([
+  'restaurant',
+  'cafe',
+  'bar',
+  'bakery',
+  'meal_takeaway',
+  'meal_delivery',
+  'food',
+])
+
+function isFoodPlace(place: GooglePlaceResult): boolean {
+  const types = place.types ?? []
+
+  if (types.some(t => FOOD_TYPE_BLACKLIST.has(t))) {
+    console.log(`Filtered out (blacklist): "${place.name}" (types: ${types.join(', ')})`)
+    return false
+  }
+
+  const hasFood = types.some(t => FOOD_TYPE_WHITELIST.has(t))
+  if (!hasFood) {
+    console.log(`Filtered out (no food type): "${place.name}" (types: ${types.join(', ')})`)
+    return false
+  }
+
+  return true
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -174,20 +208,7 @@ async function handleNearbySearch(
     throw new Error(`Google Places API: ${data.error_message ?? data.status}`)
   }
 
-  // Filter out stay-in hotels/lodging — only keep food places
-  const foodPlaces = (data.results ?? []).filter((place: GooglePlaceResult) => {
-    const types = place.types ?? []
-    // Exclude places that are primarily lodging (stay-in hotels)
-    // Keep them only if they also have explicit food service types
-    if (types.includes('lodging')) {
-      const hasFoodService = types.includes('meal_takeaway') || types.includes('meal_delivery') || types.includes('bakery') || types.includes('cafe')
-      if (!hasFoodService) {
-        console.log(`Filtered out lodging: "${place.name}" (types: ${types.join(', ')})`)
-        return false
-      }
-    }
-    return true
-  })
+  const foodPlaces = (data.results ?? []).filter(isFoodPlace)
 
   const results: NearbyRestaurant[] = foodPlaces.map((place: GooglePlaceResult) => ({
     id: place.place_id,
@@ -202,7 +223,7 @@ async function handleNearbySearch(
     isOpen: place.opening_hours?.open_now ?? null,
   }))
 
-  console.log(`Nearby search: ${(data.results ?? []).length} total, ${results.length} after filtering lodging`)
+  console.log(`Nearby search: ${(data.results ?? []).length} total, ${results.length} after filtering non-food places`)
 
   const response: PlacesResponse = { results }
   return new Response(
@@ -293,18 +314,7 @@ async function handleTextSearch(
       throw new Error(`Google Places API: ${searchData.error_message ?? searchData.status}`)
     }
 
-    // Filter out stay-in hotels/lodging
-    const foodPlaces = (searchData.results ?? []).filter((place: GooglePlaceResult) => {
-      const types = place.types ?? []
-      if (types.includes('lodging')) {
-        const hasFoodService = types.includes('meal_takeaway') || types.includes('meal_delivery') || types.includes('bakery') || types.includes('cafe')
-        if (!hasFoodService) {
-          console.log(`Filtered out lodging: "${place.name}" (types: ${types.join(', ')})`)
-          return false
-        }
-      }
-      return true
-    })
+    const foodPlaces = (searchData.results ?? []).filter(isFoodPlace)
 
     const results: NearbyRestaurant[] = foodPlaces.map((place: GooglePlaceResult) => ({
       id: place.place_id,
@@ -319,7 +329,7 @@ async function handleTextSearch(
       isOpen: place.opening_hours?.open_now ?? null,
     }))
 
-    console.log(`Text search: ${(searchData.results ?? []).length} total, ${results.length} after filtering lodging`)
+    console.log(`Text search: ${(searchData.results ?? []).length} total, ${results.length} after filtering non-food places`)
 
     const response: PlacesResponse = { results }
     return new Response(
