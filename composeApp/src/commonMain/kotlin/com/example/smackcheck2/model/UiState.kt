@@ -54,6 +54,20 @@ data class RegisterUiState(
 )
 
 /**
+ * Profile setup onboarding UI state
+ */
+data class ProfileSetupUiState(
+    val username: String = "",
+    val usernameError: String? = null,
+    val isCheckingUsername: Boolean = false,
+    val usernameAvailable: Boolean? = null,
+    val profilePhotoUrl: String? = null,
+    val isUploadingPhoto: Boolean = false,
+    val isSaving: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
  * Profile UI state
  */
 data class ProfileUiState(

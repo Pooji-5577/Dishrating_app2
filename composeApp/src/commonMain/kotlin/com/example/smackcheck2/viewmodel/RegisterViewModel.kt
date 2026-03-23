@@ -4,15 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.RegisterUiState
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-private val USERNAME_REGEX = Regex("^[a-zA-Z0-9_]{3,20}$")
 
 /**
  * ViewModel for Register screen
@@ -24,34 +20,8 @@ class RegisterViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
 
-    private var usernameCheckJob: Job? = null
-
     fun onNameChange(name: String) {
         _uiState.update { it.copy(name = name, nameError = null) }
-    }
-
-    fun onUsernameChange(username: String) {
-        _uiState.update {
-            it.copy(
-                username = username,
-                usernameError = null,
-                usernameAvailable = null,
-                isCheckingUsername = false
-            )
-        }
-        usernameCheckJob?.cancel()
-        if (username.isBlank()) return
-
-        val formatError = validateUsernameFormat(username)
-        if (formatError != null) {
-            _uiState.update { it.copy(usernameError = formatError) }
-            return
-        }
-
-        usernameCheckJob = viewModelScope.launch {
-            delay(500)
-            checkUsernameAvailability(username)
-        }
     }
 
     fun onEmailChange(email: String) {
@@ -71,7 +41,6 @@ class RegisterViewModel : ViewModel() {
 
         var hasError = false
         var nameError: String? = null
-        var usernameError: String? = null
         var emailError: String? = null
         var passwordError: String? = null
         var confirmPasswordError: String? = null
@@ -82,23 +51,6 @@ class RegisterViewModel : ViewModel() {
         } else if (currentState.name.length < 2) {
             nameError = "Name must be at least 2 characters"
             hasError = true
-        }
-
-        if (currentState.username.isBlank()) {
-            usernameError = "Username is required"
-            hasError = true
-        } else {
-            val formatError = validateUsernameFormat(currentState.username)
-            if (formatError != null) {
-                usernameError = formatError
-                hasError = true
-            } else if (currentState.usernameAvailable != true) {
-                usernameError = if (currentState.usernameAvailable == false)
-                    "That username is already taken"
-                else
-                    "Please wait while we check username availability"
-                hasError = true
-            }
         }
 
         if (currentState.email.isBlank()) {
@@ -135,7 +87,6 @@ class RegisterViewModel : ViewModel() {
             _uiState.update {
                 it.copy(
                     nameError = nameError,
-                    usernameError = usernameError,
                     emailError = emailError,
                     passwordError = passwordError,
                     confirmPasswordError = confirmPasswordError
@@ -150,7 +101,7 @@ class RegisterViewModel : ViewModel() {
             try {
                 val result = authRepository.signUp(
                     name = currentState.name,
-                    username = currentState.username,
+                    username = "",
                     email = currentState.email,
                     password = currentState.password
                 )
@@ -195,38 +146,6 @@ class RegisterViewModel : ViewModel() {
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
-    }
-
-    private fun checkUsernameAvailability(username: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isCheckingUsername = true, usernameError = null) }
-            val result = authRepository.checkUsernameAvailable(username)
-            result.fold(
-                onSuccess = {
-                    _uiState.update {
-                        it.copy(isCheckingUsername = false, usernameAvailable = true, usernameError = null)
-                    }
-                },
-                onFailure = { error ->
-                    _uiState.update {
-                        it.copy(
-                            isCheckingUsername = false,
-                            usernameAvailable = false,
-                            usernameError = error.message
-                        )
-                    }
-                }
-            )
-        }
-    }
-
-    private fun validateUsernameFormat(username: String): String? {
-        return when {
-            username.length < 3 -> "Username must be at least 3 characters"
-            username.length > 20 -> "Username must be 20 characters or fewer"
-            !USERNAME_REGEX.matches(username) -> "Username can only contain letters, numbers, and underscores"
-            else -> null
-        }
     }
 
     private fun isValidEmail(email: String): Boolean {

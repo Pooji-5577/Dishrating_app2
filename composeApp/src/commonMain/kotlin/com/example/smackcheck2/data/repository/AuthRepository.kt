@@ -13,6 +13,8 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.ktor.client.call.body
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -418,6 +420,33 @@ class AuthRepository {
      */
     fun getCurrentUserId(): String? {
         return auth.currentUserOrNull()?.id
+    }
+
+    @OptIn(ExperimentalSerializationApi::class)
+    @Serializable
+    private data class ProfileSetupDto(
+        val username: String,
+        @EncodeDefault(EncodeDefault.Mode.NEVER)
+        @kotlinx.serialization.SerialName("profile_photo_url")
+        val profilePhotoUrl: String? = null
+    )
+
+    /**
+     * Save username and optional profile photo during onboarding setup.
+     */
+    suspend fun saveProfileSetup(userId: String, username: String, profilePhotoUrl: String?): Result<Unit> {
+        return try {
+            client.postgrest["profiles"].update(ProfileSetupDto(username, profilePhotoUrl)) {
+                filter { eq("id", userId) }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            if (e.message?.contains("profiles_username_lower_idx", ignoreCase = true) == true) {
+                Result.failure(Exception("That username is already taken."))
+            } else {
+                Result.failure(Exception(sanitizeErrorMessage(e.message ?: "Failed to save profile")))
+            }
+        }
     }
 
     /**

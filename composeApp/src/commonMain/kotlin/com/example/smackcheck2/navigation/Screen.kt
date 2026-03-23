@@ -71,4 +71,7 @@ sealed class Screen(val route: String) {
     
     // Social Map (Snapchat-style map with nearby users)
     data object SocialMap : Screen("social_map")
+
+    // Onboarding — set username + profile photo after first sign-in
+    data object ProfileSetup : Screen("profile_setup")
 }
