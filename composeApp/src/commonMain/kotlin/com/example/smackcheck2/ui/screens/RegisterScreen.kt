@@ -14,7 +14,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AlternateEmail
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Visibility
@@ -153,7 +156,61 @@ fun RegisterScreen(
             )
             
             Spacer(modifier = Modifier.height(16.dp))
-            
+
+            // Username field
+            OutlinedTextField(
+                value = uiState.username,
+                onValueChange = viewModel::onUsernameChange,
+                label = { Text("Username") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Filled.AlternateEmail,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = when {
+                    uiState.isCheckingUsername -> ({
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                    })
+                    uiState.usernameAvailable == true -> ({
+                        Icon(
+                            imageVector = Icons.Filled.CheckCircle,
+                            contentDescription = "Username available",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    })
+                    uiState.usernameAvailable == false -> ({
+                        Icon(
+                            imageVector = Icons.Filled.Error,
+                            contentDescription = "Username taken",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    })
+                    else -> null
+                },
+                isError = uiState.usernameError != null || uiState.usernameAvailable == false,
+                supportingText = when {
+                    uiState.usernameError != null -> { { Text(uiState.usernameError!!) } }
+                    uiState.usernameAvailable == true -> { { Text("Available!", color = MaterialTheme.colorScheme.primary) } }
+                    else -> null
+                },
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Text,
+                    imeAction = ImeAction.Next
+                ),
+                keyboardActions = KeyboardActions(
+                    onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                ),
+                singleLine = true,
+                shape = TextFieldShape,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // Email field
             OutlinedTextField(
                 value = uiState.email,

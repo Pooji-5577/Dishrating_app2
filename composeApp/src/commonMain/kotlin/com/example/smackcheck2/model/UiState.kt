@@ -37,10 +37,14 @@ data class LoginUiState(
  */
 data class RegisterUiState(
     val name: String = "",
+    val username: String = "",
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
     val nameError: String? = null,
+    val usernameError: String? = null,
+    val isCheckingUsername: Boolean = false,
+    val usernameAvailable: Boolean? = null,
     val emailError: String? = null,
     val passwordError: String? = null,
     val confirmPasswordError: String? = null,

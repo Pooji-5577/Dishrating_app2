@@ -27,6 +27,7 @@ data class ProfileDto(
     val followersCount: Int = 0,
     @SerialName("following_count")
     val followingCount: Int = 0,
+    val username: String? = null,
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("updated_at")

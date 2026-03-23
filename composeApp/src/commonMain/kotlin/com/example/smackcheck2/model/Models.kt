@@ -7,6 +7,7 @@ data class User(
     val id: String = "",
     val name: String = "",
     val email: String = "",
+    val username: String = "",
     val profilePhotoUrl: String? = null,
     val level: Int = 1,
     val xp: Int = 0,

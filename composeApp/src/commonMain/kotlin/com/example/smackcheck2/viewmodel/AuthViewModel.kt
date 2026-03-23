@@ -140,6 +140,7 @@ class AuthViewModel : ViewModel() {
 
     fun register(
         name: String,
+        username: String = "",
         email: String,
         password: String,
         onSuccess: () -> Unit,
@@ -147,7 +148,7 @@ class AuthViewModel : ViewModel() {
     ) {
         viewModelScope.launch {
             try {
-                val result = authRepository.signUp(name, email, password)
+                val result = authRepository.signUp(name, username, email, password)
                 result.fold(
                     onSuccess = { user ->
                         _authState.value = AuthState.Authenticated(user)
