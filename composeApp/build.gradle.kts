@@ -98,6 +98,8 @@ kotlin {
             // Firebase (FCM for push notification token)
             implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
             implementation("com.google.firebase:firebase-messaging-ktx")
+            // Microsoft Clarity — session recording & heatmaps
+            implementation("com.microsoft.clarity:clarity-compose:3.+")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
