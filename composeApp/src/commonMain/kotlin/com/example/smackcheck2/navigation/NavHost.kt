@@ -103,6 +103,8 @@ import com.example.smackcheck2.ui.screens.FollowersListScreen
 import com.example.smackcheck2.ui.screens.CommentsScreen
 import com.example.smackcheck2.ui.screens.NotificationsListScreen
 import com.example.smackcheck2.ui.screens.SocialMapScreen
+import com.example.smackcheck2.ui.screens.ProfileSetupScreen
+import com.example.smackcheck2.viewmodel.ProfileSetupViewModel
 import com.example.smackcheck2.viewmodel.SocialFeedViewModel
 import com.example.smackcheck2.viewmodel.SocialMapViewModel
 import com.example.smackcheck2.viewmodel.CommentsViewModel
@@ -319,31 +321,54 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.Splash -> {
             DarkSplashScreen(
                 onNavigateToLogin = { navigationState.navigateTo(Screen.Login) },
-                onNavigateToHome = { navigationState.navigateTo(Screen.DarkHome) },
+                onNavigateToHome = {
+                    val user = authViewModel.getCurrentUser()
+                    if (user != null && user.username.isBlank()) {
+                        navigationState.navigateTo(Screen.ProfileSetup)
+                    } else {
+                        navigationState.navigateTo(Screen.DarkHome)
+                    }
+                },
                 isAuthenticated = isAuthenticated
             )
         }
-        
+
         is Screen.Login -> {
             val loginViewModel: LoginViewModel = viewModel { LoginViewModel() }
             DarkLoginScreen(
                 viewModel = loginViewModel,
                 authViewModel = authViewModel,
                 onNavigateToRegister = { navigationState.navigateTo(Screen.Register) },
-                onNavigateToHome = { navigationState.navigateTo(Screen.DarkHome) }
+                onNavigateToHome = {
+                    val user = authViewModel.getCurrentUser()
+                    if (user != null && user.username.isBlank()) {
+                        navigationState.navigateTo(Screen.ProfileSetup)
+                    } else {
+                        navigationState.navigateTo(Screen.DarkHome)
+                    }
+                }
             )
         }
-        
+
         is Screen.Register -> {
             val registerViewModel: RegisterViewModel = viewModel { RegisterViewModel() }
             RegisterScreen(
                 viewModel = registerViewModel,
                 authViewModel = authViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
-                onNavigateToHome = { navigationState.navigateTo(Screen.DarkHome) }
+                onNavigateToHome = { navigationState.navigateTo(Screen.ProfileSetup) }
             )
         }
         
+        is Screen.ProfileSetup -> {
+            val profileSetupViewModel: ProfileSetupViewModel = viewModel { ProfileSetupViewModel() }
+            ProfileSetupScreen(
+                viewModel = profileSetupViewModel,
+                currentUser = authViewModel.getCurrentUser(),
+                onComplete = { navigationState.navigateTo(Screen.DarkHome) }
+            )
+        }
+
         is Screen.Home -> {
             LocationHomeScreen(
                 viewModel = locationHomeViewModel,

@@ -39,7 +39,6 @@ class RegisterViewModel : ViewModel() {
     fun register(onSuccess: () -> Unit) {
         val currentState = _uiState.value
 
-        // Validate inputs
         var hasError = false
         var nameError: String? = null
         var emailError: String? = null
@@ -96,13 +95,13 @@ class RegisterViewModel : ViewModel() {
             return
         }
 
-        // Perform registration with Supabase
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             try {
                 val result = authRepository.signUp(
                     name = currentState.name,
+                    username = "",
                     email = currentState.email,
                     password = currentState.password
                 )
@@ -113,7 +112,6 @@ class RegisterViewModel : ViewModel() {
                         onSuccess()
                     },
                     onFailure = { error ->
-                        // Check if email confirmation is required
                         if (error.message == "CHECK_EMAIL") {
                             _uiState.update { it.copy(isLoading = false, isSuccess = true) }
                             onSuccess()

@@ -1,15 +1,8 @@
 package com.example.smackcheck2.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.dp
-import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.PhotoState
 
 /**
@@ -46,21 +39,9 @@ fun SmartRestaurantImage(
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
-    val themeColors = appColors()
-
     when (photoState) {
         is PhotoState.Loading -> {
-            // Show loading spinner while fetching from Edge Function
-            Box(
-                modifier = modifier.background(themeColors.Surface),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    color = themeColors.Primary,
-                    modifier = Modifier.size(24.dp),
-                    strokeWidth = 2.dp
-                )
-            }
+            ShimmerBox(modifier = modifier)
         }
 
         is PhotoState.ThumbnailLoaded -> {

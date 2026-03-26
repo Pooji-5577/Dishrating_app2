@@ -100,6 +100,8 @@ kotlin {
             implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
             implementation("com.google.firebase:firebase-messaging-ktx")
             implementation(libs.firebase.crashlytics)
+            // Microsoft Clarity — session recording & heatmaps
+            implementation("com.microsoft.clarity:clarity-compose:3.+")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

@@ -11,6 +11,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.smackcheck2.crashlytics.CrashlyticsHelper
+import com.microsoft.clarity.Clarity
+import com.microsoft.clarity.ClarityConfig
 import com.example.smackcheck2.data.SupabaseClientProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.example.smackcheck2.location.AppLocationManager
@@ -45,6 +47,9 @@ class MainActivity : ComponentActivity() {
         // ── Uncomment the line below ONCE to verify your Firebase project is
         // ── wired up correctly, then remove it before shipping.
         // CrashlyticsHelper.simulateCrash()
+
+        // Initialize Microsoft Clarity for session recording & heatmaps
+        Clarity.initialize(applicationContext, ClarityConfig(projectId = "w0rgf1ugzh"))
 
         // Initialize Supabase session early for session restoration
         SupabaseClientProvider.initializeSession()

@@ -137,7 +137,7 @@ class DatabaseRepository {
                 // Insert the restaurant with the user's dish photo as its image
                 val imageUrls = if (dishImageUrl != null) listOf(dishImageUrl) else restaurant.imageUrls
                 val dto = RestaurantDto(
-                    id = restaurant.id,
+                    // id omitted — let Postgres generate via DEFAULT gen_random_uuid()
                     name = restaurant.name,
                     city = restaurant.city,
                     cuisine = restaurant.cuisine,
@@ -193,6 +193,7 @@ class DatabaseRepository {
                         ilike("city", "%$city%")
                     }
                     order("average_rating", Order.DESCENDING)
+                    limit(10)
                 }
                 .decodeList<RestaurantDto>()
                 .map { it.toRestaurant() }

@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -128,17 +127,7 @@ fun NetworkImage(
         modifier = modifier,
         contentScale = contentScale,
         onLoading = {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(colors.SurfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(
-                    color = colors.Primary,
-                    strokeWidth = 2.dp
-                )
-            }
+            ShimmerBox(modifier = Modifier.fillMaxSize())
         },
         onFailure = { exception ->
             println("[DEBUG][NetworkImage] FAILED to load '$urlToLoad' for '$contentDescription'")

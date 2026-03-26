@@ -37,15 +37,33 @@ data class LoginUiState(
  */
 data class RegisterUiState(
     val name: String = "",
+    val username: String = "",
     val email: String = "",
     val password: String = "",
     val confirmPassword: String = "",
     val nameError: String? = null,
+    val usernameError: String? = null,
+    val isCheckingUsername: Boolean = false,
+    val usernameAvailable: Boolean? = null,
     val emailError: String? = null,
     val passwordError: String? = null,
     val confirmPasswordError: String? = null,
     val isLoading: Boolean = false,
     val isSuccess: Boolean = false,
+    val errorMessage: String? = null
+)
+
+/**
+ * Profile setup onboarding UI state
+ */
+data class ProfileSetupUiState(
+    val username: String = "",
+    val usernameError: String? = null,
+    val isCheckingUsername: Boolean = false,
+    val usernameAvailable: Boolean? = null,
+    val profilePhotoUrl: String? = null,
+    val isUploadingPhoto: Boolean = false,
+    val isSaving: Boolean = false,
     val errorMessage: String? = null
 )
 

@@ -73,6 +73,7 @@ import com.example.smackcheck2.ui.components.LargeDishCard
 import com.example.smackcheck2.ui.components.LocationHeader
 import com.example.smackcheck2.ui.components.RestaurantCardDark
 import com.example.smackcheck2.ui.components.HomeScreenSkeleton
+import com.example.smackcheck2.ui.components.RestaurantCardSkeleton
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.PhotoState
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
@@ -313,15 +314,6 @@ fun DarkHomeScreen(
         },
         modifier = modifier
     ) { paddingValues ->
-        if (isLoading) {
-            HomeScreenSkeleton(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            )
-            return@Scaffold
-        }
-
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -574,7 +566,7 @@ fun DarkHomeScreen(
             }
             
             // No Restaurants Found Message
-            if (noRestaurantsFound || restaurants.isEmpty()) {
+            if (!isLoading && (noRestaurantsFound || restaurants.isEmpty())) {
                 item {
                     Card(
                         modifier = Modifier
@@ -653,44 +645,52 @@ fun DarkHomeScreen(
                 }
             }
             
-            // Restaurant Cards
-            items(restaurants) { restaurant ->
-                var isFavorite by remember { mutableStateOf(false) }
-
-                LaunchedEffect(restaurant.id) {
-                    val fullRestaurant = allRestaurants.firstOrNull { it.id == restaurant.id }
-                    val knownPhotoUrl = fullRestaurant?.photoUrl
-                        ?: fullRestaurant?.imageUrls?.firstOrNull()
-                    if (knownPhotoUrl != null) {
-                        // Photo URL already known — use it directly, no edge function call needed
-                        photoViewModel?.setThumbnailUrl(restaurant.id, knownPhotoUrl)
-                    } else {
-                        // No cached URL — fetch from Google Places via edge function
-                        photoViewModel?.loadThumbnail(
-                            restaurantId = restaurant.id,
-                            placeId = fullRestaurant?.googlePlaceId,
-                            name = restaurant.name,
-                            city = fullRestaurant?.city.orEmpty()
-                        )
-                    }
+            // Restaurant Cards — show skeletons while loading, real cards when ready
+            if (isLoading && allRestaurants.isEmpty()) {
+                items(3) {
+                    RestaurantCardSkeleton(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
                 }
+            } else {
+                items(restaurants) { restaurant ->
+                    var isFavorite by remember { mutableStateOf(false) }
 
-                RestaurantCardDark(
-                    restaurantId = restaurant.id,
-                    restaurantName = restaurant.name,
-                    cuisine = restaurant.cuisine,
-                    rating = restaurant.rating,
-                    reviewCount = restaurant.reviewCount,
-                    googlePlaceId = restaurant.googlePlaceId,
-                    city = restaurant.city,
-                    photoViewModel = photoViewModel,
-                    isFavorite = isFavorite,
-                    onClick = { onRestaurantClick(restaurant.id) },
-                    onFavoriteClick = { isFavorite = !isFavorite },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    photoUrl = restaurant.photoUrl,
-                    photoState = photoStates[restaurant.id]
-                )
+                    LaunchedEffect(restaurant.id) {
+                        val fullRestaurant = allRestaurants.firstOrNull { it.id == restaurant.id }
+                        val knownPhotoUrl = fullRestaurant?.photoUrl
+                            ?: fullRestaurant?.imageUrls?.firstOrNull()
+                        if (knownPhotoUrl != null) {
+                            // Photo URL already known — use it directly, no edge function call needed
+                            photoViewModel?.setThumbnailUrl(restaurant.id, knownPhotoUrl)
+                        } else {
+                            // No cached URL — fetch from Google Places via edge function
+                            photoViewModel?.loadThumbnail(
+                                restaurantId = restaurant.id,
+                                placeId = fullRestaurant?.googlePlaceId,
+                                name = restaurant.name,
+                                city = fullRestaurant?.city.orEmpty()
+                            )
+                        }
+                    }
+
+                    RestaurantCardDark(
+                        restaurantId = restaurant.id,
+                        restaurantName = restaurant.name,
+                        cuisine = restaurant.cuisine,
+                        rating = restaurant.rating,
+                        reviewCount = restaurant.reviewCount,
+                        googlePlaceId = restaurant.googlePlaceId,
+                        city = restaurant.city,
+                        photoViewModel = photoViewModel,
+                        isFavorite = isFavorite,
+                        onClick = { onRestaurantClick(restaurant.id) },
+                        onFavoriteClick = { isFavorite = !isFavorite },
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        photoUrl = restaurant.photoUrl,
+                        photoState = photoStates[restaurant.id]
+                    )
+                }
             }
             
             // Bottom spacing

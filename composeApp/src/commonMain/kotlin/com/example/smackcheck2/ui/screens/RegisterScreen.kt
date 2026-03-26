@@ -153,7 +153,7 @@ fun RegisterScreen(
             )
             
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             // Email field
             OutlinedTextField(
                 value = uiState.email,
