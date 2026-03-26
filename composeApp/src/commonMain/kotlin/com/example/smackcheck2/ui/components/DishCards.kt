@@ -264,7 +264,6 @@ fun RestaurantCardDark(
     cuisine: String,
     rating: Float,
     reviewCount: Int,
-    deliveryTime: String,
     googlePlaceId: String? = null,
     city: String = "",
     photoViewModel: com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel? = null,
@@ -390,11 +389,6 @@ fun RestaurantCardDark(
                         // Empty spacer to maintain layout when no rating
                         Spacer(modifier = Modifier.width(1.dp))
                     }
-                    Text(
-                        text = deliveryTime,
-                        color = appColors().TextSecondary,
-                        fontSize = 12.sp
-                    )
                 }
             }
         }

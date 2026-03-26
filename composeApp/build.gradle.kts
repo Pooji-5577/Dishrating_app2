@@ -9,6 +9,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
     alias(libs.plugins.googleServices)
+    alias(libs.plugins.firebaseCrashlytics)
 }
 
 // Load local.properties
@@ -95,9 +96,10 @@ kotlin {
             implementation(libs.kotlinx.coroutines.play.services)
             // DataStore for preferences
             implementation("androidx.datastore:datastore-preferences:1.1.1")
-            // Firebase (FCM for push notification token)
+            // Firebase (FCM + Crashlytics)
             implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
             implementation("com.google.firebase:firebase-messaging-ktx")
+            implementation(libs.firebase.crashlytics)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

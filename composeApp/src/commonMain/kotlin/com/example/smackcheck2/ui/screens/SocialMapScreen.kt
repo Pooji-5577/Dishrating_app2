@@ -296,10 +296,10 @@ fun SocialMapScreen(
                 }
                 
                 else -> {
-                    // Map view — centers on user if GPS available, otherwise shows world
-                    val currentLat = uiState.currentLatitude ?: 20.0
-                    val currentLng = uiState.currentLongitude ?: 0.0
-                    
+                    // Map view — centers on user if GPS available, otherwise falls back to NYC
+                    val currentLat = uiState.currentLatitude ?: 40.7128
+                    val currentLng = uiState.currentLongitude ?: -74.0060
+
                     // Convert MapUserMarker to MapMarker for the platform map
                     // Each post is its own marker, keyed by rating id, positioned at restaurant location
                     val markers = uiState.nearbyUsers.map { user ->
@@ -317,7 +317,7 @@ fun SocialMapScreen(
                     PlatformMapView(
                         latitude = currentLat,
                         longitude = currentLng,
-                        zoom = 4f,
+                        zoom = 14f,
                         markers = markers,
                         onMarkerClick = { markerId ->
                             val user = uiState.nearbyUsers.find {
@@ -327,7 +327,45 @@ fun SocialMapScreen(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
-                    
+
+                    // Empty state overlay — shown when there are no nearby posts
+                    if (markers.isEmpty() && !uiState.isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(bottom = 80.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = themeColors.Surface.copy(alpha = 0.95f)
+                                ),
+                                elevation = CardDefaults.cardElevation(6.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Restaurant,
+                                        contentDescription = null,
+                                        tint = themeColors.Primary,
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Text(
+                                        "No dish posts nearby yet — be the first!",
+                                        color = themeColors.TextPrimary,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 15.sp,
+                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
+
                     // User count indicator
                     Card(
                         modifier = Modifier

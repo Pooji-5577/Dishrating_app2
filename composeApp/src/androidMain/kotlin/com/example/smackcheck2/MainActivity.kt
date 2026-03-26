@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.smackcheck2.crashlytics.CrashlyticsHelper
 import com.example.smackcheck2.data.SupabaseClientProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.example.smackcheck2.location.AppLocationManager
@@ -34,6 +35,17 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // ── Crashlytics ──────────────────────────────────────────────────────
+        // Force-enable collection so crashes are reported in all build types.
+        // Remove enableCollection() once you switch to a release build workflow
+        // where Crashlytics is enabled by default.
+        CrashlyticsHelper.enableCollection()
+        CrashlyticsHelper.log("MainActivity.onCreate")
+
+        // ── Uncomment the line below ONCE to verify your Firebase project is
+        // ── wired up correctly, then remove it before shipping.
+        // CrashlyticsHelper.simulateCrash()
+
         // Initialize Supabase session early for session restoration
         SupabaseClientProvider.initializeSession()
         // Handle deep link if app was launched via OAuth redirect
