@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -110,6 +112,14 @@ fun DarkDishRatingScreen(
     var selectedTags by remember { mutableStateOf(setOf<String>()) }
     var showRestaurantPicker by remember { mutableStateOf(false) }
     var restaurantSearchQuery by remember { mutableStateOf("") }
+
+    // Skip / Add New Place state
+    var showSkipInput by remember { mutableStateOf(false) }
+    var skipRestaurantName by remember { mutableStateOf("") }
+    var showAddNewPlaceForm by remember { mutableStateOf(false) }
+    var newPlaceName by remember { mutableStateOf("") }
+    var newPlaceCity by remember { mutableStateOf("") }
+    var newPlaceCuisine by remember { mutableStateOf("") }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
@@ -316,6 +326,100 @@ fun DarkDishRatingScreen(
                     }
                 }
 
+                // Skip / Add New Place options
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = {
+                        showSkipInput = !showSkipInput
+                        showAddNewPlaceForm = false
+                        if (!showSkipInput) {
+                            skipRestaurantName = ""
+                            if (selectedRestaurant?.id?.startsWith("skip_") == true) {
+                                selectedRestaurant = null
+                            }
+                        }
+                    }) {
+                        Text(
+                            text = if (showSkipInput) "✕ Cancel skip" else "Skip — type name",
+                            color = appColors().TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                    TextButton(onClick = {
+                        showRestaurantPicker = true
+                        showAddNewPlaceForm = true
+                        showSkipInput = false
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = appColors().Primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Add New Place",
+                            color = appColors().Primary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // Inline skip input — quick name entry without opening the picker
+                if (showSkipInput) {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = appColors().Surface
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Type the restaurant name",
+                                color = appColors().TextSecondary,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            OutlinedTextField(
+                                value = skipRestaurantName,
+                                onValueChange = { name ->
+                                    skipRestaurantName = name
+                                    selectedRestaurant = if (name.isNotBlank()) {
+                                        Restaurant(
+                                            id = "skip_${name.trim().hashCode()}",
+                                            name = name.trim(),
+                                            city = "",
+                                            cuisine = ""
+                                        )
+                                    } else null
+                                },
+                                placeholder = { Text("e.g. Joe's Burger Bar") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = appColors().Primary,
+                                    unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                                    cursorColor = appColors().Primary,
+                                    focusedTextColor = appColors().TextPrimary,
+                                    unfocusedTextColor = appColors().TextPrimary,
+                                    focusedPlaceholderColor = appColors().TextSecondary,
+                                    unfocusedPlaceholderColor = appColors().TextSecondary
+                                ),
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
 
                 // Star rating section
@@ -489,7 +593,7 @@ fun DarkDishRatingScreen(
                     onClick = {
                         onSubmitRating(rating, comment, selectedTags.toList(), selectedRestaurant)
                     },
-                    enabled = rating > 0 && selectedRestaurant != null && !isSubmitting,
+                    enabled = rating > 0 && (selectedRestaurant != null || showSkipInput && skipRestaurantName.isNotBlank()) && !isSubmitting,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp)
@@ -509,7 +613,11 @@ fun DarkDishRatingScreen(
                         )
                     } else {
                         Text(
-                            text = if (selectedRestaurant == null) "Select a restaurant first" else "Submit Rating",
+                            text = when {
+                                selectedRestaurant != null -> "Submit Rating"
+                                showSkipInput && skipRestaurantName.isBlank() -> "Enter a restaurant name"
+                                else -> "Select or add a restaurant"
+                            },
                             fontSize = 16.sp,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -796,6 +904,153 @@ fun DarkDishRatingScreen(
                                     )
                                 }
                             }
+                        // Add New Place — always visible at the bottom of the list
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            HorizontalDivider(color = appColors().TextSecondary.copy(alpha = 0.15f))
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            if (showAddNewPlaceForm) {
+                                // Full form for adding a new restaurant
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = appColors().Primary.copy(alpha = 0.08f)
+                                    )
+                                ) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "Add New Place",
+                                            color = appColors().Primary,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        OutlinedTextField(
+                                            value = newPlaceName,
+                                            onValueChange = { newPlaceName = it },
+                                            placeholder = { Text("Restaurant name *") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = appColors().Primary,
+                                                unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                                                cursorColor = appColors().Primary,
+                                                focusedTextColor = appColors().TextPrimary,
+                                                unfocusedTextColor = appColors().TextPrimary,
+                                                focusedPlaceholderColor = appColors().TextSecondary,
+                                                unfocusedPlaceholderColor = appColors().TextSecondary
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        OutlinedTextField(
+                                            value = newPlaceCity,
+                                            onValueChange = { newPlaceCity = it },
+                                            placeholder = { Text("City (optional)") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = appColors().Primary,
+                                                unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                                                cursorColor = appColors().Primary,
+                                                focusedTextColor = appColors().TextPrimary,
+                                                unfocusedTextColor = appColors().TextPrimary,
+                                                focusedPlaceholderColor = appColors().TextSecondary,
+                                                unfocusedPlaceholderColor = appColors().TextSecondary
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        OutlinedTextField(
+                                            value = newPlaceCuisine,
+                                            onValueChange = { newPlaceCuisine = it },
+                                            placeholder = { Text("Cuisine (optional)") },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedBorderColor = appColors().Primary,
+                                                unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                                                cursorColor = appColors().Primary,
+                                                focusedTextColor = appColors().TextPrimary,
+                                                unfocusedTextColor = appColors().TextPrimary,
+                                                focusedPlaceholderColor = appColors().TextSecondary,
+                                                unfocusedPlaceholderColor = appColors().TextSecondary
+                                            ),
+                                            shape = RoundedCornerShape(8.dp)
+                                        )
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            TextButton(
+                                                onClick = {
+                                                    showAddNewPlaceForm = false
+                                                    newPlaceName = ""
+                                                    newPlaceCity = ""
+                                                    newPlaceCuisine = ""
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("Cancel", color = appColors().TextSecondary)
+                                            }
+                                            Button(
+                                                onClick = {
+                                                    val newRestaurant = Restaurant(
+                                                        id = "new_${newPlaceName.trim().hashCode()}",
+                                                        name = newPlaceName.trim(),
+                                                        city = newPlaceCity.trim(),
+                                                        cuisine = newPlaceCuisine.trim()
+                                                    )
+                                                    selectedRestaurant = newRestaurant
+                                                    showRestaurantPicker = false
+                                                    showAddNewPlaceForm = false
+                                                    showSkipInput = false
+                                                    newPlaceName = ""
+                                                    newPlaceCity = ""
+                                                    newPlaceCuisine = ""
+                                                },
+                                                enabled = newPlaceName.isNotBlank(),
+                                                modifier = Modifier.weight(1f),
+                                                colors = ButtonDefaults.buttonColors(
+                                                    containerColor = appColors().Primary,
+                                                    contentColor = Color.White,
+                                                    disabledContainerColor = appColors().TextSecondary.copy(alpha = 0.2f)
+                                                ),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text("Add Place")
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // Button to open the Add New Place form
+                                TextButton(
+                                    onClick = { showAddNewPlaceForm = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = appColors().Primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Add New Place",
+                                        color = appColors().Primary,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(16.dp))
                         }
                     }
                 }
