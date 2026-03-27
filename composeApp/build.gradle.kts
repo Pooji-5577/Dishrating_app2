@@ -100,6 +100,8 @@ kotlin {
             implementation("com.google.firebase:firebase-messaging-ktx")
             // Microsoft Clarity — session recording & heatmaps
             implementation("com.microsoft.clarity:clarity-compose:3.+")
+            // Mixpanel — event analytics
+            implementation("com.mixpanel.android:mixpanel-android:7.+")
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)
@@ -124,6 +126,10 @@ android {
         // Supabase configuration from local.properties or .env
         buildConfigField("String", "SUPABASE_URL", "\"${getConfigProperty("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getConfigProperty("SUPABASE_ANON_KEY")}\"")
+
+        // Mixpanel analytics
+        buildConfigField("String", "MIXPANEL_TOKEN", "\"${getConfigProperty("MIXPANEL_TOKEN")}\"")
+
 
         // Google Maps SDK needs the key in AndroidManifest.xml for map rendering.
         // The Places API key is now handled server-side via Supabase Edge Function.

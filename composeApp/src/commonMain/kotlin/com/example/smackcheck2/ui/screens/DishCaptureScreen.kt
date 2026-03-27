@@ -1,5 +1,6 @@
 package com.example.smackcheck2.ui.screens
 
+import com.example.smackcheck2.analytics.Analytics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -216,7 +217,10 @@ fun DishCaptureScreen(
 
                 // Continue button
                 Button(
-                    onClick = { onImageCaptured(selectedImageUri!!, capturedImageBytes) },
+                    onClick = {
+                        Analytics.track("dish_captured", mapOf("has_image" to true))
+                        onImageCaptured(selectedImageUri!!, capturedImageBytes)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp)

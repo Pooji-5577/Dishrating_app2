@@ -2,6 +2,7 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.AuthState
@@ -36,6 +37,8 @@ class AuthViewModel : ViewModel() {
                             val user = authRepository.getCurrentUser()
                             if (user != null) {
                                 println("AuthViewModel: Session authenticated, user: ${user.email}")
+                                Analytics.identify(user.id)
+                                Analytics.track("app_opened", mapOf("email" to user.email))
                                 _authState.value = AuthState.Authenticated(user)
                             } else {
                                 _authState.value = AuthState.Unauthenticated
@@ -47,6 +50,7 @@ class AuthViewModel : ViewModel() {
                     }
                     is SessionStatus.NotAuthenticated -> {
                         println("AuthViewModel: Not authenticated")
+                        Analytics.reset()
                         _authState.value = AuthState.Unauthenticated
                     }
                     SessionStatus.Initializing -> {

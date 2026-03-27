@@ -60,6 +60,12 @@ import com.example.smackcheck2.ui.components.SocialFeedSkeleton
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.ui.theme.appColors
+import androidx.compose.material.icons.outlined.RssFeed
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +79,8 @@ fun SocialFeedScreen(
     onUserClick: (String) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit = {},
-    onScrollComplete: () -> Unit = {}
+    onScrollComplete: () -> Unit = {},
+    onExploreClick: () -> Unit = {}
 ) {
     val colors = appColors()
     val listState = rememberLazyListState()
@@ -171,6 +178,28 @@ fun SocialFeedScreen(
                             FeedFilter.FOLLOWING -> "Follow friends to see their dish ratings here"
                             FeedFilter.NEARBY -> "No ratings from nearby restaurants yet"
                             FeedFilter.ALL -> "Be the first to rate a dish!"
+                        },
+                        icon = when (uiState.filter) {
+                            FeedFilter.ALL -> Icons.Outlined.RssFeed
+                            FeedFilter.FOLLOWING -> Icons.Outlined.People
+                            FeedFilter.NEARBY -> Icons.Outlined.LocationOn
+                        },
+                        action = {
+                            Button(
+                                onClick = onExploreClick,
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.Primary,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text(
+                                    when (uiState.filter) {
+                                        FeedFilter.ALL -> "Rate a Dish"
+                                        FeedFilter.FOLLOWING -> "Find Friends"
+                                        FeedFilter.NEARBY -> "Explore Map"
+                                    }
+                                )
+                            }
                         }
                     )
                 }

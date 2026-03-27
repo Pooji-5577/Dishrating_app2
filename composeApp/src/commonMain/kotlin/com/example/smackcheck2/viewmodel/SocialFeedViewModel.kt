@@ -2,6 +2,7 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.RealtimeFeedRepository
@@ -176,6 +177,11 @@ class SocialFeedViewModel : ViewModel() {
     fun loadMoreFeed() {
         val state = _uiState.value
         if (state.isLoadingMore || !state.hasMoreItems || state.isLoading) return
+
+        Analytics.track("feed_scroll_depth", mapOf(
+            "offset" to state.currentOffset,
+            "filter" to state.filter.name
+        ))
 
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingMore = true) }

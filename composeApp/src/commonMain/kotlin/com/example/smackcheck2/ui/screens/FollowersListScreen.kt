@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FollowListUiState
 import com.example.smackcheck2.model.UserSummary
+import com.example.smackcheck2.ui.components.EmptyState
 import com.example.smackcheck2.ui.theme.appColors
 
 /**
@@ -61,7 +63,8 @@ fun FollowersListScreen(
     uiState: FollowListUiState,
     onNavigateBack: () -> Unit,
     onUserClick: (UserSummary) -> Unit,
-    onFollowToggle: (UserSummary) -> Unit
+    onFollowToggle: (UserSummary) -> Unit,
+    onExploreClick: () -> Unit = {}
 ) {
     val colors = appColors()
 
@@ -119,18 +122,25 @@ fun FollowersListScreen(
             }
 
             uiState.users.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "No users to show.",
-                        fontSize = 16.sp,
-                        color = colors.TextSecondary
-                    )
-                }
+                EmptyState(
+                    modifier = Modifier.padding(paddingValues),
+                    title = if (title == "Followers") "No followers yet" else "Not following anyone",
+                    message = if (title == "Followers") "Share your dish ratings to attract followers!"
+                              else "Find foodies to follow and see their posts.",
+                    icon = Icons.Outlined.People,
+                    action = {
+                        Button(
+                            onClick = onExploreClick,
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.Primary,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text("Discover Foodies")
+                        }
+                    }
+                )
             }
 
             else -> {

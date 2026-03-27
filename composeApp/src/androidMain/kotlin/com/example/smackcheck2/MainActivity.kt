@@ -12,6 +12,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import com.microsoft.clarity.Clarity
 import com.microsoft.clarity.ClarityConfig
+import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.SupabaseClientProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.example.smackcheck2.location.AppLocationManager
@@ -38,6 +39,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // Initialize Microsoft Clarity for session recording & heatmaps
         Clarity.initialize(applicationContext, ClarityConfig(projectId = "w0rgf1ugzh"))
+
+        // Initialize Mixpanel analytics
+        Analytics.setContext(applicationContext)
+        Analytics.initialize(BuildConfig.MIXPANEL_TOKEN)
 
         // Initialize Supabase session early for session restoration
         SupabaseClientProvider.initializeSession()

@@ -403,6 +403,9 @@ class DatabaseRepository {
      * Create or get existing dish
      */
     suspend fun createOrGetDish(name: String, restaurantId: String, imageUrl: String? = null): Result<Dish> {
+        if (name.isBlank()) {
+            return Result.failure(IllegalArgumentException("Dish name cannot be blank"))
+        }
         return try {
             // Check if dish already exists
             val existing = postgrest["dishes"]
@@ -464,6 +467,9 @@ class DatabaseRepository {
         longitude: Double? = null,
         price: Double? = null
     ): Result<String> {
+        if (rating <= 0f) {
+            return Result.failure(IllegalArgumentException("Star rating is required"))
+        }
         return try {
             @OptIn(ExperimentalUuidApi::class)
             val ratingId = Uuid.random().toString()

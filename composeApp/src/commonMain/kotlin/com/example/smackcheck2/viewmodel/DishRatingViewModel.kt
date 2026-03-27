@@ -2,6 +2,7 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.StorageRepository
@@ -83,7 +84,13 @@ class DishRatingViewModel : ViewModel() {
     fun submitRating(onSuccess: (String) -> Unit) {
         val currentState = _uiState.value
 
-        println("DishRatingViewModel: Starting submitRating - rating=${currentState.rating}, restaurantId=$restaurantId")
+        println("DishRatingViewModel: Starting submitRating - dishName='${currentState.dishName}', rating=${currentState.rating}, restaurantId=$restaurantId")
+
+        if (currentState.dishName.isBlank()) {
+            println("DishRatingViewModel: ✗ Dish name is blank")
+            _uiState.update { it.copy(errorMessage = "Dish name cannot be empty") }
+            return
+        }
 
         if (currentState.rating == 0f) {
             println("DishRatingViewModel: ✗ No rating provided")
@@ -281,6 +288,15 @@ class DishRatingViewModel : ViewModel() {
                         }
 
                         _uiState.update { it.copy(isSubmitting = false, isSuccess = true, xpEarned = totalXp, showXpNotification = true, submittedRatingId = ratingId) }
+
+                        Analytics.track("post_created", mapOf(
+                            "rating" to currentState.rating,
+                            "has_photo" to (imageUrl != null),
+                            "has_comment" to currentState.comment.isNotEmpty(),
+                            "xp_earned" to totalXp,
+                            "tags_count" to currentState.tags.size
+                        ))
+
                         println("DishRatingViewModel: ✓ Complete! Calling onSuccess callback with ratingId=$ratingId")
                         onSuccess(ratingId)
 

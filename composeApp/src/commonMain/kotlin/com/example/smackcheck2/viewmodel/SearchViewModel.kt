@@ -278,6 +278,19 @@ class SearchViewModel(
         search()
     }
 
+    fun clearSearch() {
+        _uiState.update {
+            it.copy(
+                query = "",
+                selectedCuisines = emptySet(),
+                selectedRating = null,
+                selectedCity = null,
+                restaurantsAndCafesOnly = false,
+                results = emptyList()
+            )
+        }
+    }
+
     fun clearLocationError() {
         _uiState.update { it.copy(locationError = null) }
     }

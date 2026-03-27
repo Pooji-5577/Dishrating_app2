@@ -599,7 +599,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 },
                 onRefresh = { socialFeedViewModel.refresh() },
                 onLoadMore = { socialFeedViewModel.loadMoreFeed() },
-                onScrollComplete = { socialFeedViewModel.clearScrollTarget() }
+                onScrollComplete = { socialFeedViewModel.clearScrollTarget() },
+                onExploreClick = { navigationState.navigateTo(Screen.DishCapture) }
             )
         }
         
@@ -622,7 +623,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         Screen.DishDetail,
                         "dishId" to ratingId
                     )
-                }
+                },
+                onRateDishClick = { navigationState.navigateTo(Screen.DishCapture) }
             )
         }
         
@@ -1214,7 +1216,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         "GameScreen" -> navigationState.navigateTo(Screen.Game)
                         "SocialFeed" -> navigationState.navigateTo(Screen.SocialFeed)
                     }
-                }
+                },
+                onExploreClick = { navigationState.navigateTo(Screen.SocialFeed) }
             )
         }
 
@@ -1338,7 +1341,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                             else socialRepository.followUser(me, userSummary.id).getOrThrow()
                         } catch (_: Exception) {}
                     }
-                }
+                },
+                onExploreClick = { navigationState.navigateTo(Screen.SocialFeed) }
             )
         }
 
@@ -1384,7 +1388,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                             else socialRepository.followUser(me, userSummary.id).getOrThrow()
                         } catch (_: Exception) {}
                     }
-                }
+                },
+                onExploreClick = { navigationState.navigateTo(Screen.SocialFeed) }
             )
         }
 

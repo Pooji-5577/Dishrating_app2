@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew :composeApp:assembleDebug:*)",
+      "Bash(./gradlew:*)",
+      "Bash(keytool:*)",
+      "Bash(\"C:\\\\Users\\\\manas\\\\AppData\\\\Local\\\\Programs\\\\Eclipse Adoptium\\\\jdk-17.0.16.8-hotspot\\\\bin\\\\keytool.exe\" -importcert -noprompt -file \"c:\\\\Users\\\\manas\\\\Desktop\\\\smackcheck3\\\\Dishrating_app2-1\\\\google-maven.crt\" -alias sophos-google -keystore \"C:\\\\Users\\\\manas\\\\AppData\\\\Local\\\\Programs\\\\Eclipse Adoptium\\\\jdk-17.0.16.8-hotspot\\\\lib\\\\security\\\\cacerts\" -storepass changeit)",
+      "Bash(taskkill:*)",
+      "Bash(find:*)",
+      "Bash(del /Q \"C:\\\\Users\\\\manas\\\\.android\\\\avd\\\\Pixel_9_Pro.avd\\\\*.lock\")",
+      "Bash(dir \"C:\\\\Users\\\\manas\\\\.android\\\\avd\\\\Pixel_9_Pro.avd\"\" 2>nul | findstr \"lock \")",
+      "Bash(cmd /c \"del /Q C:\\\\Users\\\\manas\\\\.android\\\\avd\\\\Pixel_9_Pro.avd\\\\*.lock 2>nul\")",
+      "Bash(cmd /c \"dir C:\\\\Users\\\\manas\\\\.android\\\\avd\\\\Pixel_9_Pro.avd\\\\*.lock 2>nul\")",
+      "Bash(cmd /c \"taskkill /F /PID 9200 /PID 11136\")",
+      "Bash(powershell -Command:*)",
+      "Bash(wmic process where \"name=''qemu-system-x86_64.exe''\" delete)",
+      "Bash(powershell \"Get-ChildItem ''C:/Users/manas/.android/avd/Pixel_9_Pro.avd/'' -Filter ''*.lock''\")",
+      "Bash(powershell \"Remove-Item ''C:/Users/manas/.android/avd/Pixel_9_Pro.avd/multiinstance.lock'' -Force\")",
+      "Bash(powershell \"Remove-Item ''C:/Users/manas/.android/avd/Pixel_9_Pro.avd/hardware-qemu.ini.lock'' -Recurse -Force\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File test_gemini_api.ps1)",
+      "Bash(git checkout:*)",
+      "Bash(curl:*)",
+      "Bash(git pull:*)"
+    ]
+  }
+}

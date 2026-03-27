@@ -33,6 +33,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Button
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -55,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.notifications.NotificationEventType
 import com.example.smackcheck2.notifications.NotificationRecord
 import com.example.smackcheck2.notifications.NotificationViewModel
+import com.example.smackcheck2.ui.components.EmptyState
 
 /**
  * Notifications Screen
@@ -67,7 +69,8 @@ import com.example.smackcheck2.notifications.NotificationViewModel
 fun NotificationsScreen(
     viewModel: NotificationViewModel,
     onNavigateBack: () -> Unit,
-    onNavigateTo: (screen: String, params: Map<String, String>) -> Unit = { _, _ -> }
+    onNavigateTo: (screen: String, params: Map<String, String>) -> Unit = { _, _ -> },
+    onExploreClick: () -> Unit = {}
 ) {
     val notifications by viewModel.notifications.collectAsState()
     val unreadCount by viewModel.unreadCount.collectAsState()
@@ -141,33 +144,19 @@ fun NotificationsScreen(
             }
 
             notifications.isEmpty() -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            imageVector = Icons.Filled.NotificationsNone,
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                        )
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            text = "No notifications yet",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = "When you get likes, comments, or earn points,\nthey'll show up here.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                        )
+                EmptyState(
+                    modifier = Modifier.padding(paddingValues),
+                    title = "No notifications yet",
+                    message = "Rate dishes, follow foodies, and engage\nto start receiving notifications.",
+                    icon = Icons.Filled.NotificationsNone,
+                    action = {
+                        Button(
+                            onClick = onExploreClick
+                        ) {
+                            Text("Start Exploring")
+                        }
                     }
-                }
+                )
             }
 
             else -> {

@@ -99,6 +99,7 @@ fun SocialMapScreen(
     onNavigateBack: () -> Unit,
     onUserProfileClick: (String) -> Unit,
     onDishDetailClick: (String) -> Unit,
+    onRateDishClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -373,6 +374,58 @@ fun SocialMapScreen(
                             contentDescription = "My Location",
                             tint = Color.White
                         )
+                    }
+
+                    // Empty state overlay when no dish posts
+                    AnimatedVisibility(
+                        visible = uiState.nearbyUsers.isEmpty() && !uiState.isLoading,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                        modifier = Modifier.align(Alignment.Center)
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = themeColors.Surface.copy(alpha = 0.95f)
+                            ),
+                            elevation = CardDefaults.cardElevation(8.dp),
+                            modifier = Modifier.padding(32.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Restaurant,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(64.dp),
+                                    tint = themeColors.Primary.copy(alpha = 0.7f)
+                                )
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    text = "No dish posts yet",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = themeColors.TextPrimary
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    text = "Be the first to share a dish rating in your area!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = themeColors.TextSecondary,
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                Spacer(Modifier.height(20.dp))
+                                Button(
+                                    onClick = onRateDishClick,
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text("Rate a Dish")
+                                }
+                            }
+                        }
                     }
                 }
             }

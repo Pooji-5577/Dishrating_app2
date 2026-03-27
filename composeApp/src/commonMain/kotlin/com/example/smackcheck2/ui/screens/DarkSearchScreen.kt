@@ -58,9 +58,15 @@ import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.FoodImages
 import com.example.smackcheck2.ui.components.SmartRestaurantImage
+import com.example.smackcheck2.ui.components.EmptyState
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import com.example.smackcheck2.viewmodel.SearchViewModel
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.text.style.TextAlign
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -347,22 +353,28 @@ fun DarkSearchScreen(
                         )
                     }
                 } else if (uiState.results.isEmpty() && uiState.query.isNotEmpty()) {
-                    Column(
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "No restaurants found",
-                            color = themeColors.TextSecondary,
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = "Try a different search",
-                            color = themeColors.TextTertiary,
-                            fontSize = 14.sp
-                        )
-                    }
+                    EmptyState(
+                        title = "No restaurants found",
+                        message = "We couldn't find any results for \"${uiState.query}\". Try a different search term.",
+                        icon = Icons.Outlined.SearchOff,
+                        action = {
+                            Button(
+                                onClick = { viewModel.clearSearch() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = themeColors.Primary,
+                                    contentColor = Color.White
+                                )
+                            ) {
+                                Text("Clear Search")
+                            }
+                        }
+                    )
+                } else if (uiState.results.isEmpty() && uiState.query.isEmpty()) {
+                    EmptyState(
+                        title = "Search for Restaurants",
+                        message = "Find restaurants by name, cuisine, or location",
+                        icon = Icons.Outlined.Search
+                    )
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),

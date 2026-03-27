@@ -2,6 +2,7 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.model.ProfileSetupUiState
@@ -135,6 +136,10 @@ class ProfileSetupViewModel(
             result.fold(
                 onSuccess = {
                     _uiState.update { it.copy(isSaving = false) }
+                    Analytics.track("onboarding_completed", mapOf(
+                        "username" to state.username,
+                        "has_photo" to (state.profilePhotoUrl != null)
+                    ))
                     onSuccess()
                 },
                 onFailure = { error ->
