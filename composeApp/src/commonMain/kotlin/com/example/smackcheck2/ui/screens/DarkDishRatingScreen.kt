@@ -1052,6 +1052,7 @@ fun DarkDishRatingScreen(
                             }
                             Spacer(modifier = Modifier.height(16.dp))
                         }
+                        }
                     }
                 }
 
