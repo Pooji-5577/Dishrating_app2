@@ -404,3 +404,9 @@ entrypoint = "./functions/google-places/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/push/index.ts"
+
+[functions.check-username]
+enabled = true
+verify_jwt = false
+import_map = "./functions/check-username/deno.json"
+entrypoint = "./functions/check-username/index.ts"

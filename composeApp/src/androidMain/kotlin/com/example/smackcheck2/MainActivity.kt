@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.lifecycleScope
 import com.example.smackcheck2.crashlytics.CrashlyticsHelper
 import com.microsoft.clarity.Clarity
 import com.microsoft.clarity.ClarityConfig
@@ -24,6 +25,7 @@ import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.PlacesService
 import com.example.smackcheck2.platform.PreferencesManager
 import com.example.smackcheck2.platform.ShareService
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     // ImagePicker must be created at Activity level for ActivityResult APIs
@@ -74,6 +76,10 @@ class MainActivity : ComponentActivity() {
         // ImagePicker must be created before setContent for ActivityResult registration
         imagePicker = ImagePicker(this)
 
+        // Track Mixpanel day-one retention after the first 24h window
+        val appPreferencesManager = PreferencesManager(applicationContext)
+        scheduleDayOneRetentionCheck(appPreferencesManager)
+
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
@@ -111,3 +117,29 @@ fun AppAndroidPreview() {
     val preferencesManager = remember { PreferencesManager(context) }
     App(preferencesManager = preferencesManager)
 }
+
+private fun MainActivity.scheduleDayOneRetentionCheck(preferencesManager: PreferencesManager) {
+    lifecycleScope.launch {
+        val firstOpenTimestamp = preferencesManager.getFirstOpenTimestamp()
+        val now = System.currentTimeMillis()
+        if (firstOpenTimestamp == 0L) {
+            preferencesManager.saveFirstOpenTimestamp(now)
+            return@launch
+        }
+
+        val alreadyTracked = preferencesManager.isDay1RetentionTracked()
+        val hasReachedDayOne = now - firstOpenTimestamp >= DAY_ONE_RETENTION_WINDOW_MS
+        if (!alreadyTracked && hasReachedDayOne) {
+            Analytics.track(
+                event = "day_1_retention",
+                properties = mapOf(
+                    "first_open_timestamp" to firstOpenTimestamp,
+                    "retained_at" to now
+                )
+            )
+            preferencesManager.setDay1RetentionTracked()
+        }
+    }
+}
+
+private const val DAY_ONE_RETENTION_WINDOW_MS = 24L * 60L * 60L * 1000L

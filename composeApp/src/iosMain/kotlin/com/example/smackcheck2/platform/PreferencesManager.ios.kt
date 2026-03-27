@@ -3,6 +3,7 @@ package com.example.smackcheck2.platform
 import com.example.smackcheck2.model.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import platform.Foundation.NSNumber
 import platform.Foundation.NSUserDefaults
 
 actual class PreferencesManager {
@@ -15,6 +16,8 @@ actual class PreferencesManager {
         const val NOTIFICATION_SETTINGS = "notification_settings"
         const val PRIVACY_SETTINGS = "privacy_settings"
         const val LANGUAGE = "language"
+        const val FIRST_OPEN_TIMESTAMP = "first_open_timestamp"
+        const val DAY1_RETENTION_TRACKED = "day1_retention_tracked"
     }
 
     actual suspend fun saveThemePreference(theme: ThemePreference) {
@@ -64,6 +67,25 @@ actual class PreferencesManager {
 
     actual suspend fun getLanguage(): String {
         return userDefaults.stringForKey(LANGUAGE) ?: "en"
+    }
+
+    actual suspend fun getFirstOpenTimestamp(): Long {
+        val storedValue = userDefaults.objectForKey(FIRST_OPEN_TIMESTAMP) as? NSNumber
+        return storedValue?.longLongValue ?: 0L
+    }
+
+    actual suspend fun saveFirstOpenTimestamp(timestamp: Long) {
+        userDefaults.setObject(NSNumber(longLong = timestamp), forKey = FIRST_OPEN_TIMESTAMP)
+        userDefaults.synchronize()
+    }
+
+    actual suspend fun isDay1RetentionTracked(): Boolean {
+        return userDefaults.boolForKey(DAY1_RETENTION_TRACKED)
+    }
+
+    actual suspend fun setDay1RetentionTracked() {
+        userDefaults.setBool(true, forKey = DAY1_RETENTION_TRACKED)
+        userDefaults.synchronize()
     }
 
     actual suspend fun clearAll() {
