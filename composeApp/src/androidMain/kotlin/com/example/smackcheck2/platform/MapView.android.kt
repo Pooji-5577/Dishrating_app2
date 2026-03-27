@@ -11,6 +11,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.model.BitmapDescriptor
 import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
@@ -34,6 +35,14 @@ actual fun PlatformMapView(
 ) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(latitude, longitude), zoom)
+    }
+
+    // Animate to user location when GPS coordinates arrive after map is already open
+    LaunchedEffect(latitude, longitude) {
+        cameraPositionState.animate(
+            update = CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), zoom),
+            durationMs = 800
+        )
     }
 
     val markerIcons = remember { mutableStateMapOf<String, BitmapDescriptor>() }

@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.smackcheck2.crashlytics.CrashlyticsHelper
 import com.microsoft.clarity.Clarity
 import com.microsoft.clarity.ClarityConfig
 import com.example.smackcheck2.analytics.Analytics
@@ -37,6 +38,17 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // ── Crashlytics ──────────────────────────────────────────────────────
+        // Force-enable collection so crashes are reported in all build types.
+        // Remove enableCollection() once you switch to a release build workflow
+        // where Crashlytics is enabled by default.
+        CrashlyticsHelper.enableCollection()
+        CrashlyticsHelper.log("MainActivity.onCreate")
+
+        // ── Uncomment the line below ONCE to verify your Firebase project is
+        // ── wired up correctly, then remove it before shipping.
+        // CrashlyticsHelper.simulateCrash()
+
         // Initialize Microsoft Clarity for session recording & heatmaps
         Clarity.initialize(applicationContext, ClarityConfig(projectId = "w0rgf1ugzh"))
 

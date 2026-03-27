@@ -117,7 +117,7 @@ fun DarkHomeScreen(
     var searchQuery by remember { mutableStateOf("") }
     
     val categories = listOf("Healthy", "Gourmet", "Chef's Special", "Quick Bites", "Desserts")
-    val filters = listOf("Great Offers", "Nearest", "Rating 4.0+", "Pure Veg")
+    val filters = listOf("Great Offers", "Nearest", "Rating 4.0+", "Vegan", "Vegetarian", "Halal", "Gluten-Free")
     var selectedFilters by remember { mutableStateOf(setOf<String>()) }
 
     // Convert real data to UI models with category filtering
@@ -194,9 +194,25 @@ fun DarkHomeScreen(
                     restaurant.averageRating >= 4.0f
                 } else true
 
-                val matchesVeg = if (selectedFilters.contains("Pure Veg")) {
+                val matchesVegan = if (selectedFilters.contains("Vegan")) {
+                    restaurant.cuisine.contains("vegan", ignoreCase = true) ||
+                    restaurant.name.contains("vegan", ignoreCase = true)
+                } else true
+
+                val matchesVegetarian = if (selectedFilters.contains("Vegetarian")) {
+                    restaurant.cuisine.contains("vegetarian", ignoreCase = true) ||
                     restaurant.cuisine.contains("veg", ignoreCase = true) ||
-                    restaurant.name.contains("veg", ignoreCase = true)
+                    restaurant.name.contains("vegetarian", ignoreCase = true)
+                } else true
+
+                val matchesHalal = if (selectedFilters.contains("Halal")) {
+                    restaurant.cuisine.contains("halal", ignoreCase = true) ||
+                    restaurant.name.contains("halal", ignoreCase = true)
+                } else true
+
+                val matchesGlutenFree = if (selectedFilters.contains("Gluten-Free")) {
+                    restaurant.cuisine.contains("gluten", ignoreCase = true) ||
+                    restaurant.name.contains("gluten", ignoreCase = true)
                 } else true
 
                 val matchesOffers = if (selectedFilters.contains("Great Offers")) {
@@ -204,7 +220,7 @@ fun DarkHomeScreen(
                     restaurant.averageRating >= 3.5f
                 } else true
 
-                matchesRating && matchesVeg && matchesOffers
+                matchesRating && matchesVegan && matchesVegetarian && matchesHalal && matchesGlutenFree && matchesOffers
             }
             .let { filtered ->
                 // Apply "Nearest" sorting if selected
@@ -222,7 +238,6 @@ fun DarkHomeScreen(
                     cuisine = restaurant.cuisine,
                     rating = restaurant.averageRating,
                     reviewCount = restaurant.reviewCount,
-                    deliveryTime = "30-40 min", // Default delivery time
                     googlePlaceId = restaurant.googlePlaceId,
                     city = restaurant.city,
                     photoUrl = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
@@ -665,7 +680,6 @@ fun DarkHomeScreen(
                         cuisine = restaurant.cuisine,
                         rating = restaurant.rating,
                         reviewCount = restaurant.reviewCount,
-                        deliveryTime = restaurant.deliveryTime,
                         googlePlaceId = restaurant.googlePlaceId,
                         city = restaurant.city,
                         photoViewModel = photoViewModel,
@@ -711,7 +725,6 @@ private data class RestaurantInfo(
     val cuisine: String,
     val rating: Float,
     val reviewCount: Int,
-    val deliveryTime: String,
     val googlePlaceId: String? = null,
     val city: String = "",
     val photoUrl: String? = null  // Google Places photo URL
