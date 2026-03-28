@@ -209,13 +209,21 @@ class PlacesService {
      * @param query The search query (e.g., "Blue Nail restaurant Hyderabad")
      * @return List of matching restaurants
      */
-    suspend fun searchRestaurantsByText(query: String): List<NearbyRestaurant> {
+    suspend fun searchRestaurantsByText(
+        query: String,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        radiusInMeters: Int = 10000
+    ): List<NearbyRestaurant> {
         return try {
-            println("PlacesService: Text search for: $query")
-            
+            println("PlacesService: Text search for: $query (lat=$latitude, lng=$longitude)")
+
             val requestBody = TextSearchRequest(
                 action = "text-search",
-                query = "$query restaurant"
+                query = "$query restaurant",
+                latitude = latitude,
+                longitude = longitude,
+                radiusInMeters = if (latitude != null) radiusInMeters else null
             )
 
             val response = supabase.functions.invoke(
@@ -273,7 +281,10 @@ private data class GeocodeCityRequest(
 @Serializable
 private data class TextSearchRequest(
     val action: String,
-    val query: String
+    val query: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val radiusInMeters: Int? = null
 )
 
 // --- Edge Function Response DTOs ---

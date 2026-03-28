@@ -1,5 +1,6 @@
 package com.example.smackcheck2.navigation
 
+import com.example.smackcheck2.analytics.Analytics
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.platform.LocalUriHandler
@@ -204,6 +205,13 @@ class NavigationState {
     fun updateAllCapturedImages(images: List<CapturedImage>) {
         allCapturedImages = images
     }
+
+    fun clearCaptureData() {
+        imageUri = ""
+        dishName = ""
+        imageBytes = null
+        allCapturedImages = emptyList()
+    }
 }
 
 /**
@@ -249,8 +257,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     }
 
     // Observe SharedLocationState and auto-update the LocationHomeViewModel (from main)
+    // Skip if user has manually selected a location
     val locationState by SharedLocationState.locationState.collectAsState()
+    val locationUiState by locationHomeViewModel.uiState.collectAsState()
     LaunchedEffect(locationState) {
+        if (locationUiState.isManuallySelected) return@LaunchedEffect
         when (val state = locationState) {
             is CommonLocationState.Success -> {
                 val data = state.data
@@ -300,6 +311,23 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             notificationViewModel.initializePushNotifications()
             notificationViewModel.refresh()
             socialFeedViewModel.loadFeed()
+
+            // Day 1 retention tracking
+            try {
+                val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
+                val firstOpen = preferencesRepository.getFirstOpenTimestamp()
+                if (firstOpen == 0L) {
+                    preferencesRepository.saveFirstOpenTimestamp(now)
+                } else if (!preferencesRepository.isDay1RetentionTracked()) {
+                    val hoursSinceFirstOpen = (now - firstOpen) / (1000 * 60 * 60)
+                    if (hoursSinceFirstOpen >= 24) {
+                        Analytics.track("day_1_retention", mapOf(
+                            "hours_since_first_open" to hoursSinceFirstOpen
+                        ))
+                        preferencesRepository.setDay1RetentionTracked()
+                    }
+                }
+            } catch (_: Exception) { }
         }
     }
     
@@ -537,6 +565,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
                         actionLabel = "Dish Rated"
                     )
+                    dishRatingViewModel.resetForm()
+                    navigationState.clearCaptureData()
                     navigationState.popToRoot()
                     navigationState.navigateToWithArgs(
                         Screen.SocialFeed,
@@ -632,6 +662,14 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             val searchViewModel: SearchViewModel = viewModel {
                 SearchViewModel(locationService, placesService)
             }
+            // Pass current location to search for location-biased results
+            LaunchedEffect(locationUiState.currentLatitude, locationUiState.currentLongitude) {
+                val lat = locationUiState.currentLatitude
+                val lng = locationUiState.currentLongitude
+                if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+                    searchViewModel.setUserLocation(lat, lng)
+                }
+            }
             DarkSearchScreen(
                 viewModel = searchViewModel,
                 photoViewModel = restaurantPhotoViewModel,
@@ -705,9 +743,13 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         println("NavHost: LocationSelection - navigating back")
                         navigationState.navigateBack() 
                     },
-                    onLocationSelected = { location ->
-                        println("NavHost: LocationSelection - location selected: $location")
-                        locationHomeViewModel.selectLocation(location)
+                    onLocationSelected = { location, lat, lng ->
+                        println("NavHost: LocationSelection - location selected: $location ($lat, $lng)")
+                        if (lat != 0.0 && lng != 0.0) {
+                            locationHomeViewModel.selectLocationWithCoordinates(location, lat, lng, isManual = true)
+                        } else {
+                            locationHomeViewModel.selectLocation(location)
+                        }
                         navigationState.navigateBack()
                     },
                     onUseCurrentLocation = {
@@ -865,9 +907,10 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     }
                 }
             ) { requestPermission ->
-                // Auto-request permission when screen first loads
+                // Auto-request permission when screen first loads (skip if user manually selected a location)
                 LaunchedEffect(Unit) {
-                    if (!hasRequestedPermission) {
+                    val manuallySelected = locationHomeViewModel.uiState.value.isManuallySelected
+                    if (!hasRequestedPermission && !manuallySelected) {
                         hasRequestedPermission = true
                         println("NavHost: DarkHome - auto-requesting location permission")
                         // Small delay to let the UI settle before showing permission dialog
@@ -917,6 +960,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.DarkDishCapture -> {
             val imagePicker = LocalImagePicker.current
             val dishCaptureViewModel: DishCaptureViewModel = viewModel { DishCaptureViewModel() }
+
+            // Reset capture form each time screen is entered
+            LaunchedEffect(Unit) {
+                dishCaptureViewModel.retake()
+            }
 
             DarkDishCaptureScreen(
                 viewModel = dishCaptureViewModel,
@@ -1138,6 +1186,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 if (ratingUiState.isSuccess) {
                     kotlinx.coroutines.delay(6000) // Show XP reward for 6 seconds
                     val ratingId = ratingUiState.submittedRatingId ?: ""
+                    dishRatingViewModel.resetForm()
+                    navigationState.clearCaptureData()
                     navigationState.popToRoot()
                     navigationState.navigateToWithArgs(
                         Screen.SocialFeed,

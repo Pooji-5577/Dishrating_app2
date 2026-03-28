@@ -348,4 +348,12 @@ class DishRatingViewModel : ViewModel() {
     fun clearXpNotification() {
         _uiState.update { it.copy(showXpNotification = false) }
     }
+
+    fun resetForm() {
+        _uiState.value = DishRatingUiState()
+        restaurantId = ""
+        selectedRestaurant = null
+        ratingLatitude = null
+        ratingLongitude = null
+    }
 }

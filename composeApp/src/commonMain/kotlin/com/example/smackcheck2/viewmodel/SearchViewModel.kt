@@ -131,8 +131,12 @@ class SearchViewModel(
                     try {
                         // If user typed a query, use text search (doesn't require location)
                         if (currentState.query.isNotBlank()) {
-                            println("SearchViewModel: Using text search for query: ${currentState.query}")
-                            val textResults = placesService.searchRestaurantsByText(currentState.query)
+                            println("SearchViewModel: Using text search for query: ${currentState.query} (lat=${currentState.currentLatitude}, lng=${currentState.currentLongitude})")
+                            val textResults = placesService.searchRestaurantsByText(
+                                query = currentState.query,
+                                latitude = currentState.currentLatitude,
+                                longitude = currentState.currentLongitude
+                            )
                             println("SearchViewModel: Text search returned ${textResults.size} results")
                             
                             // Convert NearbyRestaurant to Restaurant and apply filters
@@ -289,6 +293,10 @@ class SearchViewModel(
                 results = emptyList()
             )
         }
+    }
+
+    fun setUserLocation(latitude: Double, longitude: Double) {
+        _uiState.update { it.copy(currentLatitude = latitude, currentLongitude = longitude) }
     }
 
     fun clearLocationError() {

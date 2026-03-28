@@ -49,7 +49,8 @@ data class LocationHomeUiState(
     val searchResults: List<LocationResult> = emptyList(),
     val error: String? = null,
     val locationError: String? = null,
-    val noRestaurantsFound: Boolean = false
+    val noRestaurantsFound: Boolean = false,
+    val isManuallySelected: Boolean = false
 )
 
 /**
@@ -101,7 +102,7 @@ class LocationHomeViewModel : ViewModel() {
     }
 
     fun selectLocation(location: String) {
-        _uiState.update { it.copy(selectedLocation = location, isLoading = true, locationError = null) }
+        _uiState.update { it.copy(selectedLocation = location, isLoading = true, locationError = null, isManuallySelected = true) }
 
         // Save the selected location to user profile
         viewModelScope.launch {
@@ -132,16 +133,18 @@ class LocationHomeViewModel : ViewModel() {
      * @param latitude GPS latitude
      * @param longitude GPS longitude
      */
-    fun selectLocationWithCoordinates(city: String, latitude: Double, longitude: Double) {
+    fun selectLocationWithCoordinates(city: String, latitude: Double, longitude: Double, isManual: Boolean = false) {
         _uiState.update {
             it.copy(
                 selectedLocation = city,
                 currentLatitude = latitude,
                 currentLongitude = longitude,
-                isLoading = true
+                isLoading = true,
+                isManuallySelected = if (isManual) true else it.isManuallySelected
             )
         }
-        loadDataForLocation(city)
+        println("LocationHomeViewModel: selectLocationWithCoordinates($city, $latitude, $longitude, isManual=$isManual)")
+        loadDataForLocation(city, knownLatitude = latitude, knownLongitude = longitude)
     }
 
     fun useCurrentLocation() {
@@ -159,13 +162,14 @@ class LocationHomeViewModel : ViewModel() {
                     val location = result.location
                     if (location.cityName != null) {
                         _uiState.update {
-                            it.copy(
-                                isDetectingLocation = false,
-                                currentLatitude = location.latitude,
-                                currentLongitude = location.longitude
-                            )
+                            it.copy(isDetectingLocation = false)
                         }
-                        selectLocation(location.cityName)
+                        selectLocationWithCoordinates(
+                            city = location.cityName,
+                            latitude = location.latitude,
+                            longitude = location.longitude,
+                            isManual = false
+                        )
                     } else {
                         _uiState.update {
                             it.copy(
@@ -231,7 +235,7 @@ class LocationHomeViewModel : ViewModel() {
 
     private val databaseRepository = DatabaseRepository()
 
-    private fun loadDataForLocation(location: String) {
+    private fun loadDataForLocation(location: String, knownLatitude: Double? = null, knownLongitude: Double? = null) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, noRestaurantsFound = false) }
             println("LocationHomeViewModel: Loading data for location: $location")
@@ -282,8 +286,21 @@ class LocationHomeViewModel : ViewModel() {
                     }
                 }
                 
+                // Step 3: Fall back to known coordinates passed directly, or stored in state
                 if (coordinates == null) {
-                    println("LocationHomeViewModel: All geocoding methods failed for $location - cannot fetch nearby restaurants")
+                    val lat = knownLatitude ?: _uiState.value.currentLatitude
+                    val lng = knownLongitude ?: _uiState.value.currentLongitude
+                    println("LocationHomeViewModel: Fallback check - coords: lat=$lat, lng=$lng (known=${knownLatitude != null})")
+                    if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
+                        println("LocationHomeViewModel: ✓ Using fallback coordinates for $location: $lat, $lng")
+                        coordinates = LocationResult(
+                            latitude = lat,
+                            longitude = lng,
+                            cityName = location
+                        )
+                    } else {
+                        println("LocationHomeViewModel: ✗ All geocoding methods failed for $location - no coordinates available")
+                    }
                 }
 
                 // Fetch nearby restaurants from Google Places API using the geocoded coordinates

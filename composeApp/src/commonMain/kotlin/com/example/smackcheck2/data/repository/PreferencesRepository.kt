@@ -45,6 +45,11 @@ class PreferencesRepository(private val preferencesManager: PreferencesManager) 
         }
     }
 
+    suspend fun getFirstOpenTimestamp(): Long = preferencesManager.getFirstOpenTimestamp()
+    suspend fun saveFirstOpenTimestamp(timestamp: Long) = preferencesManager.saveFirstOpenTimestamp(timestamp)
+    suspend fun isDay1RetentionTracked(): Boolean = preferencesManager.isDay1RetentionTracked()
+    suspend fun setDay1RetentionTracked() = preferencesManager.setDay1RetentionTracked()
+
     suspend fun clearAllSettings(): Result<Unit> {
         return try {
             preferencesManager.clearAll()

@@ -30,6 +30,9 @@ interface GeocodeCityRequest {
 interface TextSearchRequest {
   action: 'text-search'
   query: string
+  latitude?: number
+  longitude?: number
+  radiusInMeters?: number
 }
 
 interface SearchPhotosRequest {
@@ -344,10 +347,17 @@ async function handleTextSearch(
   console.log(`Text search: "${query}"`)
 
   try {
-    const searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json` +
+    let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json` +
       `?query=${encodeURIComponent(query)}` +
       `&type=restaurant` +
       `&key=${apiKey}`
+
+    // Add location biasing if coordinates are provided
+    if (body.latitude != null && body.longitude != null) {
+      searchUrl += `&location=${body.latitude},${body.longitude}`
+      searchUrl += `&radius=${body.radiusInMeters ?? 10000}`
+      console.log(`Text search with location bias: lat=${body.latitude}, lng=${body.longitude}, radius=${body.radiusInMeters ?? 10000}`)
+    }
 
     const searchResponse = await fetch(searchUrl)
     if (!searchResponse.ok) {

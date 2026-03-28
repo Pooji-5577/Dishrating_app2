@@ -117,7 +117,9 @@ data class SearchUiState(
     val results: List<Restaurant> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
-    val locationError: String? = null
+    val locationError: String? = null,
+    val currentLatitude: Double? = null,
+    val currentLongitude: Double? = null
 )
 
 /**
