@@ -132,6 +132,24 @@ fun DarkDishRatingScreen(
         }
     }
 
+    // Clear form after successful submission
+    LaunchedEffect(showSuccess) {
+        if (showSuccess) {
+            rating = 0f
+            comment = ""
+            selectedRestaurant = null
+            selectedTags = setOf()
+            showRestaurantPicker = false
+            restaurantSearchQuery = ""
+            showSkipInput = false
+            skipRestaurantName = ""
+            showAddNewPlaceForm = false
+            newPlaceName = ""
+            newPlaceCity = ""
+            newPlaceCuisine = ""
+        }
+    }
+
     val tags = listOf(
         "Spicy", "Tasty", "Healthy", "Value for Money",
         "Good Presentation", "Quick Service", "Large Portion",

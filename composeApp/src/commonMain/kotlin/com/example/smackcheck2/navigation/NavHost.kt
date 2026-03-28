@@ -1150,7 +1150,15 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 dishName = navigationState.dishName,
                 imageUri = navigationState.imageUri,
                 imageBytes = ratingUiState.imageBytes,
-                restaurants = (allRestaurants + placesNearbyAsRestaurants).distinctBy { it.id },
+                restaurants = run {
+                    val selectedCity = locationUiState.selectedLocation
+                    val cityFiltered = if (!selectedCity.isNullOrBlank()) {
+                        allRestaurants.filter { it.city.contains(selectedCity, ignoreCase = true) }
+                    } else {
+                        allRestaurants
+                    }
+                    (cityFiltered + placesNearbyAsRestaurants).distinctBy { it.id }
+                },
                 nearbyRestaurants = nearbyRestaurants,
                 searchedRestaurants = searchedRestaurants,
                 isLoadingRestaurants = isLoadingRestaurants,

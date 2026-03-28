@@ -36,6 +36,12 @@ import kotlin.coroutines.resume
 @OptIn(ExperimentalForeignApi::class)
 actual class ImagePicker {
 
+    // Strong references to prevent Kotlin/Native GC from collecting delegates.
+    // UIKit holds only a weak reference to delegates, so without these the delegate
+    // gets garbage collected before the picker calls back.
+    private var singlePickerDelegate: NSObject? = null
+    private var multiplePickerDelegate: NSObject? = null
+
     /**
      * Capture an image using the device camera.
      * Presents UIImagePickerController with camera source type.
@@ -127,6 +133,7 @@ actual class ImagePicker {
                     picker: PHPickerViewController,
                     didFinishPicking: List<*>
                 ) {
+                    singlePickerDelegate = null
                     picker.dismissViewControllerAnimated(true, completion = null)
 
                     if (resumed) return
@@ -171,9 +178,11 @@ actual class ImagePicker {
                     }
                 }
             }
+            singlePickerDelegate = delegate
 
             val rootViewController = getRootViewController()
             if (rootViewController == null) {
+                singlePickerDelegate = null
                 if (!resumed) {
                     resumed = true
                     continuation.resume(null)
@@ -188,6 +197,7 @@ actual class ImagePicker {
             rootViewController.presentViewController(pickerVC, animated = true, completion = null)
 
             continuation.invokeOnCancellation {
+                singlePickerDelegate = null
                 pickerVC.dismissViewControllerAnimated(true, completion = null)
             }
         }
@@ -213,12 +223,13 @@ actual class ImagePicker {
                     picker: PHPickerViewController,
                     didFinishPicking: List<*>
                 ) {
+                    multiplePickerDelegate = null
                     picker.dismissViewControllerAnimated(true, completion = null)
 
                     if (resumed) return
 
                     val results = didFinishPicking.filterIsInstance<PHPickerResult>()
-                    
+
                     if (results.isEmpty()) {
                         resumed = true
                         continuation.resume(emptyList())
@@ -249,7 +260,7 @@ actual class ImagePicker {
                                         )
                                     }
                                 }
-                                
+
                                 // When all items are processed, resume
                                 if (processedCount == totalCount && !resumed) {
                                     resumed = true
@@ -266,9 +277,11 @@ actual class ImagePicker {
                     }
                 }
             }
+            multiplePickerDelegate = delegate
 
             val rootViewController = getRootViewController()
             if (rootViewController == null) {
+                multiplePickerDelegate = null
                 if (!resumed) {
                     resumed = true
                     continuation.resume(emptyList())
@@ -283,6 +296,7 @@ actual class ImagePicker {
             rootViewController.presentViewController(pickerVC, animated = true, completion = null)
 
             continuation.invokeOnCancellation {
+                multiplePickerDelegate = null
                 pickerVC.dismissViewControllerAnimated(true, completion = null)
             }
         }

@@ -30,6 +30,7 @@ import kotlin.coroutines.resume
 actual class LocationService {
 
     private val geocoder = CLGeocoder()
+    private val locationManager = CLLocationManager()
 
     /**
      * Get current location using CoreLocation.
@@ -74,7 +75,7 @@ actual class LocationService {
         val emulator = isEmulator()
 
         if (!hasLocationPermission()) {
-            val status = CLLocationManager.authorizationStatus()
+            val status = locationManager.authorizationStatus
             return if (status == kCLAuthorizationStatusNotDetermined) {
                 LocationOperationResult.Error(LocationErrorReason.PERMISSION_DENIED, emulator)
             } else {
@@ -146,7 +147,7 @@ actual class LocationService {
      * Check if location permissions are granted.
      */
     actual fun hasLocationPermission(): Boolean {
-        val status = CLLocationManager.authorizationStatus()
+        val status = locationManager.authorizationStatus
         return status == kCLAuthorizationStatusAuthorizedWhenInUse ||
                 status == kCLAuthorizationStatusAuthorizedAlways
     }

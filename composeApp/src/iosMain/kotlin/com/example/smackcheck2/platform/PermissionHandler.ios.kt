@@ -31,11 +31,14 @@ import platform.darwin.dispatch_get_main_queue
  * iOS implementation of PermissionHandler using CoreLocation.
  */
 actual class PermissionHandler {
+    private val locationManager = CLLocationManager()
+
     /**
-     * Check if location permission is granted by inspecting CLLocationManager.authorizationStatus().
+     * Check if location permission is granted using instance authorizationStatus
+     * (avoids the deprecated class-method which triggers a main-thread warning).
      */
     actual fun hasLocationPermission(): Boolean {
-        val status = CLLocationManager.authorizationStatus()
+        val status = locationManager.authorizationStatus
         return status == kCLAuthorizationStatusAuthorizedWhenInUse ||
                 status == kCLAuthorizationStatusAuthorizedAlways
     }
@@ -53,19 +56,19 @@ actual fun RequestLocationPermission(
     onPermissionResult: (Boolean) -> Unit,
     content: @Composable (requestPermission: () -> Unit) -> Unit
 ) {
+    val locationManager = remember { CLLocationManager() }
+
     var hasPermission by remember {
         mutableStateOf(
-            CLLocationManager.authorizationStatus() == kCLAuthorizationStatusAuthorizedWhenInUse ||
-                    CLLocationManager.authorizationStatus() == kCLAuthorizationStatusAuthorizedAlways
+            locationManager.authorizationStatus == kCLAuthorizationStatusAuthorizedWhenInUse ||
+                    locationManager.authorizationStatus == kCLAuthorizationStatusAuthorizedAlways
         )
     }
-
-    val locationManager = remember { CLLocationManager() }
 
     val delegate = remember {
         object : NSObject(), CLLocationManagerDelegateProtocol {
             override fun locationManagerDidChangeAuthorization(manager: CLLocationManager) {
-                val status = CLLocationManager.authorizationStatus()
+                val status = manager.authorizationStatus
                 val granted = status == kCLAuthorizationStatusAuthorizedWhenInUse ||
                         status == kCLAuthorizationStatusAuthorizedAlways
                 hasPermission = granted
