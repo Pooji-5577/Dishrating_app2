@@ -571,7 +571,8 @@ class SocialRepository {
                 isLiked = likedRatingIds.contains(ratingId),
                 timestamp = parseTimestamp(rating.createdAt),
                 comment = rating.comment,
-                imageUrls = allImages
+                imageUrls = allImages,
+                price = rating.price
             )
         }
     }

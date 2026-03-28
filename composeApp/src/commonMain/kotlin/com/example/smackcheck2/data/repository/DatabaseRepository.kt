@@ -601,7 +601,8 @@ class DatabaseRepository {
                         likesCount = rating.likesCount,
                         commentsCount = 0,
                         isLiked = false,
-                        timestamp = 0L
+                        timestamp = 0L,
+                        price = rating.price
                     )
                 } catch (e: Exception) {
                     null

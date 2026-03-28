@@ -1234,12 +1234,13 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         }
                     }
                 },
+                onPriceChange = { dishRatingViewModel.onPriceChange(it) },
                 onDismissError = { dishRatingViewModel.clearError() },
                 onAddRestaurantManually = { navigationState.navigateTo(Screen.ManualRestaurantEntry) },
                 onSearchRestaurants = { query -> searchQuery = query }
             )
         }
-        
+
         is Screen.DishDetail -> {
             val dishDetailViewModel: DishDetailViewModel = viewModel { DishDetailViewModel() }
             DishDetailScreen(

@@ -427,7 +427,8 @@ class RealtimeFeedRepository {
                     isLiked = isLiked,
                     timestamp = parseTimestamp(rating.createdAt),
                     comment = rating.comment,
-                    imageUrls = allImages
+                    imageUrls = allImages,
+                    price = rating.price
                 )
             } catch (e: Exception) {
                 println("RealtimeFeed: Error mapping rating: ${e.message}")

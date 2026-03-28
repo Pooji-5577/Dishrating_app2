@@ -81,7 +81,8 @@ data class Review(
     val likesCount: Int = 0,
     val commentsCount: Int = 0,
     val isLiked: Boolean = false,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val price: Double? = null
 )
 
 /**
@@ -101,7 +102,8 @@ data class FeedItem(
     val isLiked: Boolean,
     val timestamp: Long,
     val comment: String = "",
-    val imageUrls: List<String> = emptyList()
+    val imageUrls: List<String> = emptyList(),
+    val price: Double? = null
 )
 
 /**

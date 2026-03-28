@@ -379,6 +379,22 @@ fun SocialFeedCard(
                 )
             }
 
+            // Price display
+            if (item.price != null && item.price > 0) {
+                Spacer(modifier = Modifier.height(6.dp))
+                val priceText = run {
+                    val whole = item.price.toLong()
+                    val frac = ((item.price - whole) * 100 + 0.5).toLong()
+                    "$$whole.${frac.toString().padStart(2, '0')}"
+                }
+                Text(
+                    text = priceText,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = colors.Primary
+                )
+            }
+
             // Comment preview
             if (item.comment.isNotBlank()) {
                 Spacer(modifier = Modifier.height(8.dp))

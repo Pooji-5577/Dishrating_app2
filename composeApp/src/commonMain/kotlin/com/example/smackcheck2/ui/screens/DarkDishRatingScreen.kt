@@ -72,6 +72,8 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -102,12 +104,14 @@ fun DarkDishRatingScreen(
     errorMessage: String? = null,
     onNavigateBack: () -> Unit,
     onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurant: Restaurant?) -> Unit,
+    onPriceChange: (String) -> Unit = {},
     onDismissError: () -> Unit = {},
     onAddRestaurantManually: (() -> Unit)? = null,
     onSearchRestaurants: ((String) -> Unit)? = null
 ) {
     var rating by remember { mutableFloatStateOf(0f) }
     var comment by remember { mutableStateOf("") }
+    var price by remember { mutableStateOf("") }
     var selectedRestaurant by remember { mutableStateOf<Restaurant?>(null) }
     var selectedTags by remember { mutableStateOf(setOf<String>()) }
     var showRestaurantPicker by remember { mutableStateOf(false) }
@@ -550,6 +554,53 @@ fun DarkDishRatingScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp)
+                        .padding(horizontal = 16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = appColors().Primary,
+                        unfocusedBorderColor = appColors().TextSecondary.copy(alpha = 0.3f),
+                        cursorColor = appColors().Primary,
+                        focusedTextColor = appColors().TextPrimary,
+                        unfocusedTextColor = appColors().TextPrimary,
+                        focusedPlaceholderColor = appColors().TextSecondary,
+                        unfocusedPlaceholderColor = appColors().TextSecondary
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Price section
+                Text(
+                    text = "Dish Price (optional)",
+                    color = appColors().TextPrimary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = price,
+                    onValueChange = { newPrice ->
+                        // Only allow digits and a single decimal point
+                        val filtered = newPrice.filter { it.isDigit() || it == '.' }
+                            .let { if (it.count { c -> c == '.' } > 1) it.dropLast(1) else it }
+                        price = filtered
+                        onPriceChange(filtered)
+                    },
+                    placeholder = { Text("e.g. 12.50") },
+                    prefix = {
+                        Text(
+                            text = "$ ",
+                            color = appColors().TextPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier
+                        .fillMaxWidth()
                         .padding(horizontal = 16.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = appColors().Primary,

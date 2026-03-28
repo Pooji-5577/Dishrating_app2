@@ -108,6 +108,10 @@ const FOOD_TYPE_BLACKLIST = new Set([
   'stadium',
   'airport',
   'shopping_mall',
+  'lodging',
+  'hotel',
+  'motel',
+  'resort_hotel',
 ])
 
 const FOOD_TYPE_WHITELIST = new Set([
