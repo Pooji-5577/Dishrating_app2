@@ -22,5 +22,10 @@ expect class PreferencesManager {
     suspend fun saveLanguage(language: String)
     suspend fun getLanguage(): String
 
+    suspend fun getFirstOpenTimestamp(): Long
+    suspend fun saveFirstOpenTimestamp(timestamp: Long)
+    suspend fun isDay1RetentionTracked(): Boolean
+    suspend fun setDay1RetentionTracked()
+
     suspend fun clearAll()
 }

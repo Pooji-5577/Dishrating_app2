@@ -1079,6 +1079,7 @@ fun DarkDishRatingScreen(
         }
     }
 }
+}
 
 @Composable
 private fun RestaurantPickerItem(
