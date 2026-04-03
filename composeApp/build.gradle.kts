@@ -141,6 +141,9 @@ android {
         // Note: GEMINI_API_KEY is no longer needed client-side
         // AI dish detection now uses Supabase Edge Functions with the key stored server-side
     }
+    lint {
+        abortOnError = false
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"

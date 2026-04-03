@@ -87,13 +87,15 @@ class RestaurantPhotoService {
     }
 
     private fun hasLegacyGooglePhotoEndpoint(urls: List<String>): Boolean {
-        // Treat old cached URLs as stale so they get re-fetched through the new
-        // photo-proxy endpoint.  Stale formats include:
+        // Treat old/stale cached URLs as expired so they get re-fetched.
+        // Stale formats include:
         //  • Expired Google CDN URLs (lh3.googleusercontent.com)
         //  • Direct Google Places Photo URLs with the API key embedded
+        //  • Google Static Maps URLs (maps.gstatic.com)
         return urls.any {
             it.contains("googleusercontent.com") ||
-            it.contains("maps.googleapis.com/maps/api/place/photo")
+            it.contains("maps.googleapis.com/maps/api/place/photo") ||
+            it.contains("maps.gstatic.com")
         }
     }
 

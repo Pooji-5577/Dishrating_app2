@@ -77,7 +77,8 @@ class CommentsViewModel(private val ratingId: String) : ViewModel() {
                     viewModelScope.launch {
                         NotificationRepository.notifyCommentOnRating(
                             ratingId = ratingId,
-                            commenterId = user.id
+                            commenterId = user.id,
+                            commenterName = user.name
                         )
                     }
                 },

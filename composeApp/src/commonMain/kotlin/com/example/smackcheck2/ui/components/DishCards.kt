@@ -274,10 +274,13 @@ fun RestaurantCardDark(
     photoUrl: String? = null,  // Google Places photo URL
     photoState: PhotoState? = null
 ) {
-    val photoStatesMap = photoViewModel?.photoStates?.collectAsState()
-    val photoState = photoStatesMap?.value?.get(restaurantId)
+    // Use the photoState passed from the parent (DarkHomeScreen handles loading logic).
+    // If no parent-provided state, fall back to collecting from viewModel directly.
+    val resolvedPhotoState = photoState
+        ?: photoViewModel?.photoStates?.collectAsState()?.value?.get(restaurantId)
 
-    if (photoViewModel != null && restaurantId.isNotEmpty()) {
+    // Only trigger loadThumbnail if no parent already handled it (photoState param is null)
+    if (photoState == null && photoViewModel != null && restaurantId.isNotEmpty()) {
         LaunchedEffect(restaurantId) {
             photoViewModel.loadThumbnail(
                 restaurantId = restaurantId,
@@ -306,11 +309,11 @@ fun RestaurantCardDark(
                     .height(150.dp)
             ) {
                 when {
-                    photoState is PhotoState.Loading ||
-                        photoState is PhotoState.ThumbnailLoaded ||
-                        photoState is PhotoState.FullPhotosLoaded -> {
+                    resolvedPhotoState is PhotoState.Loading ||
+                        resolvedPhotoState is PhotoState.ThumbnailLoaded ||
+                        resolvedPhotoState is PhotoState.FullPhotosLoaded -> {
                         SmartRestaurantImage(
-                            photoState = photoState,
+                            photoState = resolvedPhotoState,
                             restaurantName = restaurantName,
                             modifier = Modifier.fillMaxSize(),
                             contentScale = ContentScale.Crop
@@ -321,7 +324,8 @@ fun RestaurantCardDark(
                         NetworkImage(
                             imageUrl = photoUrl,
                             contentDescription = restaurantName,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            fallbackUrl = FoodImages.getRestaurantImageByName(restaurantName)
                         )
                     }
 

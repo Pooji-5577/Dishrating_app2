@@ -219,20 +219,7 @@ class SocialRepository {
                 .select { filter { eq("id", userId) } }
                 .decodeSingleOrNull<ProfileDto>()
 
-            // Create notification for rating owner
-            val rating = postgrest["ratings"]
-                .select { filter { eq("id", ratingId) } }
-                .decodeSingleOrNull<RatingDto>()
-
-            if (rating != null && rating.userId != userId) {
-                createNotification(
-                    userId = rating.userId,
-                    type = "comment",
-                    title = "New Comment",
-                    body = "${profile?.name ?: "Someone"} commented on your rating",
-                    data = """{"rating_id": "$ratingId", "comment_id": "${created.id}"}"""
-                )
-            }
+            // Notification is handled by CommentsViewModel via NotificationRepository
 
             Result.success(
                 Comment(
@@ -338,12 +325,13 @@ class SocialRepository {
         data: String = "{}"
     ): Result<Unit> {
         return try {
+            val jsonData = kotlinx.serialization.json.Json.parseToJsonElement(data)
             val dto = NotificationDto(
                 userId = userId,
                 type = type,
                 title = title,
                 body = body,
-                data = data
+                data = jsonData
             )
             postgrest["notifications"].insert(dto)
             Result.success(Unit)

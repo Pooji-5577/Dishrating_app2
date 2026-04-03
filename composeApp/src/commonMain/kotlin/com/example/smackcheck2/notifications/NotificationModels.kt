@@ -18,7 +18,11 @@ enum class NotificationEventType(val value: String) {
     CHALLENGE_COMPLETED("challenge_completed"),
     TRENDING_DISH("trending_dish"),
     NEW_POST("new_post"),
-    RATING_SUBMITTED("rating_submitted");
+    RATING_SUBMITTED("rating_submitted"),
+    WELCOME("welcome"),
+    FIRST_DISH("first_dish"),
+    INACTIVITY_REMINDER("inactivity_reminder"),
+    ADMIN_BROADCAST("admin_broadcast");
 
     companion object {
         fun fromValue(value: String): NotificationEventType? =

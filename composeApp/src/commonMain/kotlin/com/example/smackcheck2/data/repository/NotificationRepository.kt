@@ -101,8 +101,7 @@ class NotificationRepository {
         title = title,
         body = body,
         data = runCatching {
-            Json.parseToJsonElement(data).jsonObject
-                .mapValues { it.value.jsonPrimitive.content }
+            data?.jsonObject?.mapValues { it.value.jsonPrimitive.content } ?: emptyMap()
         }.getOrDefault(emptyMap()),
         isRead = isRead,
         createdAt = runCatching {

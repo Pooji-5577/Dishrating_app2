@@ -3,6 +3,7 @@ package com.example.smackcheck2.data.repository
 import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.dto.ProfileDto
 import com.example.smackcheck2.model.User
+import com.example.smackcheck2.notifications.NotificationRepository
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -126,6 +127,13 @@ class AuthRepository {
                 } catch (e: Exception) {
                     // Profile might already exist from trigger, ignore error
                     println("AuthRepository: Profile upsert note: ${e.message}")
+                }
+
+                // Send welcome notification
+                try {
+                    NotificationRepository.notifyWelcome(userId, name)
+                } catch (e: Exception) {
+                    println("AuthRepository: Welcome notification failed: ${e.message}")
                 }
 
                 Result.success(
@@ -687,6 +695,24 @@ class AuthRepository {
      * so they are safe to display in the UI.
      */
     private fun sanitizeErrorMessage(message: String): String {
+        // Map known Supabase errors to user-friendly messages
+        if (message.contains("invalid_credentials", ignoreCase = true) ||
+            message.contains("Invalid login credentials", ignoreCase = true)
+        ) {
+            return "Invalid email or password. Please try again."
+        }
+        if (message.contains("infinite recursion", ignoreCase = true)) {
+            return "A temporary error occurred. Please try again."
+        }
+        if (message.contains("email not confirmed", ignoreCase = true)) {
+            return "Please verify your email before signing in."
+        }
+        if (message.contains("too many requests", ignoreCase = true) ||
+            message.contains("rate limit", ignoreCase = true)
+        ) {
+            return "Too many attempts. Please wait and try again."
+        }
+
         // If the message contains Authorization headers or JWT tokens, return a generic message
         if (message.contains("Authorization", ignoreCase = true) ||
             message.contains("Bearer ", ignoreCase = true) ||

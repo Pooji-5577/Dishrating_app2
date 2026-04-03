@@ -228,14 +228,14 @@ class SocialFeedViewModel : ViewModel() {
     }
 
     fun toggleLike(itemId: String) {
-        val userId = authRepository.getCurrentUserId()
-        if (userId == null) {
+        val currentUserId = authRepository.getCurrentUserId()
+        if (currentUserId == null) {
             println("[DEBUG][SocialFeed] toggleLike: No user ID — user not logged in")
             return
         }
         // Capture pre-toggle state so we can revert on failure
         val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
-        println("[DEBUG][SocialFeed] toggleLike: itemId=$itemId, wasLiked=$wasLiked, userId=$userId")
+        println("[DEBUG][SocialFeed] toggleLike: itemId=$itemId, wasLiked=$wasLiked, userId=$currentUserId")
 
         // Optimistic update
         _uiState.update { state ->
@@ -251,41 +251,23 @@ class SocialFeedViewModel : ViewModel() {
         }
 
         viewModelScope.launch {
-            // Ensure user profile exists
             val user = authRepository.getCurrentUser()
             if (user == null) {
                 println("SocialFeedViewModel: User not signed in, cannot toggle like")
                 return@launch
             }
-            val userId = user.id
-            
-            // Capture pre-toggle state so we can revert on failure
-            val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
 
-            // Optimistic update - will be confirmed by real-time subscription
-            _uiState.update { state ->
-                val updatedItems = state.feedItems.map { item ->
-                    if (item.id == itemId) {
-                        item.copy(
-                            isLiked = !wasLiked,
-                            likesCount = if (!wasLiked) item.likesCount + 1 else (item.likesCount - 1).coerceAtLeast(0)
-                        )
-                    } else item
-                }
-                state.copy(feedItems = updatedItems)
-            }
-
-            val result = realtimeFeedRepository.toggleLike(itemId, userId)
+            val result = realtimeFeedRepository.toggleLike(itemId, user.id)
             result.fold(
                 onSuccess = { isNowLiked ->
                     println("[DEBUG][SocialFeed] toggleLike SUCCESS: itemId=$itemId, isNowLiked=$isNowLiked")
                     if (isNowLiked) {
                         val item = _uiState.value.feedItems.find { it.id == itemId }
-                        if (item != null && item.userId != userId) {
+                        if (item != null && item.userId != user.id) {
                             viewModelScope.launch {
                                 NotificationRepository.notifyReviewLiked(
                                     reviewOwnerId = item.userId,
-                                    likerName = "",
+                                    likerName = user.name,
                                     dishName = item.dishName,
                                     reviewId = itemId
                                 )
@@ -296,7 +278,7 @@ class SocialFeedViewModel : ViewModel() {
                 onFailure = { e ->
                     println("[DEBUG][SocialFeed] toggleLike FAILED: itemId=$itemId, error=${e::class.simpleName} - ${e.message}")
                     e.printStackTrace()
-                    // Revert optimistic UI toggle
+                    // Revert optimistic UI toggle back to original state
                     _uiState.update { state ->
                         val revertedItems = state.feedItems.map { item ->
                             if (item.id == itemId) {

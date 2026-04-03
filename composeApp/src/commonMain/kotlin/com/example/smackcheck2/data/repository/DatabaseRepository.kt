@@ -186,18 +186,32 @@ class DatabaseRepository {
     suspend fun getRestaurantsByCity(city: String): Result<List<Restaurant>> {
         return try {
             println("DatabaseRepository: Searching for restaurants in city: $city")
-            val restaurants = postgrest["restaurants"]
+            var restaurants = postgrest["restaurants"]
                 .select {
                     filter {
                         // Use case-insensitive pattern matching for better results
                         ilike("city", "%$city%")
                     }
                     order("average_rating", Order.DESCENDING)
-                    limit(10)
+                    limit(50)
                 }
                 .decodeList<RestaurantDto>()
                 .map { it.toRestaurant() }
             println("DatabaseRepository: Found ${restaurants.size} restaurants for city: $city")
+
+            // If no results for the specific city, fetch all restaurants as fallback
+            if (restaurants.isEmpty()) {
+                println("DatabaseRepository: No restaurants for '$city', fetching all restaurants")
+                restaurants = postgrest["restaurants"]
+                    .select {
+                        order("average_rating", Order.DESCENDING)
+                        limit(50)
+                    }
+                    .decodeList<RestaurantDto>()
+                    .map { it.toRestaurant() }
+                println("DatabaseRepository: Fallback returned ${restaurants.size} restaurants")
+            }
+
             Result.success(restaurants)
         } catch (e: Exception) {
             println("DatabaseRepository: Error searching restaurants: ${e.message}")
@@ -1094,6 +1108,23 @@ class DatabaseRepository {
             imageUrl = imageUrl,
             restaurantId = restaurantId
         )
+    }
+
+    /**
+     * Get the total number of ratings submitted by a user.
+     */
+    suspend fun getUserRatingCount(userId: String): Int {
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter { eq("user_id", userId) }
+                }
+                .decodeList<RatingDto>()
+            ratings.size
+        } catch (e: Exception) {
+            println("DatabaseRepository: Failed to get user rating count: ${e.message}")
+            0
+        }
     }
 
     private fun BadgeDto.toBadge(isEarned: Boolean = false): Badge {

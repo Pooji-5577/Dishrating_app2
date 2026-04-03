@@ -318,6 +318,17 @@ class DishRatingViewModel : ViewModel() {
                                 ratingId = ratingId
                             )
                         }
+                        // Check if this is the user's first dish and send congratulatory notification
+                        viewModelScope.launch {
+                            try {
+                                val ratingCount = databaseRepository.getUserRatingCount(userId)
+                                if (ratingCount == 1) {
+                                    NotificationRepository.notifyFirstDish(userId, currentState.dishName)
+                                }
+                            } catch (e: Exception) {
+                                println("DishRatingViewModel: First dish check failed: ${e.message}")
+                            }
+                        }
                     },
                     onFailure = { error ->
                         println("DishRatingViewModel: ✗ Rating submission failed: ${error.message}")

@@ -310,6 +310,22 @@ private fun getNotificationIcon(eventType: NotificationEventType?): Notification
             icon = Icons.Filled.CheckCircle,
             backgroundColor = Color(0xFF4CAF50) // Green
         )
+        NotificationEventType.WELCOME -> NotificationIconData(
+            icon = Icons.Filled.Stars,
+            backgroundColor = Color(0xFFFF9800) // Orange
+        )
+        NotificationEventType.FIRST_DISH -> NotificationIconData(
+            icon = Icons.Filled.CheckCircle,
+            backgroundColor = Color(0xFF4CAF50) // Green
+        )
+        NotificationEventType.INACTIVITY_REMINDER -> NotificationIconData(
+            icon = Icons.Filled.Notifications,
+            backgroundColor = Color(0xFF2196F3) // Blue
+        )
+        NotificationEventType.ADMIN_BROADCAST -> NotificationIconData(
+            icon = Icons.Filled.Notifications,
+            backgroundColor = Color(0xFFFF6B35) // SmackCheck brand
+        )
         null -> NotificationIconData(
             icon = Icons.Filled.Notifications,
             backgroundColor = Color(0xFF9E9E9E) // Grey

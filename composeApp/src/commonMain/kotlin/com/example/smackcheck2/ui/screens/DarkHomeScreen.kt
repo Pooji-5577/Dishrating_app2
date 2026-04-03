@@ -658,8 +658,17 @@ fun DarkHomeScreen(
 
                     LaunchedEffect(restaurant.id) {
                         val fullRestaurant = allRestaurants.firstOrNull { it.id == restaurant.id }
-                        val knownPhotoUrl = fullRestaurant?.photoUrl
-                            ?: fullRestaurant?.imageUrls?.firstOrNull()
+                        // Only use cached URL if it's a valid non-stale format
+                        val knownPhotoUrl = (fullRestaurant?.photoUrl
+                            ?: fullRestaurant?.imageUrls?.firstOrNull())
+                            ?.takeIf { url ->
+                                url.isNotBlank() &&
+                                !url.contains("googleusercontent.com") &&
+                                !url.contains("maps.googleapis.com/maps/api/place/photo") &&
+                                !url.contains("maps.gstatic.com") &&
+                                // Unsplash URLs are always valid
+                                (url.contains("unsplash.com") || url.contains("functions/v1/google-places"))
+                            }
                         if (knownPhotoUrl != null) {
                             // Photo URL already known — use it directly, no edge function call needed
                             photoViewModel?.setThumbnailUrl(restaurant.id, knownPhotoUrl)

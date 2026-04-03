@@ -239,7 +239,7 @@ object NotificationRepository {
      * Notify the owner of a rating that someone commented on it.
      * Fetches rating details internally to resolve the owner.
      */
-    suspend fun notifyCommentOnRating(ratingId: String, commenterId: String): TriggerResult {
+    suspend fun notifyCommentOnRating(ratingId: String, commenterId: String, commenterName: String = ""): TriggerResult {
         return try {
             val rating = client.postgrest["ratings"]
                 .select { filter { eq("id", ratingId) } }
@@ -248,11 +248,20 @@ object NotificationRepository {
 
             if (rating.userId == commenterId) return TriggerResult(success = true)
 
+            // Fetch commenter name if not provided
+            val name = commenterName.ifBlank {
+                try {
+                    client.postgrest["profiles"]
+                        .select { filter { eq("id", commenterId) } }
+                        .decodeSingleOrNull<ProfileBasicDto>()?.name ?: "Someone"
+                } catch (_: Exception) { "Someone" }
+            }
+
             insertNotification(
                 NotificationInsert(
                     userId = rating.userId,
                     title = "💬 New Comment",
-                    body = "Someone commented on your review",
+                    body = "$name commented on your review",
                     eventType = NotificationEventType.DISH_COMMENT.value,
                     data = mapOf(
                         "source_id" to "comment_${ratingId}_$commenterId",
@@ -265,6 +274,48 @@ object NotificationRepository {
             println("Failed to notify comment: ${e.message}")
             TriggerResult(success = false, error = e.message)
         }
+    }
+
+    /**
+     * Send a welcome notification to a newly signed-up user.
+     */
+    suspend fun notifyWelcome(
+        userId: String,
+        userName: String
+    ): TriggerResult {
+        return insertNotification(
+            NotificationInsert(
+                userId = userId,
+                title = "Welcome to SmackCheck!",
+                body = "Hey $userName! Start by rating your first dish and earn XP!",
+                eventType = NotificationEventType.WELCOME.value,
+                data = mapOf(
+                    "source_id" to "welcome_$userId",
+                    "screen" to "Home"
+                )
+            )
+        )
+    }
+
+    /**
+     * Congratulate a user on uploading their first dish rating.
+     */
+    suspend fun notifyFirstDish(
+        userId: String,
+        dishName: String
+    ): TriggerResult {
+        return insertNotification(
+            NotificationInsert(
+                userId = userId,
+                title = "First Review Posted!",
+                body = "Awesome! Your review of $dishName is live. Keep rating to level up!",
+                eventType = NotificationEventType.FIRST_DISH.value,
+                data = mapOf(
+                    "source_id" to "first_dish_$userId",
+                    "screen" to "SocialFeed"
+                )
+            )
+        )
     }
 
     // ─── Fetch User's Notifications ──────────────────────────────
@@ -425,4 +476,10 @@ private data class RatingBasicDto(
     val id: String = "",
     @kotlinx.serialization.SerialName("user_id") val userId: String = "",
     @kotlinx.serialization.SerialName("dish_id") val dishId: String = ""
+)
+
+@kotlinx.serialization.Serializable
+private data class ProfileBasicDto(
+    val id: String = "",
+    val name: String = ""
 )

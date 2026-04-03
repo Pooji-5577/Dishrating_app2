@@ -240,6 +240,11 @@ class LocationHomeViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, error = null, noRestaurantsFound = false) }
             println("LocationHomeViewModel: Loading data for location: $location")
 
+            // Wait briefly for placesService to be injected if it hasn't been yet
+            if (placesService == null) {
+                kotlinx.coroutines.delay(300)
+            }
+
             try {
                 // Fetch restaurants for the selected city from Supabase
                 println("LocationHomeViewModel: Fetching restaurants from database for: $location")

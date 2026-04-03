@@ -97,6 +97,10 @@ const EVENT_CHANNEL_MAP: Record<string, string> = {
   trending_dish: 'discovery',
   nearby_restaurant: 'discovery',
   geofence_enter: 'discovery',
+  welcome: 'default',
+  first_dish: 'default',
+  inactivity_reminder: 'default',
+  admin_broadcast: 'default',
 }
 
 // ─── Token Type Detection ────────────────────────────────────────

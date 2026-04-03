@@ -254,10 +254,11 @@ data class NotificationDto(
     val id: String? = null,
     @SerialName("user_id")
     val userId: String,
+    @SerialName("event_type")
     val type: String,
     val title: String,
     val body: String,
-    val data: String = "{}",
+    val data: kotlinx.serialization.json.JsonElement? = null,
     @SerialName("is_read")
     val isRead: Boolean = false,
     @OptIn(ExperimentalSerializationApi::class)
