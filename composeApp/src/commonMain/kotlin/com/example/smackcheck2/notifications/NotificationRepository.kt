@@ -445,7 +445,7 @@ object NotificationRepository {
             val user = client.auth.currentUserOrNull()
             if (user != null) {
                 client.postgrest["profiles"]
-                    .update({ set("push_token", "") }) {
+                    .update({ set("push_token", value = null as String?) }) {
                         filter { eq("id", user.id) }
                     }
                 println("Push token removed for user: ${user.id}")

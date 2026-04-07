@@ -35,24 +35,20 @@ interface ExpoPushMessage {
 interface FCMMessage {
   message: {
     token: string
-    notification: {
-      title: string
-      body: string
-    }
     data?: Record<string, string>
     android?: {
       priority: 'high' | 'normal'
-      notification?: {
-        channel_id: string
-        sound: string
-        click_action: string
-      }
     }
     apns?: {
       payload: {
         aps: {
           sound: string
           badge?: number
+          'mutable-content'?: number
+          alert?: {
+            title: string
+            body: string
+          }
         }
       }
     }
@@ -248,29 +244,28 @@ async function sendFCMNotification(
     const fcmMessage: FCMMessage = {
       message: {
         token: token,
-        notification: {
+        data: {
           title: notification.title || 'SmackCheck',
           body: notification.body,
-        },
-        data: {
           notificationId: notification.id,
           eventType: notification.event_type,
+          channelId: channelId,
           ...Object.fromEntries(
             Object.entries(notification.data || {}).map(([k, v]) => [k, String(v)])
           ),
         },
         android: {
           priority: 'high',
-          notification: {
-            channel_id: channelId,
-            sound: 'default',
-            click_action: 'FLUTTER_NOTIFICATION_CLICK',
-          },
         },
         apns: {
           payload: {
             aps: {
               sound: 'default',
+              'mutable-content': 1,
+              alert: {
+                title: notification.title || 'SmackCheck',
+                body: notification.body,
+              },
             },
           },
         },
