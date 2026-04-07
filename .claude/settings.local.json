@@ -20,7 +20,9 @@
       "Bash(powershell -ExecutionPolicy Bypass -File test_gemini_api.ps1)",
       "Bash(git checkout:*)",
       "Bash(curl:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(find /Users/teja/smackcheck/Dishrating_app2/composeApp -type f \\\\\\(-name *.kt -o -name *.swift -o -name *.ts -o -name *.tsx \\\\\\))",
+      "Bash(supabase functions:*)"
     ]
   }
 }

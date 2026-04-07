@@ -37,7 +37,7 @@ interface FCMMessage {
     token: string
     data?: Record<string, string>
     android?: {
-      priority: 'high' | 'normal'
+      priority: 'HIGH' | 'NORMAL'
     }
     apns?: {
       payload: {
@@ -255,7 +255,7 @@ async function sendFCMNotification(
           ),
         },
         android: {
-          priority: 'high',
+          priority: 'HIGH',
         },
         apns: {
           payload: {

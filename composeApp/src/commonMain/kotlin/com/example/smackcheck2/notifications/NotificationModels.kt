@@ -2,6 +2,10 @@ package com.example.smackcheck2.notifications
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * SmackCheck - Notification Models
@@ -41,7 +45,7 @@ data class NotificationRecord(
     @SerialName("event_type") val eventType: String = "",
     @SerialName("is_read") val isRead: Boolean = false,
     @SerialName("created_at") val createdAt: String = "",
-    val data: Map<String, String> = emptyMap()
+    val data: JsonObject = JsonObject(emptyMap())
 )
 
 // ─── Insert Payload ──────────────────────────────────────────────
@@ -79,19 +83,19 @@ data class NotificationNavigationTarget(
 /**
  * Maps notification data to a navigation target screen.
  */
-fun getNavigationTarget(data: Map<String, String>): NotificationNavigationTarget? {
-    val screen = data["screen"] ?: return null
+fun getNavigationTarget(data: JsonObject): NotificationNavigationTarget? {
+    val screen = data["screen"]?.jsonPrimitive?.content ?: return null
     return when (screen) {
         "DishDetail" -> NotificationNavigationTarget(
             screen = "DishDetail",
             params = mapOf(
-                "dishId" to (data["dishId"] ?: ""),
-                "reviewId" to (data["reviewId"] ?: "")
+                "dishId" to (data["dishId"]?.jsonPrimitive?.content ?: ""),
+                "reviewId" to (data["reviewId"]?.jsonPrimitive?.content ?: "")
             )
         )
         "GameScreen" -> NotificationNavigationTarget(
             screen = "GameScreen",
-            params = mapOf("challengeId" to (data["challengeId"] ?: ""))
+            params = mapOf("challengeId" to (data["challengeId"]?.jsonPrimitive?.content ?: ""))
         )
         "SocialFeed" -> NotificationNavigationTarget(
             screen = "SocialFeed",
