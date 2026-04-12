@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120">
+  <!-- Dark red circle background -->
+  <circle cx="60" cy="60" r="56" fill="#5C2020"/>
+
+  <!-- Fork (left side) - thick with 3 rounded prongs -->
+  <g fill="#E53935">
+    <!-- Left prong -->
+    <rect x="30" y="26" width="6" height="18" rx="3"/>
+    <!-- Middle prong -->
+    <rect x="40" y="26" width="6" height="18" rx="3"/>
+    <!-- Right prong -->
+    <rect x="50" y="26" width="6" height="18" rx="3"/>
+    <!-- Wide fork body connecting prongs to handle -->
+    <path d="M30,42 L56,42 L56,48 Q56,58 43,58 Q30,58 30,48 Z"/>
+    <!-- Thick handle -->
+    <rect x="38" y="56" width="10" height="34" rx="5"/>
+  </g>
+
+  <!-- Knife (right side) - thick straight blade -->
+  <g fill="#E53935">
+    <!-- Blade - wide at top, straight sides -->
+    <path d="M68,26 L80,26 Q82,26 82,28 L82,60 L68,60 Z"/>
+    <!-- Handle - slightly narrower -->
+    <rect x="70" y="60" width="10" height="30" rx="5"/>
+  </g>
+</svg>

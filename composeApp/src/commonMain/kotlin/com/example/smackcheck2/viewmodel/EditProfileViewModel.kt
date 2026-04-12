@@ -21,10 +21,10 @@ class EditProfileViewModel(
 
     private val _uiState = MutableStateFlow(EditProfileUiState(
         name = initialUser?.name ?: "",
-        bio = initialUser?.bio ?: "",
         username = initialUser?.username ?: "",
-        email = initialUser?.email ?: "",
+        bio = initialUser?.bio ?: "",
         location = initialUser?.lastLocation ?: "",
+        email = initialUser?.email ?: "",
         profilePhotoUrl = initialUser?.profilePhotoUrl
     ))
     val uiState: StateFlow<EditProfileUiState> = _uiState.asStateFlow()
@@ -35,11 +35,22 @@ class EditProfileViewModel(
         _uiState.update { it.copy(name = name, nameError = null) }
     }
 
+    fun onUsernameChange(username: String) {
+        _uiState.update { it.copy(username = username) }
+    }
+
     fun onBioChange(bio: String) {
-        // Keep in sync with edit profile UI character counter.
         if (bio.length <= 160) {
             _uiState.update { it.copy(bio = bio) }
         }
+    }
+
+    fun onLocationChange(location: String) {
+        _uiState.update { it.copy(location = location) }
+    }
+
+    fun onEmailChange(email: String) {
+        _uiState.update { it.copy(email = email) }
     }
 
     fun uploadProfilePhoto(imageBytes: ByteArray, fileName: String) {
@@ -70,9 +81,18 @@ class EditProfileViewModel(
     fun saveProfile(onSuccess: () -> Unit) {
         val state = _uiState.value
 
-        // Validation
+        // Client-side validation
         if (state.name.isBlank()) {
             _uiState.update { it.copy(nameError = "Name cannot be empty") }
+            return
+        }
+        if (state.username.length < 3) {
+            _uiState.update { it.copy(nameError = "Username must be at least 3 characters") }
+            return
+        }
+        val emailRegex = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+        if (state.email.isNotBlank() && !emailRegex.matches(state.email)) {
+            _uiState.update { it.copy(nameError = "Please enter a valid email address") }
             return
         }
 
@@ -87,7 +107,9 @@ class EditProfileViewModel(
 
             val updatedUser = currentUser.copy(
                 name = state.name,
+                username = state.username,
                 bio = state.bio,
+                lastLocation = state.location.ifBlank { null },
                 profilePhotoUrl = state.profilePhotoUrl
             )
 

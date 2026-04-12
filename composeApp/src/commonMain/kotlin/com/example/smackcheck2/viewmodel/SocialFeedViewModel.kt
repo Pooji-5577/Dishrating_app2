@@ -7,6 +7,7 @@ import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.RealtimeFeedRepository
 import com.example.smackcheck2.data.repository.FeedUpdate
+import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
@@ -18,7 +19,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class SocialFeedViewModel : ViewModel() {
+class SocialFeedViewModel(
+    private val preferencesRepository: PreferencesRepository
+) : ViewModel() {
 
     private val socialRepository = SocialRepository()
     private val authRepository = AuthRepository()
@@ -35,7 +38,37 @@ class SocialFeedViewModel : ViewModel() {
 
     init {
         loadFeed()
+        loadStoryUsers()
+        loadTopDishes()
         subscribeToRealtimeUpdates()
+    }
+
+    private fun loadStoryUsers() {
+        viewModelScope.launch {
+            try {
+                val userId = authRepository.getCurrentUserId() ?: return@launch
+                val result = socialRepository.getFollowing(userId)
+                result.onSuccess { users ->
+                    _uiState.update { it.copy(storyUsers = users) }
+                }
+            } catch (e: Exception) {
+                println("SocialFeedViewModel: Failed to load story users: ${e.message}")
+            }
+        }
+    }
+
+    private fun loadTopDishes() {
+        viewModelScope.launch {
+            try {
+                val userId = authRepository.getCurrentUserId()
+                val result = socialRepository.getTrendingFeed(limit = 6, offset = 0, currentUserId = userId)
+                result.onSuccess { dishes ->
+                    _uiState.update { it.copy(topDishes = dishes) }
+                }
+            } catch (e: Exception) {
+                println("SocialFeedViewModel: Failed to load top dishes: ${e.message}")
+            }
+        }
     }
     
     /**
@@ -207,13 +240,21 @@ class SocialFeedViewModel : ViewModel() {
     }
 
     private suspend fun fetchPage(offset: Int, userId: String?): Result<List<FeedItem>> {
-        return when (_uiState.value.filter) {
-            FeedFilter.ALL -> socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = userId)
-            FeedFilter.FOLLOWING -> {
-                if (userId != null) socialRepository.getFollowingFeed(userId, limit = PAGE_SIZE, offset = offset)
-                else socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = null)
-            }
+        val result = when (_uiState.value.filter) {
+            FeedFilter.FOLLOWING,
+            FeedFilter.TRENDING,
             FeedFilter.NEARBY -> socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = userId)
+            FeedFilter.MY_RATINGS -> {
+                if (userId != null) socialRepository.getUserRatings(userId, limit = PAGE_SIZE)
+                else Result.success(emptyList())
+            }
+        }
+        // Apply bookmark state from local storage
+        return result.map { items ->
+            val bookmarks = preferencesRepository.getBookmarks()
+            items.map { item ->
+                item.copy(isBookmarked = bookmarks.contains(item.id))
+            }
         }
     }
 
@@ -295,6 +336,32 @@ class SocialFeedViewModel : ViewModel() {
         }
     }
     
+    fun toggleBookmark(itemId: String) {
+        viewModelScope.launch {
+            val isNowBookmarked = preferencesRepository.toggleBookmark(itemId)
+            _uiState.update { state ->
+                val updatedItems = state.feedItems.map { item ->
+                    if (item.id == itemId) item.copy(isBookmarked = isNowBookmarked) else item
+                }
+                state.copy(feedItems = updatedItems)
+            }
+        }
+    }
+
+    /**
+     * Increment the comment count for a feed item (called after a comment is posted).
+     */
+    fun incrementCommentCount(ratingId: String) {
+        _uiState.update { state ->
+            val updatedItems = state.feedItems.map { item ->
+                if (item.id == ratingId) {
+                    item.copy(commentsCount = item.commentsCount + 1)
+                } else item
+            }
+            state.copy(feedItems = updatedItems)
+        }
+    }
+
     /**
      * Clean up real-time subscriptions when ViewModel is cleared
      */

@@ -61,7 +61,9 @@ data class Restaurant(
     val latitude: Double? = null,
     val longitude: Double? = null,
     val googlePlaceId: String? = null,   // Google Places API place ID for fetching photos
-    val photoUrl: String? = null          // Direct Google Places photo URL
+    val photoUrl: String? = null,         // Direct Google Places photo URL
+    val tagline: String? = null,
+    val isOpenNow: Boolean? = null
 )
 
 /**
@@ -93,6 +95,7 @@ data class FeedItem(
     val userId: String = "",
     val userProfileImageUrl: String?,
     val userName: String,
+    val roleBadge: String? = null,
     val dishImageUrl: String?,
     val dishName: String,
     val restaurantName: String,
@@ -100,6 +103,7 @@ data class FeedItem(
     val likesCount: Int,
     val commentsCount: Int,
     val isLiked: Boolean,
+    val isBookmarked: Boolean = false,
     val timestamp: Long,
     val comment: String = "",
     val imageUrls: List<String> = emptyList(),
@@ -199,6 +203,8 @@ data class UserMapProfile(
     val latestDishImage: String? = null
 )
 
+enum class MapMode { NEARBY, MY_RATINGS }
+
 /**
  * UI state for the Social Map screen
  */
@@ -206,6 +212,7 @@ data class SocialMapUiState(
     val isLoading: Boolean = true,
     val currentUserProfile: UserMapProfile? = null,
     val nearbyUsers: List<MapUserMarker> = emptyList(),
+    val myRatingMarkers: List<MapUserMarker> = emptyList(),
     val selectedUser: MapUserMarker? = null,
     val currentLatitude: Double? = null,
     val currentLongitude: Double? = null,
@@ -213,5 +220,7 @@ data class SocialMapUiState(
     val errorMessage: String? = null,
     val isRefreshing: Boolean = false,
     val lastRefreshTime: Long = 0L,
-    val locationPermissionGranted: Boolean = false
+    val locationPermissionGranted: Boolean = false,
+    val mapMode: MapMode = MapMode.NEARBY,
+    val recenterTrigger: Int = 0
 )

@@ -27,6 +27,7 @@ actual class PreferencesManager(private val context: Context) {
         val LANGUAGE = stringPreferencesKey("language")
         val FIRST_OPEN_TIMESTAMP = longPreferencesKey("first_open_timestamp")
         val DAY1_RETENTION_TRACKED = booleanPreferencesKey("day1_retention_tracked")
+        val BOOKMARKS = stringPreferencesKey("bookmarked_ratings")
     }
 
     actual suspend fun saveThemePreference(theme: ThemePreference) {
@@ -103,6 +104,22 @@ actual class PreferencesManager(private val context: Context) {
     actual suspend fun setDay1RetentionTracked() {
         context.dataStore.edit { prefs ->
             prefs[DAY1_RETENTION_TRACKED] = true
+        }
+    }
+
+    actual suspend fun saveBookmarks(bookmarkIds: Set<String>) {
+        context.dataStore.edit { prefs ->
+            prefs[BOOKMARKS] = json.encodeToString(bookmarkIds.toList())
+        }
+    }
+
+    actual suspend fun getBookmarks(): Set<String> {
+        val prefs = context.dataStore.data.first()
+        val bookmarksJson = prefs[BOOKMARKS] ?: return emptySet()
+        return try {
+            json.decodeFromString<List<String>>(bookmarksJson).toSet()
+        } catch (e: Exception) {
+            emptySet()
         }
     }
 

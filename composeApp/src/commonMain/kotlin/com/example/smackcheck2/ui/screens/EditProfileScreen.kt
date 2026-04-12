@@ -11,36 +11,32 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.outlined.Email
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -51,97 +47,185 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.platform.LocalImagePicker
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
+import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.EditProfileViewModel
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 
-private val EditProfileBackground = Color(0xFFF6F6F6)
-private val EditProfileCard = Color(0xFFFFFFFF)
-private val EditProfileMaroon = Color(0xFF642223)
-private val EditProfileButtonEnd = Color(0xFFFF7669)
-private val EditProfileButtonText = Color(0xFFFFEFED)
+// ─── Screen-local colors ────────────────────────────────────────────────────
+private val ScreenBackground = Color(0xFFFAFAFA)
+private val FieldCardColor = Color.White
+private val SectionLabelColor = Color(0xFF2D2F2F)
+private val FieldTextColor = Color(0xFF333333)
+private val FieldIconColor = Color(0xFF999999)
+private val AccentMaroon = Color(0xFF642223)
+private val CharCountColor = Color(0xFF642223)
+private val CameraBadgeBg = Color(0xFF642223)
+private val GradientStart = Color(0xFF9B2335)
+private val GradientEnd = Color(0xFFBE3A50)
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditProfileScreen(
     viewModel: EditProfileViewModel,
     onNavigateBack: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val colors = appColors()
+    val jakartaSans = PlusJakartaSans()
     val scrollState = rememberScrollState()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-
     val imagePicker = LocalImagePicker.current
 
     LaunchedEffect(uiState.errorMessage) {
         uiState.errorMessage?.let { error ->
-            snackbarHostState.showSnackbar(message = error, duration = SnackbarDuration.Short)
+            snackbarHostState.showSnackbar(
+                message = error,
+                duration = SnackbarDuration.Short
+            )
             viewModel.clearError()
         }
     }
 
     LaunchedEffect(uiState.isSuccess) {
         if (uiState.isSuccess) {
+            snackbarHostState.showSnackbar(
+                message = "Profile updated successfully!",
+                duration = SnackbarDuration.Short
+            )
             onNavigateBack()
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = "Edit Profile",
-                        color = Color(0xFF2D2F2F),
-                        style = MaterialTheme.typography.titleLarge.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp,
-                            letterSpacing = (-0.5).sp
-                        )
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFF2D2F2F)
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = EditProfileBackground
-    ) { paddingValues ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ScreenBackground)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
                 .verticalScroll(scrollState)
-                .padding(horizontal = 24.dp, vertical = 24.dp),
+                .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            ProfilePhotoSection(
-                profilePhotoUrl = uiState.profilePhotoUrl,
-                isUploadingPhoto = uiState.isUploadingPhoto,
-                onPickPhoto = {
+            // ── Top Bar ──
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = SectionLabelColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Text(
+                    text = "Edit Profile",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = jakartaSans,
+                    color = SectionLabelColor
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // ── Profile Photo ──
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.clickable {
+                    scope.launch {
+                        imagePicker?.pickFromGallery()?.let { result ->
+                            val fileName = "profile_${Clock.System.now().toEpochMilliseconds()}.jpg"
+                            viewModel.uploadProfilePhoto(result.bytes, fileName)
+                        }
+                    }
+                }
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clip(CircleShape)
+                        .background(colors.SurfaceVariant),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (uiState.profilePhotoUrl != null) {
+                        NetworkImage(
+                            imageUrl = uiState.profilePhotoUrl!!,
+                            contentDescription = "Profile Photo",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Text(
+                            text = uiState.name.firstOrNull()?.uppercase() ?: "?",
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentMaroon
+                        )
+                    }
+
+                    if (uiState.isUploadingPhoto) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
+                }
+
+                // Camera badge (bottom-right)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = (-4).dp, y = (-4).dp)
+                        .size(28.dp)
+                        .background(CameraBadgeBg, CircleShape)
+                        .border(2.dp, Color.White, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.CameraAlt,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "CHANGE PHOTO",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = jakartaSans,
+                color = AccentMaroon,
+                letterSpacing = 0.8.sp,
+                modifier = Modifier.clickable {
                     scope.launch {
                         imagePicker?.pickFromGallery()?.let { result ->
                             val fileName = "profile_${Clock.System.now().toEpochMilliseconds()}.jpg"
@@ -151,366 +235,242 @@ fun EditProfileScreen(
                 }
             )
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-            LabeledInput(
-                label = "FULL NAME",
-                value = uiState.name,
-                onValueChange = viewModel::onNameChange
-            )
-            uiState.nameError?.let { error ->
-                Text(
-                    text = error,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 6.dp, start = 4.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            LabeledInput(
-                label = "USERNAME",
-                value = uiState.username,
-                onValueChange = {},
-                readOnly = true,
-                leadingContent = {
-                    Text(
-                        text = "@",
-                        color = EditProfileMaroon,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            BioInput(
-                value = uiState.bio,
-                onValueChange = viewModel::onBioChange,
-                maxChars = 160
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            LabeledInput(
-                label = "LOCATION",
-                value = uiState.location,
-                onValueChange = {},
-                readOnly = true,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.LocationOn,
-                        contentDescription = "Location",
-                        tint = EditProfileMaroon,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            LabeledInput(
-                label = "EMAIL ADDRESS",
-                value = uiState.email,
-                onValueChange = {},
-                readOnly = true,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Outlined.Email,
-                        contentDescription = "Email",
-                        tint = EditProfileMaroon,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = {},
+            // ── Form Fields ──
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent,
-                    contentColor = EditProfileMaroon
-                ),
-                border = BorderStroke(2.dp, EditProfileMaroon),
-                elevation = null
+                    .padding(horizontal = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Full Name
+                ProfileFieldSection(
+                    label = "FULL NAME",
+                    value = uiState.name,
+                    onValueChange = { viewModel.onNameChange(it) },
+                    isError = uiState.nameError != null,
+                    errorText = uiState.nameError,
+                    jakartaSans = jakartaSans
+                )
+
+                // Username
+                ProfileFieldSection(
+                    label = "USERNAME",
+                    value = uiState.username,
+                    onValueChange = { viewModel.onUsernameChange(it) },
+                    leadingIcon = Icons.Default.AlternateEmail,
+                    jakartaSans = jakartaSans
+                )
+
+                // Bio
+                ProfileFieldSection(
+                    label = "BIO",
+                    value = uiState.bio,
+                    onValueChange = { viewModel.onBioChange(it) },
+                    singleLine = false,
+                    minLines = 3,
+                    maxLines = 5,
+                    charCount = uiState.bio.length,
+                    maxCharCount = 160,
+                    jakartaSans = jakartaSans
+                )
+
+                // Location
+                ProfileFieldSection(
+                    label = "LOCATION",
+                    value = uiState.location,
+                    onValueChange = { viewModel.onLocationChange(it) },
+                    leadingIcon = Icons.Default.LocationOn,
+                    jakartaSans = jakartaSans
+                )
+
+                // Email Address
+                ProfileFieldSection(
+                    label = "EMAIL ADDRESS",
+                    value = uiState.email,
+                    onValueChange = { viewModel.onEmailChange(it) },
+                    leadingIcon = Icons.Default.Email,
+                    jakartaSans = jakartaSans
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Change Password button
+                OutlinedButton(
+                    onClick = { /* TODO: Navigate to change password */ },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                    shape = RoundedCornerShape(24.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentMaroon)
+                ) {
                     Icon(
-                        imageVector = Icons.Outlined.Lock,
-                        contentDescription = "Change Password",
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = AccentMaroon,
                         modifier = Modifier.size(16.dp)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
                         text = "CHANGE PASSWORD",
-                        fontSize = 14.sp,
+                        color = AccentMaroon,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.4.sp
+                        fontFamily = jakartaSans,
+                        letterSpacing = 0.8.sp
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.height(28.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-            Button(
-                onClick = { viewModel.saveProfile(onSuccess = onNavigateBack) },
-                enabled = !uiState.isSaving,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(64.dp)
-                    .shadow(12.dp, RoundedCornerShape(999.dp))
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(EditProfileMaroon, EditProfileButtonEnd),
-                            start = Offset.Zero,
-                            end = Offset(800f, 260f)
-                        ),
-                        shape = RoundedCornerShape(999.dp)
-                    ),
-                shape = RoundedCornerShape(999.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent
-                ),
-                elevation = null
-            ) {
-                if (uiState.isSaving) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        strokeWidth = 2.dp,
-                        color = EditProfileButtonText
-                    )
-                } else {
-                    Text(
-                        text = "Update Profile",
-                        color = EditProfileButtonText,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
-
-@Composable
-private fun ProfilePhotoSection(
-    profilePhotoUrl: String?,
-    isUploadingPhoto: Boolean,
-    onPickPhoto: () -> Unit
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Box(
-            modifier = Modifier
-                .size(128.dp)
-                .shadow(10.dp, CircleShape)
-                .border(width = 4.dp, color = Color.White, shape = CircleShape)
-                .clip(CircleShape)
-                .background(Color(0xFFEDEDED))
-                .clickable(onClick = onPickPhoto),
-            contentAlignment = Alignment.Center
-        ) {
-            if (profilePhotoUrl != null) {
-                NetworkImage(
-                    imageUrl = profilePhotoUrl,
-                    contentDescription = "Profile Photo",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "Add Photo",
-                    tint = Color(0xFF8A8A8A),
-                    modifier = Modifier.size(40.dp)
-                )
-            }
-
-            if (isUploadingPhoto) {
+                // Update Profile button (gradient)
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f)),
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .shadow(6.dp, RoundedCornerShape(26.dp))
+                        .clip(RoundedCornerShape(26.dp))
+                        .background(
+                            Brush.horizontalGradient(
+                                colors = listOf(GradientStart, GradientEnd)
+                            )
+                        )
+                        .clickable(enabled = !uiState.isSaving) {
+                            viewModel.saveProfile(onSuccess = onNavigateBack)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp)
+                    if (uiState.isSaving) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text(
+                            text = "Update Profile",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = jakartaSans
+                        )
+                    }
                 }
-            }
-
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .size(30.dp)
-                    .clip(CircleShape)
-                    .background(EditProfileMaroon)
-                    .border(2.dp, Color.White, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.CameraAlt,
-                    contentDescription = "Change Photo",
-                    tint = Color.White,
-                    modifier = Modifier.size(12.dp)
-                )
             }
         }
 
-        Text(
-            text = "CHANGE PHOTO",
-            color = EditProfileMaroon,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            letterSpacing = 1.4.sp,
-            modifier = Modifier.padding(top = 16.dp)
+        // Bottom nav bar
+        com.example.smackcheck2.ui.components.BottomNavBar(
+            selectedItem = com.example.smackcheck2.ui.components.NavItem.PROFILE,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
+
+        // Snackbar host (above bottom nav)
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 56.dp)
         )
     }
 }
 
-@Composable
-private fun FieldLabel(text: String) {
-    Text(
-        text = text,
-        color = Color.Black,
-        fontWeight = FontWeight.Bold,
-        fontSize = 12.sp,
-        letterSpacing = 1.2.sp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 4.dp, bottom = 8.dp)
-    )
-}
+// ─── Reusable field section ─────────────────────────────────────────────────
 
 @Composable
-private fun LabeledInput(
+private fun ProfileFieldSection(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    readOnly: Boolean = false,
-    leadingContent: (@Composable () -> Unit)? = null,
-    leadingIcon: (@Composable () -> Unit)? = null
+    leadingIcon: ImageVector? = null,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = 1,
+    charCount: Int? = null,
+    maxCharCount: Int? = null,
+    isError: Boolean = false,
+    errorText: String? = null,
+    jakartaSans: androidx.compose.ui.text.font.FontFamily
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
-        FieldLabel(text = label)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(EditProfileCard)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            leadingIcon?.invoke()
-            leadingContent?.invoke()
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                readOnly = readOnly,
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = TextStyle(
-                    color = Color.Black,
-                    fontSize = 18.sp,
-                    lineHeight = 28.sp,
-                    fontFamily = FontFamily.Serif
-                ),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    cursorColor = EditProfileMaroon,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    disabledIndicatorColor = Color.Transparent,
-                    focusedTextColor = Color.Black,
-                    unfocusedTextColor = Color.Black,
-                    disabledTextColor = Color.Black
-                ),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words,
-                    keyboardType = KeyboardType.Text
-                )
-            )
-        }
-    }
-}
-
-@Composable
-private fun BioInput(
-    value: String,
-    onValueChange: (String) -> Unit,
-    maxChars: Int
-) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column {
+        // Section label row
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "BIO",
-                color = Color.Black,
+                text = label,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
-                fontSize = 12.sp,
-                letterSpacing = 1.2.sp,
-                modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+                fontFamily = jakartaSans,
+                color = SectionLabelColor,
+                letterSpacing = 1.sp
             )
-            Text(
-                text = "${value.length} / $maxChars",
-                color = EditProfileMaroon,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
+            if (charCount != null && maxCharCount != null) {
+                Text(
+                    text = "$charCount / $maxCharCount",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    fontFamily = jakartaSans,
+                    color = CharCountColor
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // Card-style input field
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = FieldCardColor,
+            shadowElevation = 1.dp
+        ) {
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                singleLine = singleLine,
+                minLines = minLines,
+                maxLines = maxLines,
+                isError = isError,
+                leadingIcon = if (leadingIcon != null) {
+                    {
+                        Icon(
+                            imageVector = leadingIcon,
+                            contentDescription = null,
+                            tint = FieldIconColor,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else null,
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    focusedTextColor = FieldTextColor,
+                    unfocusedTextColor = FieldTextColor,
+                    cursorColor = AccentMaroon,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    errorIndicatorColor = Color.Transparent
+                ),
+                textStyle = androidx.compose.ui.text.TextStyle(
+                    fontSize = 14.sp,
+                    fontFamily = jakartaSans,
+                    fontWeight = FontWeight.Normal
+                ),
+                modifier = Modifier.fillMaxWidth()
             )
         }
 
-        TextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(16.dp))
-                .background(EditProfileCard),
-            minLines = 4,
-            maxLines = 6,
-            textStyle = TextStyle(
-                color = Color.Black,
-                fontSize = 18.sp,
-                lineHeight = 29.sp,
-                fontFamily = FontFamily.Serif
-            ),
-            colors = TextFieldDefaults.colors(
-                focusedContainerColor = EditProfileCard,
-                unfocusedContainerColor = EditProfileCard,
-                disabledContainerColor = EditProfileCard,
-                cursorColor = EditProfileMaroon,
-                focusedIndicatorColor = Color.Transparent,
-                unfocusedIndicatorColor = Color.Transparent,
-                disabledIndicatorColor = Color.Transparent,
-                focusedTextColor = Color.Black,
-                unfocusedTextColor = Color.Black,
-                disabledTextColor = Color.Black
-            ),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            placeholder = {
-                Text(
-                    text = "Tell us a bit about your food journey",
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = Color(0xFF8D8D8D),
-                    fontSize = 16.sp,
-                    fontFamily = FontFamily.Serif
-                )
-            }
-        )
+        // Error text
+        if (isError && errorText != null) {
+            Text(
+                text = errorText,
+                fontSize = 11.sp,
+                color = Color(0xFFE53935),
+                fontFamily = jakartaSans,
+                modifier = Modifier.padding(start = 4.dp, top = 4.dp)
+            )
+        }
     }
 }

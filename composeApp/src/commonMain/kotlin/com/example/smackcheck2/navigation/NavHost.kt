@@ -67,6 +67,8 @@ import com.example.smackcheck2.ui.screens.SplashScreen
 import com.example.smackcheck2.ui.screens.TopDishesScreen
 import com.example.smackcheck2.ui.screens.TopRestaurantsScreen
 import com.example.smackcheck2.ui.screens.UserProgressScreen
+import com.example.smackcheck2.ui.screens.AchievementsListScreen
+import com.example.smackcheck2.ui.screens.ProgressDashboardScreen
 import com.example.smackcheck2.platform.LocalLocationService
 import com.example.smackcheck2.platform.LocalPlacesService
 import com.example.smackcheck2.platform.LocalGeofencingService
@@ -248,7 +250,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     val notificationViewModel: NotificationViewModel = viewModel { NotificationViewModel() }
 
     // Shared SocialFeedViewModel — created early so feed pre-loads on auth
-    val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel() }
+    val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel(preferencesRepository) }
 
     // Points-earned popup state (from main)
     var pointsEvent by remember { mutableStateOf<PointsEarnedEvent?>(null) }
@@ -654,7 +656,24 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onRefresh = { socialFeedViewModel.refresh() },
                 onLoadMore = { socialFeedViewModel.loadMoreFeed() },
                 onScrollComplete = { socialFeedViewModel.clearScrollTarget() },
-                onExploreClick = { navigationState.navigateTo(Screen.DishCapture) }
+                onExploreClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onBookmarkClick = { ratingId -> socialFeedViewModel.toggleBookmark(ratingId) },
+                onMapBannerClick = { navigationState.navigateTo(Screen.SocialMap) },
+                onAvatarClick = { navigationState.navigateTo(Screen.Profile) },
+                onStoryClick = { userId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to userId
+                    )
+                },
+                onAddStoryClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onTopDishClick = { /* TODO: navigate to dish detail */ },
+                onSeeAllTopDishes = { /* TODO: navigate to top dishes list */ },
+                onHomeClick = { /* Already on home/feed */ },
+                onMapClick = { navigationState.navigateTo(Screen.SocialMap) },
+                onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onNavExploreClick = { navigationState.navigateTo(Screen.AllRestaurants) },
+                onProfileClick = { navigationState.navigateTo(Screen.Profile) }
             )
         }
         
@@ -717,7 +736,16 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 viewModel = restaurantDetailViewModel,
                 photoViewModel = restaurantPhotoViewModel,
                 restaurantId = navigationState.restaurantId,
-                onNavigateBack = { navigationState.navigateBack() }
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavItemClick = { index ->
+                    when (index) {
+                        0 -> navigationState.navigateTo(Screen.Home)
+                        1 -> navigationState.navigateTo(Screen.SocialMap)
+                        2 -> navigationState.navigateTo(Screen.DishCapture)
+                        3 -> navigationState.navigateTo(Screen.SocialFeed)
+                        4 -> navigationState.navigateTo(Screen.Profile)
+                    }
+                }
             )
         }
         
@@ -731,17 +759,21 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         
         is Screen.UserProgress -> {
             val userProgressViewModel: UserProgressViewModel = viewModel { UserProgressViewModel() }
-            UserProgressScreen(
-                viewModel = userProgressViewModel,
+            val progressGamificationViewModel: GamificationViewModel = viewModel(key = "progress_gamification") { GamificationViewModel() }
+            ProgressDashboardScreen(
+                progressViewModel = userProgressViewModel,
+                gamificationViewModel = progressGamificationViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
-                onNavigateToBadges = { navigationState.navigateTo(Screen.Badges) }
+                onViewAllAchievements = { navigationState.navigateTo(Screen.Badges) }
             )
         }
         
         is Screen.Badges -> {
             val userProgressViewModel: UserProgressViewModel = viewModel { UserProgressViewModel() }
-            BadgesScreen(
-                viewModel = userProgressViewModel,
+            val badgesGamificationViewModel: GamificationViewModel = viewModel(key = "badges_gamification") { GamificationViewModel() }
+            AchievementsListScreen(
+                progressViewModel = userProgressViewModel,
+                gamificationViewModel = badgesGamificationViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
             )
         }
@@ -1478,7 +1510,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
 
         is Screen.Comments -> {
             val ratingId = navigationState.ratingId
-            val commentsViewModel: CommentsViewModel = viewModel { CommentsViewModel(ratingId) }
+            val commentsViewModel: CommentsViewModel = viewModel(key = "comments_$ratingId") { CommentsViewModel(ratingId) }
             val commentsState by commentsViewModel.uiState.collectAsState()
             val currentUserId = remember { mutableStateOf("") }
 
@@ -1492,7 +1524,10 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 uiState = commentsState,
                 currentUserId = currentUserId.value,
                 onNavigateBack = { navigationState.navigateBack() },
-                onSubmitComment = { content, _ -> commentsViewModel.addComment(content) },
+                onSubmitComment = { content, _ ->
+                    commentsViewModel.addComment(content)
+                    socialFeedViewModel.incrementCommentCount(ratingId)
+                },
                 onDeleteComment = { commentId -> commentsViewModel.deleteComment(commentId) },
                 onReplyClick = { comment -> commentsViewModel.setReplyingTo(comment) },
                 onCancelReply = { commentsViewModel.setReplyingTo(null) }

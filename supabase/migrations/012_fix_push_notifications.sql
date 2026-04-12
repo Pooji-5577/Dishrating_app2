@@ -32,10 +32,18 @@ DROP POLICY IF EXISTS admin_profiles_select_all ON public.profiles;
 -- Uses the project anon key so the edge function accepts the request
 CREATE OR REPLACE FUNCTION public.notify_push_on_new_notification()
 RETURNS TRIGGER AS $$
+DECLARE
+  _headers jsonb;
 BEGIN
+  -- Build headers as a variable to avoid Windows \r\n inside JSON string literals
+  _headers := jsonb_build_object(
+    'Content-Type', 'application/json',
+    'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5b3Btdmh0ZnV3YnNqeGhwZmdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjAyMTksImV4cCI6MjA4NDgzNjIxOX0.2siGUJfE3iLoaEKae5gycw_6mo748KKyi5C7YEHuUlQ'
+  );
+
   PERFORM net.http_post(
     url := 'https://ayopmvhtfuwbsjxhpfgd.supabase.co/functions/v1/push',
-    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5b3Btdmh0ZnV3YnNqeGhwZmdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjAyMTksImV4cCI6MjA4NDgzNjIxOX0.2siGUJfE3iLoaEKae5gycw_6mo748KKyi5C7YEHuUlQ"}'::jsonb,
+    headers := _headers,
     body := jsonb_build_object(
       'type', 'INSERT',
       'table', 'notifications',

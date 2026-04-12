@@ -307,11 +307,13 @@ fun UserProfileScreen(
                 }
             } else {
                 items(uiState.ratings, key = { it.id }) { feedItem ->
-                    SocialFeedCard(
-                        item = feedItem,
+                    com.example.smackcheck2.ui.components.ReviewPostCard(
+                        feedItem = feedItem,
                         onLikeClick = { onLikeClick(feedItem) },
                         onCommentClick = { onCommentClick(feedItem) },
                         onShareClick = { onShareClick(feedItem) },
+                        onBookmarkClick = { },
+                        onUserClick = { },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
