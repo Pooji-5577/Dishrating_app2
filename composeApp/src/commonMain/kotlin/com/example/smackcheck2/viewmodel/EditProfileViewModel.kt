@@ -22,6 +22,9 @@ class EditProfileViewModel(
     private val _uiState = MutableStateFlow(EditProfileUiState(
         name = initialUser?.name ?: "",
         bio = initialUser?.bio ?: "",
+        username = initialUser?.username ?: "",
+        email = initialUser?.email ?: "",
+        location = initialUser?.lastLocation ?: "",
         profilePhotoUrl = initialUser?.profilePhotoUrl
     ))
     val uiState: StateFlow<EditProfileUiState> = _uiState.asStateFlow()
@@ -33,8 +36,8 @@ class EditProfileViewModel(
     }
 
     fun onBioChange(bio: String) {
-        // Limit bio to 150 characters
-        if (bio.length <= 150) {
+        // Keep in sync with edit profile UI character counter.
+        if (bio.length <= 160) {
             _uiState.update { it.copy(bio = bio) }
         }
     }

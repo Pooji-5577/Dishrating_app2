@@ -2,56 +2,41 @@ package com.example.smackcheck2.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.smackcheck2.ui.theme.appColors
-import com.example.smackcheck2.model.LoginUiState
+import org.jetbrains.compose.resources.painterResource
 import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
+import smackcheck.composeapp.generated.resources.Res
+import smackcheck.composeapp.generated.resources.login_food_pattern
 
 @Composable
 fun DarkLoginScreen(
@@ -61,200 +46,143 @@ fun DarkLoginScreen(
     onNavigateToHome: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var passwordVisible by remember { mutableStateOf(false) }
-    
-    // Handle successful login
+
     if (uiState.isSuccess) {
         onNavigateToHome()
     }
-    
+
+    val pageBackground = Color(0xFF3A0A0E)
+    val topBackground = Color(0xFF742228)
+    val buttonColor = Color(0xFF642223)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(appColors().Background)
+            .background(pageBackground)
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .height(380.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(topBackground)
+            )
+
+            Image(
+                painter = painterResource(Res.drawable.login_food_pattern),
+                contentDescription = "Food pattern",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+                alpha = 0.32f
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(width = 1080.dp, height = 520.dp)
+                    .align(Alignment.BottomCenter)
+                    .offset(y = 268.dp)
+                    .background(pageBackground, CircleShape)
+            ) {
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(180.dp)
+                    .background(Color(0xFFD9D9D9), CircleShape)
+                    .align(Alignment.BottomCenter)
+                    .offset(y = 88.dp)
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
-            
-            // Logo
-            Box(
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .background(
-                            color = appColors().Primary.copy(alpha = 0.15f),
-                            shape = CircleShape
-                        )
-                )
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = "Logo",
-                    modifier = Modifier.size(60.dp),
-                    tint = appColors().Primary
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
+            Spacer(modifier = Modifier.height(510.dp))
+
             Text(
-                text = "Welcome Back",
-                fontSize = 28.sp,
-                fontWeight = FontWeight.Bold,
-                color = appColors().TextPrimary
-            )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = "Sign in to continue your food journey",
-                fontSize = 14.sp,
-                color = appColors().TextSecondary,
+                text = "SmackCheck",
+                fontSize = 32.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
                 textAlign = TextAlign.Center
             )
-            
-            Spacer(modifier = Modifier.height(48.dp))
-            
-            // Email field
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Rate . Discover . Share",
+                fontSize = 19.sp,
+                fontWeight = FontWeight.ExtraLight,
+                color = Color.White.copy(alpha = 0.92f),
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(30.dp))
+
             OutlinedTextField(
                 value = uiState.email,
                 onValueChange = { viewModel.onEmailChange(it) },
-                label = { Text("Email") },
-                placeholder = { Text("Enter your email") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Email,
-                        contentDescription = null,
-                        tint = appColors().TextSecondary
-                    )
-                },
+                placeholder = { Text("Email", color = Color.White.copy(alpha = 0.65f)) },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = appColors().Primary,
-                    unfocusedBorderColor = appColors().Surface,
-                    focusedLabelColor = appColors().Primary,
-                    unfocusedLabelColor = appColors().TextSecondary,
-                    cursorColor = appColors().Primary,
-                    focusedTextColor = appColors().TextPrimary,
-                    unfocusedTextColor = appColors().TextPrimary,
-                    focusedContainerColor = appColors().CardBackground,
-                    unfocusedContainerColor = appColors().CardBackground,
-                    focusedPlaceholderColor = appColors().TextTertiary,
-                    unfocusedPlaceholderColor = appColors().TextTertiary
-                ),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next
-                ),
-                singleLine = true
+                    focusedBorderColor = Color(0xFF8C4D52),
+                    unfocusedBorderColor = Color(0xFF6D3A3E),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color(0xFF4B171C),
+                    unfocusedContainerColor = Color(0xFF4B171C),
+                    cursorColor = Color.White
+                )
             )
-            
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Password field
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             OutlinedTextField(
                 value = uiState.password,
                 onValueChange = { viewModel.onPasswordChange(it) },
-                label = { Text("Password") },
-                placeholder = { Text("Enter your password") },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Lock,
-                        contentDescription = null,
-                        tint = appColors().TextSecondary
-                    )
-                },
-                trailingIcon = {
-                    IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                        Icon(
-                            imageVector = if (passwordVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                            contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                            tint = appColors().TextSecondary
-                        )
-                    }
-                },
+                placeholder = { Text("Password", color = Color.White.copy(alpha = 0.65f)) },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = appColors().Primary,
-                    unfocusedBorderColor = appColors().Surface,
-                    focusedLabelColor = appColors().Primary,
-                    unfocusedLabelColor = appColors().TextSecondary,
-                    cursorColor = appColors().Primary,
-                    focusedTextColor = appColors().TextPrimary,
-                    unfocusedTextColor = appColors().TextPrimary,
-                    focusedContainerColor = appColors().CardBackground,
-                    unfocusedContainerColor = appColors().CardBackground,
-                    focusedPlaceholderColor = appColors().TextTertiary,
-                    unfocusedPlaceholderColor = appColors().TextTertiary
-                ),
-                visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Password,
-                    imeAction = ImeAction.Done
-                ),
-                singleLine = true
-            )
-            
-            Spacer(modifier = Modifier.height(12.dp))
-            
-            // Forgot Password
-            Text(
-                text = "Forgot Password?",
-                color = appColors().Primary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .clickable { /* Handle forgot password */ }
-            )
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
-            // Error message
-            if (uiState.errorMessage != null) {
-                Text(
-                    text = uiState.errorMessage!!,
-                    color = appColors().Error,
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    focusedBorderColor = Color(0xFF8C4D52),
+                    unfocusedBorderColor = Color(0xFF6D3A3E),
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedContainerColor = Color(0xFF4B171C),
+                    unfocusedContainerColor = Color(0xFF4B171C),
+                    cursorColor = Color.White
                 )
-            }
-            
-            // Login button
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
             Button(
                 onClick = {
-                    viewModel.login {
-                        // LoginViewModel.login() already calls authRepository.signIn()
-                        // and sets isSuccess=true. AuthViewModel picks up the session
-                        // change automatically via observeSessionStatus().
-                        // No need to call authViewModel.signIn() again.
-                        onNavigateToHome()
-                    }
+                    viewModel.login(onNavigateToHome)
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
-                shape = RoundedCornerShape(12.dp),
+                    .height(54.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = appColors().Primary,
-                    disabledContainerColor = appColors().Primary.copy(alpha = 0.5f)
+                    containerColor = buttonColor,
+                    disabledContainerColor = buttonColor.copy(alpha = 0.55f)
                 ),
                 enabled = !uiState.isLoading && uiState.email.isNotBlank() && uiState.password.isNotBlank()
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(
                         color = Color.White,
-                        modifier = Modifier.size(24.dp),
+                        modifier = Modifier.size(22.dp),
                         strokeWidth = 2.dp
                     )
                 } else {
@@ -262,135 +190,65 @@ fun DarkLoginScreen(
                         text = "Sign In",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White
-                    )
-                }
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Divider with text
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp)
-                        .background(appColors().Surface)
-                )
-                Text(
-                    text = "  or continue with  ",
-                    color = appColors().TextSecondary,
-                    fontSize = 12.sp
-                )
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(1.dp)
-                        .background(appColors().Surface)
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-            
-            // Social login buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                SocialLoginButton("G") {
-                    authViewModel.signInWithGoogle(
-                        onSuccess = onNavigateToHome,
-                        onError = { error ->
-                            viewModel.setError(error)
-                        }
-                    )
-                }
-                Spacer(modifier = Modifier.size(16.dp))
-                SocialLoginButton("f") {
-                    authViewModel.signInWithFacebook(
-                        onSuccess = onNavigateToHome,
-                        onError = { error ->
-                            viewModel.setError(error)
-                        }
-                    )
-                }
-                Spacer(modifier = Modifier.size(16.dp))
-                SocialLoginButton("A") {
-                    authViewModel.signInWithApple(
-                        onSuccess = onNavigateToHome,
-                        onError = { error ->
-                            viewModel.setError(error)
-                        }
+                        color = Color(0xFFFAFAF8)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Demo mode removed - users must login properly
-            // If you need demo mode for testing, uncomment below:
-            /*
-            Text(
-                text = "Skip Login (Demo Mode)",
-                color = appColors().Primary,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
+            OutlinedButton(
+                onClick = onNavigateToRegister,
                 modifier = Modifier
-                    .clickable {
-                        authViewModel.signInAsDemo(onSuccess = onNavigateToHome)
-                    }
-                    .padding(8.dp)
-            )
-            */
-
-            Spacer(modifier = Modifier.weight(1f))
-            
-            // Register link
-            Row(
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color.White
+                ),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF8C4D52))
             ) {
                 Text(
-                    text = "Don't have an account? ",
-                    color = appColors().TextSecondary,
-                    fontSize = 14.sp
-                )
-                Text(
-                    text = "Sign Up",
-                    color = appColors().Primary,
-                    fontSize = 14.sp,
+                    text = "Create Account",
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable { onNavigateToRegister() }
+                    color = Color.White
                 )
             }
-            
-            Spacer(modifier = Modifier.height(24.dp))
-        }
-    }
-}
 
-@Composable
-private fun SocialLoginButton(text: String, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .size(50.dp)
-            .background(
-                color = appColors().CardBackground,
-                shape = CircleShape
-            )
-            .clickable { onClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = appColors().TextPrimary,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
+            Spacer(modifier = Modifier.height(14.dp))
+
+            if (uiState.emailError != null) {
+                Text(
+                    text = uiState.emailError ?: "",
+                    color = Color(0xFFFF9E9E),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (uiState.passwordError != null) {
+                Text(
+                    text = uiState.passwordError ?: "",
+                    color = Color(0xFFFF9E9E),
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (uiState.errorMessage != null) {
+                Text(
+                    text = uiState.errorMessage ?: "",
+                    color = Color(0xFFFF9E9E),
+                    fontSize = 13.sp,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
     }
 }

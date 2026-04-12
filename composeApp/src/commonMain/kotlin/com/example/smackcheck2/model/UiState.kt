@@ -72,6 +72,8 @@ data class ProfileSetupUiState(
  */
 data class ProfileUiState(
     val user: User? = null,
+    val userRatings: List<FeedItem> = emptyList(),
+    val isRatingsLoading: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
@@ -208,6 +210,9 @@ sealed class PermissionState {
 data class EditProfileUiState(
     val name: String = "",
     val bio: String = "",
+    val username: String = "",
+    val email: String = "",
+    val location: String = "",
     val profilePhotoUrl: String? = null,
     val isUploadingPhoto: Boolean = false,
     val isSaving: Boolean = false,

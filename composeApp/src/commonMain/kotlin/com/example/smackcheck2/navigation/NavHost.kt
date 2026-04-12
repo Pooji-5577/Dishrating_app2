@@ -99,6 +99,8 @@ import com.example.smackcheck2.ui.screens.EditProfileScreen
 import com.example.smackcheck2.ui.screens.NotificationSettingsScreen
 import com.example.smackcheck2.ui.screens.AccountSettingsScreen
 import com.example.smackcheck2.ui.screens.PrivacySettingsScreen
+import com.example.smackcheck2.ui.screens.HelpFaqScreen
+import com.example.smackcheck2.ui.screens.ContactSupportScreen
 import com.example.smackcheck2.ui.screens.UserProfileScreen
 import com.example.smackcheck2.ui.screens.FollowersListScreen
 import com.example.smackcheck2.ui.screens.CommentsScreen
@@ -438,7 +440,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onNavigateToNotifications = { navigationState.navigateTo(Screen.NotificationSettings) },
                 onNavigateToAccount = { navigationState.navigateTo(Screen.AccountSettings) },
                 onNavigateToPrivacy = { navigationState.navigateTo(Screen.PrivacySettings) },
-                onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) }
+                onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) },
+                onNavigateToHelpFaq = { navigationState.navigateTo(Screen.HelpFaq) },
+                onNavigateToContactSupport = { navigationState.navigateTo(Screen.ContactSupport) }
             )
         }
 
@@ -494,6 +498,26 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             PrivacySettingsScreen(
                 viewModel = privacySettingsViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
+            )
+        }
+
+        is Screen.HelpFaq -> {
+            HelpFaqScreen(
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavigateToContactSupport = { navigationState.navigateTo(Screen.ContactSupport) }
+            )
+        }
+
+        is Screen.ContactSupport -> {
+            val currentUser = when (val state = authState) {
+                is AuthState.Authenticated -> state.user
+                else -> null
+            }
+
+            ContactSupportScreen(
+                initialEmail = currentUser?.email ?: "",
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavigateToHelpFaq = { navigationState.navigateTo(Screen.HelpFaq) }
             )
         }
 

@@ -73,3 +73,16 @@ val StarColor = Color(0xFFFFD700)
 val StarColorEmpty = Color(0xFFE0E0E0)
 val SuccessColor = Color(0xFF4CAF50)
 val WarningColor = Color(0xFFFF9800)
+
+// SmackCheck Brand Design Tokens
+val BrandRed = Color(0xFF9B2335)
+val DarkMaroon = Color(0xFF3D0A14)
+val DeepMaroon = Color(0xFF1A0508)
+val OffWhite = Color(0xFFFAF7F5)
+val SurfaceGray100 = Color(0xFFF5F0EE)
+val SurfaceGray200 = Color(0xFFE8E0DC)
+val SurfaceGray400 = Color(0xFFBFB5B0)
+val SurfaceGray600 = Color(0xFF8A7E78)
+
+// Spacing tokens (in dp — use with .dp in code)
+// Spacing.xs = 4, sm = 8, md = 16, lg = 24, xl = 32, xxl = 48, xxxl = 64
