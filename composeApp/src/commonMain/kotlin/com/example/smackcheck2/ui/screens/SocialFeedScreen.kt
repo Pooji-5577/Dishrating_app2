@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,60 +13,56 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.runtime.derivedStateOf
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.People
+import androidx.compose.material.icons.outlined.RssFeed
+import androidx.compose.material.icons.outlined.Warning
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
+import com.example.smackcheck2.model.UserSummary
+import com.example.smackcheck2.ui.components.BottomNavBar
+import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.EmptyState
+import com.example.smackcheck2.ui.components.FeedTabRow
+import com.example.smackcheck2.ui.components.FollowingStoriesRow
+import com.example.smackcheck2.ui.components.NearbyMapBanner
+import com.example.smackcheck2.ui.components.ReviewPostCard
 import com.example.smackcheck2.ui.components.SocialFeedSkeleton
-import com.example.smackcheck2.ui.components.StarRatingDisplay
-import com.example.smackcheck2.ui.theme.CardShape
+import com.example.smackcheck2.ui.components.TopDishesCarousel
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
-import androidx.compose.material.icons.outlined.RssFeed
-import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.outlined.LocationOn
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.ui.graphics.Color
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SocialFeedScreen(
     uiState: SocialFeedUiState,
@@ -80,9 +75,23 @@ fun SocialFeedScreen(
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit = {},
     onScrollComplete: () -> Unit = {},
-    onExploreClick: () -> Unit = {}
+    onExploreClick: () -> Unit = {},
+    onBookmarkClick: (String) -> Unit = {},
+    onMapBannerClick: () -> Unit = {},
+    onAvatarClick: () -> Unit = {},
+    currentUserAvatarUrl: String? = null,
+    onStoryClick: (String) -> Unit = {},
+    onAddStoryClick: () -> Unit = {},
+    onTopDishClick: (String) -> Unit = {},
+    onSeeAllTopDishes: () -> Unit = {},
+    onHomeClick: () -> Unit = {},
+    onMapClick: () -> Unit = {},
+    onCameraClick: () -> Unit = {},
+    onNavExploreClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {}
 ) {
     val colors = appColors()
+    val jakartaSans = PlusJakartaSans()
     val listState = rememberLazyListState()
 
     // Auto-scroll to newly created post
@@ -105,351 +114,283 @@ fun SocialFeedScreen(
     }
 
     Scaffold(
-        containerColor = colors.Background,
-        topBar = {
-            TopAppBar(
-                title = { Text("Social Feed", color = colors.TextPrimary) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = colors.TextPrimary
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onRefresh) {
-                        Icon(
-                            imageVector = Icons.Filled.Refresh,
-                            contentDescription = "Refresh",
-                            tint = colors.TextPrimary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = colors.Background
-                )
-            )
-        }
+        containerColor = colors.Background
     ) { paddingValues ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Filter chips
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FeedFilter.entries.forEach { filter ->
-                    FilterChip(
-                        selected = uiState.filter == filter,
-                        onClick = { onFilterSelected(filter) },
-                        label = {
-                            Text(
-                                when (filter) {
-                                    FeedFilter.ALL -> "All"
-                                    FeedFilter.FOLLOWING -> "Following"
-                                    FeedFilter.NEARBY -> "Nearby"
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(0.dp),
+            contentPadding = PaddingValues(bottom = 96.dp)
+        ) {
+            // Top bar: SmackCheck branding + user avatar
+            item(key = "top_bar") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "SmackCheck",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.Primary,
+                        fontSize = 24.sp
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(colors.Primary.copy(alpha = 0.15f))
+                            .clickable { onAvatarClick() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (currentUserAvatarUrl != null) {
+                            KamelImage(
+                                resource = asyncPainterResource(currentUserAvatarUrl),
+                                contentDescription = "Profile",
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop,
+                                onFailure = {
+                                    Text(
+                                        text = "U",
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.Primary,
+                                        fontSize = 14.sp
+                                    )
                                 }
                             )
-                        },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = colors.Primary,
-                            selectedLabelColor = colors.Background
-                        )
-                    )
+                        } else {
+                            Text(
+                                text = "U",
+                                fontWeight = FontWeight.Bold,
+                                color = colors.Primary,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
                 }
             }
 
+            // Following Stories Row
+            item(key = "stories") {
+                FollowingStoriesRow(
+                    storyUsers = uiState.storyUsers,
+                    currentUserAvatarUrl = currentUserAvatarUrl,
+                    onAddStoryClick = onAddStoryClick,
+                    onStoryClick = onStoryClick
+                )
+                Spacer(modifier = Modifier.height(40.dp))
+            }
+
+            // Top Dishes Carousel
+            if (uiState.topDishes.isNotEmpty()) {
+                item(key = "top_dishes") {
+                    TopDishesCarousel(
+                        dishes = uiState.topDishes,
+                        onDishClick = onTopDishClick,
+                        onSeeAllClick = onSeeAllTopDishes
+                    )
+                    Spacer(modifier = Modifier.height(40.dp))
+                }
+            }
+
+            // "From Your Network" header + sticky tab row
+            stickyHeader(key = "tab_row") {
+                androidx.compose.foundation.layout.Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color.White)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "From Your Network",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = jakartaSans,
+                            color = Color(0xFF2D2F2F)
+                        )
+                        Icon(
+                            imageVector = Icons.Filled.MoreHoriz,
+                            contentDescription = "More",
+                            tint = Color(0xFF2D2F2F),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    FeedTabRow(
+                        selectedTab = uiState.filter,
+                        onTabSelected = onFilterSelected
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+
+            // Error banner
+            if (!uiState.errorMessage.isNullOrBlank()) {
+                item(key = "error_banner") {
+                    androidx.compose.material3.Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 4.dp)
+                            .clickable { onRefresh() },
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                        colors = androidx.compose.material3.CardDefaults.cardColors(
+                            containerColor = Color(0xFF9B2335).copy(alpha = 0.1f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(14.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Warning,
+                                contentDescription = null,
+                                tint = Color(0xFF9B2335),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                "Something went wrong — tap to retry",
+                                color = Color(0xFF9B2335),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Feed content
             when {
                 uiState.isLoading -> {
-                    SocialFeedSkeleton()
+                    item(key = "skeleton") {
+                        SocialFeedSkeleton()
+                    }
                 }
 
                 uiState.feedItems.isEmpty() -> {
-                    EmptyState(
-                        title = "No Posts Yet",
-                        message = when (uiState.filter) {
-                            FeedFilter.FOLLOWING -> "Follow friends to see their dish ratings here"
-                            FeedFilter.NEARBY -> "No ratings from nearby restaurants yet"
-                            FeedFilter.ALL -> "Be the first to rate a dish!"
-                        },
-                        icon = when (uiState.filter) {
-                            FeedFilter.ALL -> Icons.Outlined.RssFeed
-                            FeedFilter.FOLLOWING -> Icons.Outlined.People
-                            FeedFilter.NEARBY -> Icons.Outlined.LocationOn
-                        },
-                        action = {
-                            Button(
-                                onClick = onExploreClick,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = colors.Primary,
-                                    contentColor = Color.White
-                                )
-                            ) {
-                                Text(
-                                    when (uiState.filter) {
-                                        FeedFilter.ALL -> "Rate a Dish"
-                                        FeedFilter.FOLLOWING -> "Find Friends"
-                                        FeedFilter.NEARBY -> "Explore Map"
-                                    }
-                                )
+                    item(key = "empty") {
+                        EmptyState(
+                            title = "No Posts Yet",
+                            message = when (uiState.filter) {
+                                FeedFilter.FOLLOWING -> "Follow friends to see their dish ratings here"
+                                FeedFilter.TRENDING -> "No trending posts yet"
+                                FeedFilter.NEARBY -> "No ratings from nearby restaurants yet"
+                                FeedFilter.MY_RATINGS -> "You haven't rated any dishes yet"
+                            },
+                            icon = when (uiState.filter) {
+                                FeedFilter.FOLLOWING -> Icons.Outlined.People
+                                FeedFilter.TRENDING -> Icons.AutoMirrored.Outlined.TrendingUp
+                                FeedFilter.NEARBY -> Icons.Outlined.LocationOn
+                                FeedFilter.MY_RATINGS -> Icons.Outlined.RssFeed
+                            },
+                            action = {
+                                Button(
+                                    onClick = onExploreClick,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = colors.Primary,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text(
+                                        when (uiState.filter) {
+                                            FeedFilter.FOLLOWING -> "Find Friends"
+                                            FeedFilter.TRENDING -> "Rate a Dish"
+                                            FeedFilter.NEARBY -> "Explore Map"
+                                            FeedFilter.MY_RATINGS -> "Rate a Dish"
+                                        }
+                                    )
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
                 }
 
                 else -> {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        items(uiState.feedItems, key = { it.id }) { item ->
-                            SocialFeedCard(
-                                item = item,
-                                onLikeClick = { onLikeClick(item.id) },
-                                onCommentClick = { onCommentClick(item.id) },
-                                onShareClick = { onShareClick(item) },
-                                onUserClick = { onUserClick(item.userId) }
-                            )
-                        }
-                        if (uiState.isLoadingMore) {
-                            item(key = "loading_more") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator(modifier = Modifier.size(32.dp))
-                                }
-                            }
-                        } else if (!uiState.hasMoreItems) {
-                            item(key = "end_of_feed") {
-                                Text(
-                                    text = "You're all caught up!",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(16.dp),
-                                    textAlign = TextAlign.Center,
-                                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                    color = colors.TextSecondary
+                    val feedItems = uiState.feedItems
+                    feedItems.forEachIndexed { index, item ->
+                        item(key = item.id) {
+                            Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                                ReviewPostCard(
+                                    feedItem = item,
+                                    onLikeClick = { onLikeClick(item.id) },
+                                    onCommentClick = { onCommentClick(item.id) },
+                                    onShareClick = { onShareClick(item) },
+                                    onBookmarkClick = { onBookmarkClick(item.id) },
+                                    onUserClick = { onUserClick(item.userId) }
                                 )
                             }
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+
+                        // Insert map banner after 3rd item
+                        if (index == 2) {
+                            item(key = "map_banner") {
+                                Box(modifier = Modifier.padding(horizontal = 24.dp)) {
+                                    NearbyMapBanner(
+                                        restaurantCount = 8,
+                                        onClick = onMapBannerClick
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(24.dp))
+                            }
+                        }
+                    }
+
+                    if (uiState.isLoadingMore) {
+                        item(key = "loading_more") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(32.dp))
+                            }
+                        }
+                    } else if (!uiState.hasMoreItems && feedItems.isNotEmpty()) {
+                        item(key = "end_of_feed") {
+                            Text(
+                                text = "You're all caught up!",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                textAlign = TextAlign.Center,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.TextSecondary
+                            )
                         }
                     }
                 }
             }
         }
-    }
-}
 
-@Composable
-fun SocialFeedCard(
-    item: FeedItem,
-    onLikeClick: () -> Unit,
-    onCommentClick: () -> Unit,
-    onShareClick: () -> Unit,
-    onUserClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
-) {
-    val colors = appColors()
-    // Driven by ViewModel state — no local copy to avoid triple-update bugs
-    val isLiked = item.isLiked
-    val likesCount = item.likesCount
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(
-            containerColor = colors.CardBackground
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // User profile row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(if (onUserClick != null) Modifier.clickable { onUserClick() } else Modifier),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(colors.Primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = item.userName.firstOrNull()?.toString()?.uppercase() ?: "?",
-                        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.Primary
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.userName,
-                        style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = colors.TextPrimary
-                    )
-                    Text(
-                        text = "at ${item.restaurantName}",
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                        color = colors.TextSecondary
-                    )
-                }
-
-                IconButton(onClick = onShareClick) {
-                    Icon(
-                        imageVector = Icons.Filled.Share,
-                        contentDescription = "Share",
-                        tint = colors.TextSecondary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Dish image
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(220.dp)
-                    .clip(androidx.compose.material3.MaterialTheme.shapes.medium)
-                    .background(colors.Surface),
-                contentAlignment = Alignment.Center
-            ) {
-                val imageUrl = item.dishImageUrl?.takeIf { it.isNotBlank() }
-                    ?: item.imageUrls.firstOrNull()
-                println("SocialFeedCard: dish='${item.dishName}' imageUrl=$imageUrl")
-                if (imageUrl != null) {
-                    com.example.smackcheck2.ui.components.NetworkImage(
-                        imageUrl = imageUrl,
-                        contentDescription = item.dishName,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Filled.Restaurant,
-                        contentDescription = null,
-                        modifier = Modifier.size(80.dp),
-                        tint = colors.TextSecondary.copy(alpha = 0.5f)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Dish name and rating
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = item.dishName,
-                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                    color = colors.TextPrimary
-                )
-
-                StarRatingDisplay(
-                    rating = item.rating,
-                    starSize = 20.dp
-                )
-            }
-
-            // Price display
-            if (item.price != null && item.price > 0) {
-                Spacer(modifier = Modifier.height(6.dp))
-                val priceText = run {
-                    val whole = item.price.toLong()
-                    val frac = ((item.price - whole) * 100 + 0.5).toLong()
-                    "$$whole.${frac.toString().padStart(2, '0')}"
-                }
-                Text(
-                    text = priceText,
-                    style = androidx.compose.material3.MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.Primary
-                )
-            }
-
-            // Comment preview
-            if (item.comment.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = item.comment,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    color = colors.TextSecondary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Actions row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(24.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable { onLikeClick() }
-                ) {
-                    Icon(
-                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                        contentDescription = "Like",
-                        tint = if (isLiked) colors.Error else colors.TextSecondary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = likesCount.toString(),
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
-                        color = colors.TextSecondary
-                    )
-                }
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.clickable(onClick = onCommentClick)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.ChatBubbleOutline,
-                        contentDescription = "Comments",
-                        tint = colors.TextSecondary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = item.commentsCount.toString(),
-                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
-                        color = colors.TextSecondary
-                    )
-                }
-            }
+            // Floating Bottom Nav Bar
+            BottomNavBar(
+                selectedItem = NavItem.HOME,
+                onHomeClick = onHomeClick,
+                onMapClick = onMapClick,
+                onCameraClick = onCameraClick,
+                onExploreClick = onNavExploreClick,
+                onProfileClick = onProfileClick,
+                modifier = Modifier.align(Alignment.BottomCenter)
+            )
         }
     }
 }

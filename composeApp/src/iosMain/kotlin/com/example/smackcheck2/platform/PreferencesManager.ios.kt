@@ -18,6 +18,7 @@ actual class PreferencesManager {
         const val LANGUAGE = "language"
         const val FIRST_OPEN_TIMESTAMP = "first_open_timestamp"
         const val DAY1_RETENTION_TRACKED = "day1_retention_tracked"
+        const val BOOKMARKS = "bookmarked_ratings"
     }
 
     actual suspend fun saveThemePreference(theme: ThemePreference) {
@@ -86,6 +87,21 @@ actual class PreferencesManager {
     actual suspend fun setDay1RetentionTracked() {
         userDefaults.setBool(true, forKey = DAY1_RETENTION_TRACKED)
         userDefaults.synchronize()
+    }
+
+    actual suspend fun saveBookmarks(bookmarkIds: Set<String>) {
+        val bookmarksJson = json.encodeToString(bookmarkIds.toList())
+        userDefaults.setObject(bookmarksJson, forKey = BOOKMARKS)
+        userDefaults.synchronize()
+    }
+
+    actual suspend fun getBookmarks(): Set<String> {
+        val bookmarksJson = userDefaults.stringForKey(BOOKMARKS) ?: return emptySet()
+        return try {
+            json.decodeFromString<List<String>>(bookmarksJson).toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }
     }
 
     actual suspend fun clearAll() {

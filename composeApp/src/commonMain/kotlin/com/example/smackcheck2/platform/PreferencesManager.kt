@@ -27,5 +27,8 @@ expect class PreferencesManager {
     suspend fun isDay1RetentionTracked(): Boolean
     suspend fun setDay1RetentionTracked()
 
+    suspend fun saveBookmarks(bookmarkIds: Set<String>)
+    suspend fun getBookmarks(): Set<String>
+
     suspend fun clearAll()
 }

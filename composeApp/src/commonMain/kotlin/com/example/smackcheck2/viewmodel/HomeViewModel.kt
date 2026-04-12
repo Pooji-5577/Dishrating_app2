@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.model.HomeFeedUiState
 import com.example.smackcheck2.model.ProfileUiState
 import com.example.smackcheck2.model.UserProgressUiState
@@ -118,6 +119,7 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
 
     // Add AuthRepository to query database directly for fresh data
     private val authRepository = AuthRepository()
+    private val socialRepository = SocialRepository()
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -128,22 +130,34 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
 
     fun loadProfile() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.update {
+                it.copy(
+                    isLoading = true,
+                    isRatingsLoading = true,
+                    errorMessage = null
+                )
+            }
 
             try {
                 // Query database directly for fresh data instead of using cached AuthViewModel user
                 // This ensures XP, level, streak, and badges are always up-to-date
                 val user = authRepository.getCurrentUser()
+                val userRatings = user?.id?.let { userId ->
+                    socialRepository.getUserRatings(userId, limit = 30).getOrDefault(emptyList())
+                } ?: emptyList()
 
                 _uiState.update {
                     it.copy(
                         user = user,
+                        userRatings = userRatings,
+                        isRatingsLoading = false,
                         isLoading = false
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
+                        isRatingsLoading = false,
                         isLoading = false,
                         errorMessage = e.message ?: "Failed to load profile"
                     )

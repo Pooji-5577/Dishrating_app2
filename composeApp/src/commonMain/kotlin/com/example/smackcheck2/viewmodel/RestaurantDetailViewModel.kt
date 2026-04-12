@@ -164,7 +164,8 @@ class RestaurantDetailViewModel(
         val dishesResult = databaseRepository.getDishesForRestaurant(restaurantId)
 
         dishesResult.onSuccess { dishes ->
-            _uiState.update { it.copy(dishes = dishes) }
+            val topDishes = dishes.sortedByDescending { it.rating }.take(6)
+            _uiState.update { it.copy(dishes = dishes, topDishes = topDishes) }
         }.onFailure { error ->
             println("RestaurantDetailViewModel: Failed to load dishes: ${error.message}")
             // Don't update error state, just leave dishes empty

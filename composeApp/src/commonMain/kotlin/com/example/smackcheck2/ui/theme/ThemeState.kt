@@ -105,7 +105,10 @@ data class ThemeColors(
     val BestsellerBadge: Color,
     val AvailableBadge: Color,
     val ImageOverlay: Color,
-    val Divider: Color
+    val Divider: Color,
+    val PrimaryDark: Color,
+    val PrimaryRed: Color,
+    val MaroonAccent: Color
 )
 
 /**
@@ -136,7 +139,10 @@ fun appColors(): ThemeColors {
             BestsellerBadge = DarkThemeColors.BestsellerBadge,
             AvailableBadge = DarkThemeColors.AvailableBadge,
             ImageOverlay = DarkThemeColors.ImageOverlay,
-            Divider = DarkThemeColors.Divider
+            Divider = DarkThemeColors.Divider,
+            PrimaryDark = DarkThemeColors.PrimaryDark,
+            PrimaryRed = DarkThemeColors.PrimaryRed,
+            MaroonAccent = DarkThemeColors.MaroonAccent
         )
     } else {
         ThemeColors(
@@ -160,7 +166,10 @@ fun appColors(): ThemeColors {
             BestsellerBadge = LightThemeColors.BestsellerBadge,
             AvailableBadge = LightThemeColors.AvailableBadge,
             ImageOverlay = LightThemeColors.ImageOverlay,
-            Divider = LightThemeColors.Divider
+            Divider = LightThemeColors.Divider,
+            PrimaryDark = LightThemeColors.PrimaryDark,
+            PrimaryRed = LightThemeColors.PrimaryRed,
+            MaroonAccent = LightThemeColors.MaroonAccent
         )
     }
 }

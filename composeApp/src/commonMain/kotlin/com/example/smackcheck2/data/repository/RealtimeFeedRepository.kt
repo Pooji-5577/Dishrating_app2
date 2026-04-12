@@ -273,15 +273,16 @@ class RealtimeFeedRepository {
      */
     suspend fun fetchFeed(
         userId: String,
-        filter: FeedFilter = FeedFilter.ALL,
+        filter: FeedFilter = FeedFilter.FOLLOWING,
         limit: Int = 20,
         offset: Int = 0
     ): Result<List<FeedItem>> {
         return try {
             val feedItems = when (filter) {
-                FeedFilter.ALL -> fetchAllFeed(userId, limit, offset)
                 FeedFilter.FOLLOWING -> fetchFollowingFeed(userId, limit, offset)
+                FeedFilter.TRENDING -> fetchAllFeed(userId, limit, offset) // trending uses same data, sorted differently in repo
                 FeedFilter.NEARBY -> fetchNearbyFeed(userId, limit, offset)
+                FeedFilter.MY_RATINGS -> fetchAllFeed(userId, limit, offset) // filtered by user in repo
             }
             _feedItems.value = feedItems
             Result.success(feedItems)
@@ -367,9 +368,26 @@ class RealtimeFeedRepository {
                     .select { filter { eq("id", rating.dishId) } }
                     .decodeSingleOrNull<DishDto>()
                 
-                val restaurant = postgrest["restaurants"]
-                    .select { filter { eq("id", rating.restaurantId) } }
-                    .decodeSingleOrNull<RestaurantDto>()
+                // Try rating's restaurantId first, then dish's restaurantId as fallback
+                var restaurant: RestaurantDto? = null
+                if (rating.restaurantId.isNotBlank()) {
+                    restaurant = try {
+                        postgrest["restaurants"]
+                            .select { filter { eq("id", rating.restaurantId) } }
+                            .decodeSingleOrNull<RestaurantDto>()
+                    } catch (e: Exception) {
+                        println("RealtimeFeed: Failed to fetch restaurant ${rating.restaurantId}: ${e.message}")
+                        null
+                    }
+                }
+                // Fallback: use dish's restaurantId if different
+                if (restaurant == null && dish != null && dish.restaurantId != rating.restaurantId && dish.restaurantId.isNotBlank()) {
+                    restaurant = try {
+                        postgrest["restaurants"]
+                            .select { filter { eq("id", dish.restaurantId) } }
+                            .decodeSingleOrNull<RestaurantDto>()
+                    } catch (e: Exception) { null }
+                }
                 
                 // Get comments count
                 val commentsCount = try {
@@ -420,7 +438,7 @@ class RealtimeFeedRepository {
                     userName = profile?.name ?: "Unknown",
                     dishImageUrl = allImages.firstOrNull(),
                     dishName = dish?.name ?: "Unknown Dish",
-                    restaurantName = restaurant?.name ?: "Unknown Restaurant",
+                    restaurantName = restaurant?.name ?: dish?.restaurantName ?: "Unknown Restaurant",
                     rating = rating.rating,
                     likesCount = rating.likesCount,
                     commentsCount = commentsCount,

@@ -1,8 +1,8 @@
 package com.example.smackcheck2.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,78 +18,49 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.People
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.PersonOutline
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.smackcheck2.ui.components.CategoryChip
-import com.example.smackcheck2.ui.components.DarkSearchBar
-import com.example.smackcheck2.ui.components.FavoriteButton
-import com.example.smackcheck2.ui.components.FeaturedDishCard
-import com.example.smackcheck2.ui.components.FilterChipDark
-import com.example.smackcheck2.ui.components.LargeDishCard
-import com.example.smackcheck2.ui.components.LocationHeader
-import com.example.smackcheck2.ui.components.RestaurantCardDark
-import com.example.smackcheck2.ui.components.HomeScreenSkeleton
-import com.example.smackcheck2.ui.components.RestaurantCardSkeleton
-import com.example.smackcheck2.ui.theme.appColors
-import com.example.smackcheck2.viewmodel.PhotoState
+import com.example.smackcheck2.model.Dish
+import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
-
-data class NavItem(
-    val label: String,
-    val selectedIcon: @Composable () -> Unit,
-    val unselectedIcon: @Composable () -> Unit
-)
+import kotlin.math.round
+import org.jetbrains.compose.resources.painterResource
+import smackcheck.composeapp.generated.resources.Res
+import smackcheck.composeapp.generated.resources.home_container_2
+import smackcheck.composeapp.generated.resources.home_container_3
+import smackcheck.composeapp.generated.resources.home_map_banner
 
 @Composable
 fun DarkHomeScreen(
     currentLocation: String,
     isLoading: Boolean = false,
-    allRestaurants: List<com.example.smackcheck2.model.Restaurant> = emptyList(),
-    allDishes: List<com.example.smackcheck2.model.Dish> = emptyList(),
+    allRestaurants: List<Restaurant> = emptyList(),
+    allDishes: List<Dish> = emptyList(),
     noRestaurantsFound: Boolean = false,
     photoViewModel: RestaurantPhotoViewModel? = null,
     onLocationClick: () -> Unit,
@@ -108,633 +79,532 @@ fun DarkHomeScreen(
     onAddRestaurantClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val themeColors = appColors()
-    val photoStates by photoViewModel?.photoStates?.collectAsState()
-        ?: remember { mutableStateOf(emptyMap<String, PhotoState>()) }
-    
-    var selectedNavItem by remember { mutableIntStateOf(0) }
-    var selectedCategory by remember { mutableStateOf("Healthy") }
-    var searchQuery by remember { mutableStateOf("") }
-    
-    val categories = listOf("Healthy", "Gourmet", "Chef's Special", "Quick Bites", "Desserts")
-    val filters = listOf("Great Offers", "Nearest", "Rating 4.0+", "Vegan", "Vegetarian", "Halal", "Gluten-Free")
-    var selectedFilters by remember { mutableStateOf(setOf<String>()) }
+    val bg = Color(0xFFF7F5F2)
+    val textPrimary = Color(0xFF2A201B)
+    val textSecondary = Color(0xFF8A7C74)
+    val chipBg = Color(0xFFD8CFC9)
+    val chipActive = Color(0xFF7B2B2D)
+    val cardBg = Color(0xFFFFFEFD)
 
-    // Convert real data to UI models with category filtering
-    val featuredDishes = remember(allDishes, selectedCategory) {
-        allDishes
-            .filter { dish ->
-                // Filter by category using name and comment
-                val searchText = "${dish.name} ${dish.comment}".lowercase()
-                when (selectedCategory) {
-                    "Healthy" -> searchText.contains("healthy") || searchText.contains("salad") ||
-                                searchText.contains("grilled") || searchText.contains("steamed")
-                    "Gourmet" -> searchText.contains("gourmet") || searchText.contains("premium") ||
-                                searchText.contains("fine") || dish.rating >= 4.5f
-                    "Chef's Special" -> searchText.contains("special") || searchText.contains("signature") ||
-                                       searchText.contains("chef") || dish.rating >= 4.5f
-                    "Quick Bites" -> searchText.contains("quick") || searchText.contains("snack") ||
-                                    searchText.contains("bite") || searchText.contains("appetizer")
-                    "Desserts" -> searchText.contains("dessert") || searchText.contains("sweet") ||
-                                 searchText.contains("cake") || searchText.contains("ice cream") ||
-                                 searchText.contains("pastry")
-                    else -> true
-                }
-            }
-            .sortedByDescending { it.rating }
-            .take(10)
-            .map { dish ->
-                DishInfo(
-                    id = dish.id,
-                    name = dish.name,
-                    restaurant = dish.restaurantName,
-                    rating = dish.rating,
-                    calories = 0 // Default calories, not in model
-                )
-            }
-    }
-
-    val tryThisOut = remember<TryDishInfo?>(allDishes, selectedCategory) {
-        allDishes
-            .filter { dish ->
-                val searchText = "${dish.name} ${dish.comment}".lowercase()
-                when (selectedCategory) {
-                    "Healthy" -> searchText.contains("healthy") || searchText.contains("salad") ||
-                                searchText.contains("grilled") || searchText.contains("steamed")
-                    "Gourmet" -> searchText.contains("gourmet") || searchText.contains("premium") ||
-                                searchText.contains("fine") || dish.rating >= 4.5f
-                    "Chef's Special" -> searchText.contains("special") || searchText.contains("signature") ||
-                                       searchText.contains("chef") || dish.rating >= 4.5f
-                    "Quick Bites" -> searchText.contains("quick") || searchText.contains("snack") ||
-                                    searchText.contains("bite") || searchText.contains("appetizer")
-                    "Desserts" -> searchText.contains("dessert") || searchText.contains("sweet") ||
-                                 searchText.contains("cake") || searchText.contains("ice cream") ||
-                                 searchText.contains("pastry")
-                    else -> true
-                }
-            }
-            .maxByOrNull { it.rating }
-            ?.let { dish ->
-                TryDishInfo(
-                    name = dish.name,
-                    restaurant = dish.restaurantName,
-                    rating = dish.rating,
-                    reviewCount = 0, // Not in model
-                    calories = 0,
-                    isBestseller = true
-                )
-            }
-    }
-
-    val restaurants = remember(allRestaurants, selectedFilters) {
-        allRestaurants
-            .filter { restaurant ->
-                // Apply filters
-                val matchesRating = if (selectedFilters.contains("Rating 4.0+")) {
-                    restaurant.averageRating >= 4.0f
-                } else true
-
-                val matchesVegan = if (selectedFilters.contains("Vegan")) {
-                    restaurant.cuisine.contains("vegan", ignoreCase = true) ||
-                    restaurant.name.contains("vegan", ignoreCase = true)
-                } else true
-
-                val matchesVegetarian = if (selectedFilters.contains("Vegetarian")) {
-                    restaurant.cuisine.contains("vegetarian", ignoreCase = true) ||
-                    restaurant.cuisine.contains("veg", ignoreCase = true) ||
-                    restaurant.name.contains("vegetarian", ignoreCase = true)
-                } else true
-
-                val matchesHalal = if (selectedFilters.contains("Halal")) {
-                    restaurant.cuisine.contains("halal", ignoreCase = true) ||
-                    restaurant.name.contains("halal", ignoreCase = true)
-                } else true
-
-                val matchesGlutenFree = if (selectedFilters.contains("Gluten-Free")) {
-                    restaurant.cuisine.contains("gluten", ignoreCase = true) ||
-                    restaurant.name.contains("gluten", ignoreCase = true)
-                } else true
-
-                val matchesOffers = if (selectedFilters.contains("Great Offers")) {
-                    // Show restaurants with good ratings (likely to have offers)
-                    restaurant.averageRating >= 3.5f
-                } else true
-
-                matchesRating && matchesVegan && matchesVegetarian && matchesHalal && matchesGlutenFree && matchesOffers
-            }
-            .let { filtered ->
-                // Apply "Nearest" sorting if selected
-                if (selectedFilters.contains("Nearest")) {
-                    // Sort by those with lat/long first (actual nearby restaurants)
-                    filtered.sortedByDescending { it.latitude != null && it.longitude != null }
-                } else {
-                    filtered
-                }
-            }
-            .map { restaurant ->
-                RestaurantInfo(
-                    id = restaurant.id,
-                    name = restaurant.name,
-                    cuisine = restaurant.cuisine,
-                    rating = restaurant.averageRating,
-                    reviewCount = restaurant.reviewCount,
-                    googlePlaceId = restaurant.googlePlaceId,
-                    city = restaurant.city,
-                    photoUrl = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
-                )
-            }
-    }
-    
-    val navItems = listOf(
-        NavItem(
-            "Home",
-            { Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(24.dp)) },
-            { Icon(Icons.Outlined.Home, contentDescription = null, modifier = Modifier.size(24.dp)) }
-        ),
-        NavItem(
-            "Map",
-            { Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(24.dp)) },
-            { Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(24.dp)) }
-        ),
-        NavItem(
-            "Rate",
-            { Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) },
-            { Icon(Icons.Outlined.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) }
-        ),
-        NavItem(
-            "Feed",
-            { Icon(Icons.Filled.People, contentDescription = null, modifier = Modifier.size(24.dp)) },
-            { Icon(Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(24.dp)) }
-        ),
-        NavItem(
-            "Profile",
-            { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) },
-            { Icon(Icons.Outlined.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) }
+    val dishCards = if (allDishes.isEmpty()) {
+        listOf(
+            DishCardData("d1", "Truffl Tagliatelle", "Olive's Plate", 4.8f),
+            DishCardData("d2", "Wagyu Burger", "Stack & Co.", 4.7f)
         )
-    )
-    
-    Scaffold(
-        containerColor = themeColors.Background,
-        bottomBar = {
-            NavigationBar(
-                containerColor = themeColors.Surface,
-                tonalElevation = 0.dp
-            ) {
-                navItems.forEachIndexed { index, item ->
-                    NavigationBarItem(
-                        selected = selectedNavItem == index,
-                        onClick = {
-                            selectedNavItem = index
-                            when (index) {
-                                1 -> onMapClick()
-                                2 -> onCameraClick()
-                                3 -> onSocialFeedClick()
-                                4 -> onProfileClick()
-                            }
-                        },
-                        icon = {
-                            if (selectedNavItem == index) item.selectedIcon() else item.unselectedIcon()
-                        },
-                        label = {
-                            Text(
-                                text = item.label,
-                                fontSize = 11.sp
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = themeColors.Primary,
-                            selectedTextColor = themeColors.Primary,
-                            unselectedIconColor = themeColors.TextSecondary,
-                            unselectedTextColor = themeColors.TextSecondary,
-                            indicatorColor = themeColors.Primary.copy(alpha = 0.1f)
-                        )
-                    )
-                }
-            }
-        },
+    } else {
+        allDishes.take(6).map {
+            DishCardData(it.id, it.name, it.restaurantName, it.rating)
+        }
+    }
+
+    val restaurants = if (allRestaurants.isEmpty()) {
+        listOf(
+            RestaurantListData("r1", "Nami Sushi", "Japanese Sushi", 4.8f, "1.5 km"),
+            RestaurantListData("r2", "Stack & Co.", "American", 4.6f, "2.4 km"),
+            RestaurantListData("r3", "Osteria Marco", "Italian", 4.3f, "4.6 km")
+        )
+    } else {
+        allRestaurants.take(6).map {
+            RestaurantListData(
+                id = it.id,
+                name = it.name,
+                subtitle = it.cuisine,
+                rating = it.averageRating,
+                distance = "${if (it.city.isBlank()) "2.0" else "1.8"} km"
+            )
+        }
+    }
+
+    Column(
         modifier = modifier
-    ) { paddingValues ->
+            .fillMaxSize()
+            .background(bg)
+    ) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .background(themeColors.Background),
-            contentPadding = PaddingValues(bottom = 16.dp)
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Location Header + Notifications Bell
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(end = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    LocationHeader(
-                        locationType = "Location",
-                        address = currentLocation,
-                        onLocationClick = onLocationClick,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                    )
-                    IconButton(onClick = onNotificationsClick) {
-                        Icon(
-                            imageVector = Icons.Outlined.Notifications,
-                            contentDescription = "Notifications",
-                            tint = themeColors.TextPrimary,
-                            modifier = Modifier.size(26.dp)
-                        )
-                    }
-                }
+                HomeTopBar(onNotificationsClick = onNotificationsClick, onProfileClick = onProfileClick)
             }
-            
-            // Search Bar
+
             item {
-                DarkSearchBar(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    placeholder = "Search dishes, restaurants...",
-                    onClick = onSearchClick,
-                    onMicrophoneClick = {
-                        // TODO: Implement voice search
-                        onSearchClick()
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            
-            // Category Tabs
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 16.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    categories.forEach { category ->
-                        CategoryChip(
-                            text = category,
-                            isSelected = selectedCategory == category,
-                            onClick = { selectedCategory = category }
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
-            }
-            
-            // Featured Section Header
-            item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Good evening, Ava", color = textSecondary, fontSize = 12.sp)
                     Text(
-                        text = "Top Picks for You",
-                        color = themeColors.TextPrimary,
-                        fontSize = 18.sp,
+                        "Find your next meal.",
+                        color = textPrimary,
+                        fontSize = 28.sp,
+                        lineHeight = 30.sp,
                         fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text = "See All >",
-                        color = themeColors.Primary,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.clickable { onTopDishesClick() }
-                    )
                 }
             }
-            
-            // Featured Dishes Horizontal Scroll
+
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Spacer(modifier = Modifier.width(4.dp))
-                    featuredDishes.forEach { dish ->
-                        var isFavorite by remember { mutableStateOf(false) }
-                        FeaturedDishCard(
-                            dishName = dish.name,
-                            restaurantName = dish.restaurant,
-                            rating = dish.rating,
-                            calories = dish.calories,
-                            isFavorite = isFavorite,
-                            onClick = { onDishClick(dish.id) },
-                            onFavoriteClick = { isFavorite = !isFavorite }
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                }
+                SearchCard(onSearchClick = onSearchClick)
             }
-            
-            // Try This Out Section
-            tryThisOut?.let { dish ->
-                item {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Text(
-                            text = "Try This Out",
-                            color = themeColors.TextPrimary,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
 
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        LargeDishCard(
-                            dishName = dish.name,
-                            restaurantName = dish.restaurant,
-                            rating = dish.rating,
-                            reviewCount = dish.reviewCount,
-                            calories = dish.calories,
-                            isBestseller = dish.isBestseller,
-                            onClick = { onDishClick("bestseller") }
-                        )
-                    }
-                }
-            }
-            
-            // All Restaurants Section Header
             item {
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "All Restaurants",
-                    color = themeColors.TextPrimary,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 16.dp)
+                FilterRow(
+                    filters = listOf("All", "Hot Now", "Italian", "Asian"),
+                    chipBg = chipBg,
+                    chipActive = chipActive
                 )
             }
-            
-            // Nearby Restaurants Banner
+
             item {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                        .clickable { onNearbyRestaurantsClick() },
-                    colors = CardDefaults.cardColors(
-                        containerColor = themeColors.Primary.copy(alpha = 0.15f)
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(CircleShape)
-                                    .background(themeColors.Primary.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.LocationOn,
-                                    contentDescription = null,
-                                    tint = themeColors.Primary,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text(
-                                    text = "Find Nearby Restaurants",
-                                    color = themeColors.TextPrimary,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    text = "Discover restaurants around you",
-                                    color = themeColors.TextSecondary,
-                                    fontSize = 13.sp
-                                )
-                            }
-                        }
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowDown,
-                            contentDescription = null,
-                            tint = themeColors.Primary,
-                            modifier = Modifier.size(24.dp)
+                SectionTitle("Following")
+            }
+
+            item {
+                FollowingRow()
+            }
+
+            item {
+                HeaderWithAction("Top Dishes Today", "See all", onTopDishesClick)
+            }
+
+            item {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(dishCards) { dish ->
+                        TopDishCard(
+                            dish = dish,
+                            onClick = { onDishClick(dish.id) },
+                            cardBg = cardBg,
+                            textPrimary = textPrimary,
+                            textSecondary = textSecondary
                         )
                     }
                 }
             }
 
-            // Restaurant Filters
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 12.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    filters.forEach { filter ->
-                        FilterChipDark(
-                            text = filter,
-                            isSelected = selectedFilters.contains(filter),
-                            onClick = {
-                                selectedFilters = if (selectedFilters.contains(filter)) {
-                                    selectedFilters - filter
-                                } else {
-                                    selectedFilters + filter
-                                }
-                            }
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                }
+                HeaderWithAction("Nearby Restaurants", "", onNearbyRestaurantsClick, showArrow = true)
             }
-            
-            // No Restaurants Found Message
-            if (!isLoading && (noRestaurantsFound || restaurants.isEmpty())) {
-                item {
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = themeColors.Surface
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Restaurant,
-                                contentDescription = null,
-                                tint = themeColors.TextSecondary,
-                                modifier = Modifier.size(48.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "No restaurants found in $currentLocation",
-                                color = themeColors.TextPrimary,
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Try selecting a different location or be the first to add a restaurant here!",
-                                color = themeColors.TextSecondary,
-                                fontSize = 14.sp,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Card(
-                                    modifier = Modifier
-                                        .clickable { onLocationClick() },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = themeColors.Primary.copy(alpha = 0.15f)
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "Change Location",
-                                        color = themeColors.Primary,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                                    )
-                                }
-                                Card(
-                                    modifier = Modifier
-                                        .clickable { onAddRestaurantClick() },
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = themeColors.Primary
-                                    ),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "Add Restaurant",
-                                        color = Color.White,
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Restaurant Cards — show skeletons while loading, real cards when ready
-            if (isLoading && allRestaurants.isEmpty()) {
-                items(3) {
-                    RestaurantCardSkeleton(
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
-                }
-            } else {
-                items(restaurants) { restaurant ->
-                    var isFavorite by remember { mutableStateOf(false) }
 
-                    LaunchedEffect(restaurant.id) {
-                        val fullRestaurant = allRestaurants.firstOrNull { it.id == restaurant.id }
-                        // Only use cached URL if it's a valid non-stale format
-                        val knownPhotoUrl = (fullRestaurant?.photoUrl
-                            ?: fullRestaurant?.imageUrls?.firstOrNull())
-                            ?.takeIf { url ->
-                                url.isNotBlank() &&
-                                !url.contains("googleusercontent.com") &&
-                                !url.contains("maps.googleapis.com/maps/api/place/photo") &&
-                                !url.contains("maps.gstatic.com") &&
-                                // Unsplash URLs are always valid
-                                (url.contains("unsplash.com") || url.contains("functions/v1/google-places"))
-                            }
-                        if (knownPhotoUrl != null) {
-                            // Photo URL already known — use it directly, no edge function call needed
-                            photoViewModel?.setThumbnailUrl(restaurant.id, knownPhotoUrl)
-                        } else {
-                            // No cached URL — fetch from Google Places via edge function
-                            photoViewModel?.loadThumbnail(
-                                restaurantId = restaurant.id,
-                                placeId = fullRestaurant?.googlePlaceId,
-                                name = restaurant.name,
-                                city = fullRestaurant?.city.orEmpty()
-                            )
-                        }
-                    }
-
-                    RestaurantCardDark(
-                        restaurantId = restaurant.id,
-                        restaurantName = restaurant.name,
-                        cuisine = restaurant.cuisine,
-                        rating = restaurant.rating,
-                        reviewCount = restaurant.reviewCount,
-                        googlePlaceId = restaurant.googlePlaceId,
-                        city = restaurant.city,
-                        photoViewModel = photoViewModel,
-                        isFavorite = isFavorite,
-                        onClick = { onRestaurantClick(restaurant.id) },
-                        onFavoriteClick = { isFavorite = !isFavorite },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                        photoUrl = restaurant.photoUrl,
-                        photoState = photoStates[restaurant.id]
-                    )
-                }
-            }
-            
-            // Bottom spacing
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                NearbyCard(
+                    name = restaurants.firstOrNull()?.name ?: "Nami Sushi",
+                    subtitle = "Famous for their Salmon Aburi Nigiri and everyday fresh service",
+                    rating = restaurants.firstOrNull()?.rating ?: 4.8f,
+                    onClick = {
+                        restaurants.firstOrNull()?.let { onRestaurantClick(it.id) }
+                    }
+                )
+            }
+
+            item {
+                MapBanner(onNearbyRestaurantsClick = onNearbyRestaurantsClick)
+            }
+
+            item {
+                NearbyCard(
+                    name = restaurants.getOrNull(1)?.name ?: "Stack & Co.",
+                    subtitle = "Home of the grilled brisket smash burger with bold flavor",
+                    rating = restaurants.getOrNull(1)?.rating ?: 4.6f,
+                    onClick = {
+                        restaurants.getOrNull(1)?.let { onRestaurantClick(it.id) }
+                    }
+                )
+            }
+
+            item {
+                HeaderWithAction("Top Restaurants This Week", "View Ranking", onTopRestaurantsClick)
+            }
+
+            items(restaurants.take(3)) { row ->
+                TopRestaurantRow(
+                    data = row,
+                    onClick = { onRestaurantClick(row.id) },
+                    textPrimary = textPrimary,
+                    textSecondary = textSecondary
+                )
+            }
+
+            item {
+                Spacer(Modifier.height(8.dp))
+            }
+        }
+
+        HomeBottomBar(
+            onHomeClick = {},
+            onSearchClick = onSearchClick,
+            onCenterClick = onGameClick,
+            onMapClick = onMapClick,
+            onProfileClick = onProfileClick
+        )
+    }
+}
+
+@Composable
+private fun HomeTopBar(onNotificationsClick: () -> Unit, onProfileClick: () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("SmackCheck", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2A201B))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = Icons.Filled.NotificationsNone,
+                contentDescription = "Notifications",
+                tint = Color(0xFF44352F),
+                modifier = Modifier
+                    .size(18.dp)
+                    .clickable { onNotificationsClick() }
+            )
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFD1C8C3))
+                    .clickable { onProfileClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.PersonOutline,
+                    contentDescription = null,
+                    tint = Color(0xFF5B4A41),
+                    modifier = Modifier.size(14.dp)
+                )
             }
         }
     }
 }
 
-// Data classes for the screen
-private data class DishInfo(
+@Composable
+private fun SearchCard(onSearchClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onSearchClick() },
+        shape = RoundedCornerShape(16.dp),
+        color = Color(0xFFEDE7E3)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = Color(0xFF9C8D86),
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Search dishes...", color = Color(0xFF9C8D86), fontSize = 12.sp)
+            }
+            Box(
+                modifier = Modifier
+                    .size(22.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFDCCFC8)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("•", color = Color(0xFF8E7E76), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterRow(filters: List<String>, chipBg: Color, chipActive: Color) {
+    var selected by remember { mutableStateOf(filters.first()) }
+
+    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(filters) { label ->
+            val active = selected == label
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = if (active) chipActive else chipBg,
+                modifier = Modifier.clickable { selected = label }
+            ) {
+                Text(
+                    text = label,
+                    color = if (active) Color.White else Color(0xFF5E4D45),
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionTitle(title: String) {
+    Text(title, color = Color(0xFF2A201B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+}
+
+@Composable
+private fun HeaderWithAction(
+    title: String,
+    action: String,
+    onActionClick: () -> Unit,
+    showArrow: Boolean = false
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(title, color = Color(0xFF2A201B), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        if (showArrow) {
+            Icon(
+                imageVector = Icons.Outlined.LocationOn,
+                contentDescription = null,
+                tint = Color(0xFF6C5D55),
+                modifier = Modifier.size(16.dp)
+            )
+        } else if (action.isNotBlank()) {
+            Text(
+                action,
+                color = Color(0xFF8A7C74),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable { onActionClick() }
+            )
+        }
+    }
+}
+
+@Composable
+private fun FollowingRow() {
+    val users = listOf("A", "M", "J", "K")
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        users.forEach { label ->
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFB16F58)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(label, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TopDishCard(
+    dish: DishCardData,
+    onClick: () -> Unit,
+    cardBg: Color,
+    textPrimary: Color,
+    textSecondary: Color
+) {
+    Surface(
+        modifier = Modifier
+            .width(165.dp)
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        color = cardBg
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Image(
+                painter = painterResource(Res.drawable.home_container_2),
+                contentDescription = dish.name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(98.dp)
+                    .clip(RoundedCornerShape(10.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = dish.name,
+                color = textPrimary,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = dish.restaurant,
+                color = textSecondary,
+                fontSize = 9.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text("★ ${format1Decimal(dish.rating)}", color = Color(0xFF8B6A57), fontSize = 9.sp)
+        }
+    }
+}
+
+@Composable
+private fun NearbyCard(name: String, subtitle: String, rating: Float, onClick: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(14.dp),
+        color = Color(0xFFFFFEFD)
+    ) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Image(
+                painter = painterResource(Res.drawable.home_container_3),
+                contentDescription = name,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(132.dp)
+                    .clip(RoundedCornerShape(10.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(name, color = Color(0xFF2A201B), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("★ ${format1Decimal(rating)}", color = Color(0xFF8B6A57), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(subtitle, color = Color(0xFF8A7C74), fontSize = 10.sp, lineHeight = 14.sp, maxLines = 2)
+            Spacer(Modifier.height(8.dp))
+            Surface(shape = RoundedCornerShape(999.dp), color = Color(0xFF7B2B2D)) {
+                Text(
+                    "Book Table",
+                    color = Color.White,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MapBanner(onNearbyRestaurantsClick: () -> Unit) {
+    Image(
+        painter = painterResource(Res.drawable.home_map_banner),
+        contentDescription = "8 restaurants near you",
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(92.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable { onNearbyRestaurantsClick() },
+        contentScale = ContentScale.Crop
+    )
+}
+
+@Composable
+private fun TopRestaurantRow(
+    data: RestaurantListData,
+    onClick: () -> Unit,
+    textPrimary: Color,
+    textSecondary: Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFB18E69)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(data.name.take(1), color = Color.White, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(data.name, color = textPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+            Text(data.subtitle, color = textSecondary, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            Text("★ ${format1Decimal(data.rating)}", color = Color(0xFF8B6A57), fontSize = 9.sp)
+            Text(data.distance, color = textSecondary, fontSize = 9.sp)
+        }
+    }
+}
+
+@Composable
+private fun HomeBottomBar(
+    onHomeClick: () -> Unit,
+    onSearchClick: () -> Unit,
+    onCenterClick: () -> Unit,
+    onMapClick: () -> Unit,
+    onProfileClick: () -> Unit
+) {
+    Surface(color = Color(0xFFFAF8F6), shadowElevation = 6.dp) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Home,
+                contentDescription = "Home",
+                tint = Color(0xFFC24E56),
+                modifier = Modifier.size(20.dp).clickable { onHomeClick() }
+            )
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = "Search",
+                tint = Color(0xFFC3BAB5),
+                modifier = Modifier.size(20.dp).clickable { onSearchClick() }
+            )
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFB10F2E))
+                    .clickable { onCenterClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = "Add",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Icon(
+                imageVector = Icons.Outlined.Public,
+                contentDescription = "Map",
+                tint = Color(0xFFC3BAB5),
+                modifier = Modifier.size(20.dp).clickable { onMapClick() }
+            )
+            Icon(
+                imageVector = Icons.Outlined.PersonOutline,
+                contentDescription = "Profile",
+                tint = Color(0xFFC3BAB5),
+                modifier = Modifier.size(20.dp).clickable { onProfileClick() }
+            )
+        }
+    }
+}
+
+private data class DishCardData(
     val id: String,
     val name: String,
     val restaurant: String,
-    val rating: Float,
-    val calories: Int
+    val rating: Float
 )
 
-private data class TryDishInfo(
-    val name: String,
-    val restaurant: String,
-    val rating: Float,
-    val reviewCount: Int,
-    val calories: Int,
-    val isBestseller: Boolean
-)
-
-private data class RestaurantInfo(
+private data class RestaurantListData(
     val id: String,
     val name: String,
-    val cuisine: String,
+    val subtitle: String,
     val rating: Float,
-    val reviewCount: Int,
-    val googlePlaceId: String? = null,
-    val city: String = "",
-    val photoUrl: String? = null  // Google Places photo URL
+    val distance: String
 )
+
+private fun format1Decimal(value: Float): String {
+    val rounded = round(value * 10f) / 10f
+    return rounded.toString()
+}
