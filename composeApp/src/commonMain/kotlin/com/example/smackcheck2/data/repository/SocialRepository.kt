@@ -196,6 +196,26 @@ class SocialRepository {
         }
     }
 
+    suspend fun getTrendingFeed(
+        limit: Int = 20,
+        offset: Int = 0,
+        currentUserId: String? = null
+    ): Result<List<FeedItem>> {
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    order("likes_count", Order.DESCENDING)
+                    range(offset.toLong(), (offset + limit - 1).toLong())
+                }
+                .decodeList<RatingDto>()
+
+            val feedItems = mapRatingsToFeedItems(ratings, currentUserId)
+            Result.success(feedItems)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ==================== COMMENTS ====================
 
     suspend fun addComment(
@@ -483,12 +503,23 @@ class SocialRepository {
                 .associateBy { it.id ?: "" }
         } catch (_: Exception) { emptyMap() }
 
+        // Collect all possible restaurant IDs: from ratings AND from dishes
+        val dishRestaurantIds = dishesMap.values.map { it.restaurantId }.distinct()
+        val allRestaurantIds = (restaurantIds + dishRestaurantIds).distinct()
+        val validRestaurantIds = allRestaurantIds.filter { it.isNotBlank() }
+        println("SocialRepository: Fetching restaurants for IDs: $validRestaurantIds")
         val restaurantsMap = try {
-            postgrest["restaurants"]
-                .select { filter { isIn("id", restaurantIds) } }
-                .decodeList<RestaurantDto>()
-                .associateBy { it.id ?: "" }
-        } catch (_: Exception) { emptyMap() }
+            if (validRestaurantIds.isNotEmpty()) {
+                val results = postgrest["restaurants"]
+                    .select { filter { isIn("id", validRestaurantIds) } }
+                    .decodeList<RestaurantDto>()
+                println("SocialRepository: Batch restaurant query returned ${results.size} results: ${results.map { "${it.id}=${it.name}" }}")
+                results.associateBy { it.id ?: "" }
+            } else emptyMap()
+        } catch (e: Exception) {
+            println("SocialRepository: Failed to fetch restaurants: ${e.message}")
+            emptyMap()
+        }
 
         // Batch fetch all comments counts
         val commentsCountMap = try {
@@ -531,12 +562,37 @@ class SocialRepository {
             } else emptyMap()
         } catch (_: Exception) { emptyMap() }
 
+        // Fallback: fetch restaurant names individually for any missing from batch
+        val missingRestaurantIds = validRestaurantIds.filter { it !in restaurantsMap }
+        val fallbackRestaurantNames = mutableMapOf<String, String>()
+        for (missingId in missingRestaurantIds) {
+            try {
+                val dto = postgrest["restaurants"]
+                    .select {
+                        filter { eq("id", missingId) }
+                    }
+                    .decodeSingleOrNull<RestaurantDto>()
+                if (dto != null) {
+                    fallbackRestaurantNames[missingId] = dto.name
+                }
+            } catch (e: Exception) {
+                println("SocialRepository: Fallback restaurant fetch failed for $missingId: ${e.message}")
+            }
+        }
+
         // Now map ratings to feed items using the pre-fetched data (no more network calls)
         return ratings.mapNotNull { rating ->
             val ratingId = rating.id ?: return@mapNotNull null
             val profile = profilesMap[rating.userId]
             val dish = dishesMap[rating.dishId]
             val restaurant = restaurantsMap[rating.restaurantId]
+            // Try dish's restaurantId as fallback (dish may reference a different restaurant ID)
+            val dishRestaurant = if (restaurant == null && dish != null) restaurantsMap[dish.restaurantId] else null
+            val restaurantName = restaurant?.name
+                ?: dishRestaurant?.name
+                ?: dish?.restaurantName  // Use restaurant_name stored directly on the dish
+                ?: fallbackRestaurantNames[rating.restaurantId]
+                ?: "Unknown Restaurant"
             val additionalImages = additionalImagesMap[ratingId] ?: emptyList()
 
             val allImages = buildList {
@@ -552,7 +608,7 @@ class SocialRepository {
                 userName = profile?.name ?: "Unknown",
                 dishImageUrl = allImages.firstOrNull(),
                 dishName = dish?.name ?: "Unknown Dish",
-                restaurantName = restaurant?.name ?: "Unknown Restaurant",
+                restaurantName = restaurantName,
                 rating = rating.rating,
                 likesCount = rating.likesCount,
                 commentsCount = commentsCountMap[ratingId] ?: 0,

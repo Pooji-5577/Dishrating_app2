@@ -52,7 +52,7 @@ class ProfileSetupViewModel(
         }
 
         usernameCheckJob = viewModelScope.launch {
-            delay(500)
+            delay(300)
             _uiState.update { it.copy(isCheckingUsername = true, usernameError = null) }
             val result = authRepository.checkUsernameAvailable(username)
             result.fold(

@@ -247,7 +247,7 @@ fun DishRatingScreen(
                                 selectedRestaurant = restaurant
                                 restaurantSearchQuery = restaurant.name
                                 showRestaurantDropdown = false
-                                viewModel.setRestaurantId(restaurant.id)
+                                viewModel.setRestaurant(restaurant)
                             }
                         )
                     }

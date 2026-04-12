@@ -3,6 +3,7 @@ package com.example.smackcheck2.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.SocialMapRepository
+import com.example.smackcheck2.model.MapMode
 import com.example.smackcheck2.model.MapUserMarker
 import com.example.smackcheck2.model.SocialMapUiState
 import com.example.smackcheck2.platform.LocationOperationResult
@@ -39,6 +40,7 @@ class SocialMapViewModel(
     init {
         loadCurrentUserProfile()
         loadNearbyUsers() // Load all world posts immediately, no GPS needed
+        loadMyRatings()
     }
 
     /**
@@ -173,10 +175,47 @@ class SocialMapViewModel(
     }
 
     /**
+     * Load the current user's own dish posts for MY RATINGS mode.
+     */
+    fun loadMyRatings() {
+        viewModelScope.launch {
+            repository.getMyRatingPosts()
+                .onSuccess { markers ->
+                    _uiState.update { it.copy(myRatingMarkers = markers) }
+                }
+                .onFailure { error ->
+                    println("SocialMapViewModel: loadMyRatings failed: ${error.message}")
+                }
+        }
+    }
+
+    /**
+     * Switch between NEARBY and MY_RATINGS map modes.
+     */
+    fun setMapMode(mode: MapMode) {
+        _uiState.update { it.copy(mapMode = mode) }
+        if (mode == MapMode.MY_RATINGS) {
+            loadMyRatings()
+        } else {
+            loadNearbyUsers()
+        }
+    }
+
+    /**
+     * Re-center the map on the user's current location.
+     */
+    fun recenter() {
+        viewModelScope.launch {
+            requestCurrentLocation()
+            _uiState.update { it.copy(recenterTrigger = it.recenterTrigger + 1) }
+        }
+    }
+
+    /**
      * Manually refresh nearby users
      */
     fun refresh() {
-        loadNearbyUsers()
+        if (_uiState.value.mapMode == MapMode.MY_RATINGS) loadMyRatings() else loadNearbyUsers()
     }
 
     /**

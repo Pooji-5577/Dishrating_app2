@@ -128,6 +128,7 @@ data class SearchUiState(
 data class RestaurantDetailUiState(
     val restaurant: Restaurant? = null,
     val dishes: List<Dish> = emptyList(),
+    val topDishes: List<Dish> = emptyList(),
     val reviews: List<Review> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null
@@ -207,7 +208,10 @@ sealed class PermissionState {
  */
 data class EditProfileUiState(
     val name: String = "",
+    val username: String = "",
     val bio: String = "",
+    val location: String = "",
+    val email: String = "",
     val profilePhotoUrl: String? = null,
     val isUploadingPhoto: Boolean = false,
     val isSaving: Boolean = false,
@@ -259,13 +263,15 @@ data class SocialFeedUiState(
     val isLoadingMore: Boolean = false,
     val hasMoreItems: Boolean = true,
     val currentOffset: Int = 0,
-    val filter: FeedFilter = FeedFilter.ALL,
+    val filter: FeedFilter = FeedFilter.FOLLOWING,
     val errorMessage: String? = null,
     val scrollToRatingId: String? = null,
-    val scrollToIndex: Int? = null
+    val scrollToIndex: Int? = null,
+    val storyUsers: List<UserSummary> = emptyList(),
+    val topDishes: List<FeedItem> = emptyList()
 )
 
-enum class FeedFilter { ALL, FOLLOWING, NEARBY }
+enum class FeedFilter { FOLLOWING, TRENDING, NEARBY, MY_RATINGS }
 
 /**
  * Comments UI state

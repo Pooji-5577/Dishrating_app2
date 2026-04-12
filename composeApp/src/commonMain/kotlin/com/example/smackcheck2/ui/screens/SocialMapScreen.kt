@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,6 +63,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -131,6 +134,11 @@ fun SocialMapScreen(
     Scaffold(
         containerColor = themeColors.Background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
+        bottomBar = {
+            com.example.smackcheck2.ui.components.BottomNavBar(
+                selectedItem = com.example.smackcheck2.ui.components.NavItem.MAP
+            )
+        },
         topBar = {
             TopAppBar(
                 title = {
@@ -301,9 +309,10 @@ fun SocialMapScreen(
                     val currentLat = uiState.currentLatitude ?: 40.7128
                     val currentLng = uiState.currentLongitude ?: -74.0060
 
-                    // Convert MapUserMarker to MapMarker for the platform map
-                    // Each post is its own marker, keyed by rating id, positioned at restaurant location
-                    val markers = uiState.nearbyUsers.map { user ->
+                    // Derive marker list from current mode
+                    val activeMarkerSource = if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
+                        uiState.myRatingMarkers else uiState.nearbyUsers
+                    val markers = activeMarkerSource.map { user ->
                         MapMarker(
                             id = user.latestRatingId ?: user.userId,
                             latitude = user.latitude,
@@ -315,19 +324,22 @@ fun SocialMapScreen(
                         )
                     }
 
-                    PlatformMapView(
-                        latitude = currentLat,
-                        longitude = currentLng,
-                        zoom = 14f,
-                        markers = markers,
-                        onMarkerClick = { markerId ->
-                            val user = uiState.nearbyUsers.find {
-                                it.latestRatingId == markerId || it.userId == markerId
-                            }
-                            viewModel.selectUser(user)
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    // Use recenterTrigger as key to force map re-center when Locate Me is tapped
+                    key(uiState.recenterTrigger) {
+                        PlatformMapView(
+                            latitude = currentLat,
+                            longitude = currentLng,
+                            zoom = 14f,
+                            markers = markers,
+                            onMarkerClick = { markerId ->
+                                val user = activeMarkerSource.find {
+                                    it.latestRatingId == markerId || it.userId == markerId
+                                }
+                                viewModel.selectUser(user)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
 
                     // Empty state overlay — shown when there are no nearby posts
                     if (markers.isEmpty() && !uiState.isLoading) {
@@ -398,20 +410,150 @@ fun SocialMapScreen(
                         }
                     }
                     
-                    // My location FAB
-                    FloatingActionButton(
-                        onClick = { viewModel.requestCurrentLocation() },
+                    // List View state
+                    var showListView by remember { mutableStateOf(false) }
+
+                    // Floating controls — top-right: List View (white pill) + Locate Me (red)
+                    Column(
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(16.dp),
-                        containerColor = themeColors.Primary,
-                        elevation = FloatingActionButtonDefaults.elevation(6.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(top = 16.dp, end = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalAlignment = Alignment.End
                     ) {
-                        Icon(
-                            imageVector = Icons.Filled.MyLocation,
-                            contentDescription = "My Location",
-                            tint = Color.White
-                        )
+                        // List View white pill button
+                        Surface(
+                            onClick = { showListView = true },
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color.White,
+                            shadowElevation = 4.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.Star, null, tint = Color(0xFF3B1011), modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("List View", color = Color(0xFF3B1011), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        // Locate Me red button — requests GPS and re-centers map
+                        Surface(
+                            onClick = { viewModel.recenter() },
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFF9B2335),
+                            shadowElevation = 4.dp
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Filled.MyLocation, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Locate Me", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // MY RATINGS / NEARBY toggle pill — wired to ViewModel
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 72.dp)
+                            .shadow(4.dp, RoundedCornerShape(30.dp))
+                            .background(Color.White, RoundedCornerShape(30.dp))
+                            .padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        listOf(
+                            "MY RATINGS" to com.example.smackcheck2.model.MapMode.MY_RATINGS,
+                            "NEARBY" to com.example.smackcheck2.model.MapMode.NEARBY
+                        ).forEach { (label, mode) ->
+                            val isActive = uiState.mapMode == mode
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(26.dp))
+                                    .background(if (isActive) Color(0xFF9B2335) else Color.Transparent)
+                                    .clickable { viewModel.setMapMode(mode) }
+                                    .padding(horizontal = 22.dp, vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    label,
+                                    color = if (isActive) Color.White else Color(0xFF767777),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.5.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // List View bottom sheet
+                    if (showListView) {
+                        ModalBottomSheet(
+                            onDismissRequest = { showListView = false },
+                            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
+                            containerColor = Color.White
+                        ) {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
+                                            "My Ratings (${markers.size})"
+                                        else "Nearby Dishes (${markers.size})",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2D2F2F)
+                                    )
+                                    Icon(
+                                        Icons.Filled.Close,
+                                        contentDescription = "Close",
+                                        modifier = Modifier
+                                            .size(22.dp)
+                                            .clickable { showListView = false },
+                                        tint = Color(0xFF767777)
+                                    )
+                                }
+                                androidx.compose.material3.HorizontalDivider(color = Color(0xFFE7E8E8))
+                                if (markers.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier.fillMaxWidth().padding(48.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "No dish posts found.",
+                                            color = Color(0xFF767777), fontSize = 14.sp
+                                        )
+                                    }
+                                } else {
+                                    androidx.compose.foundation.lazy.LazyColumn(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        contentPadding = PaddingValues(bottom = 32.dp)
+                                    ) {
+                                        items(activeMarkerSource, key = { it.latestRatingId ?: it.userId }) { post ->
+                                            MapListItem(
+                                                post = post,
+                                                onClick = {
+                                                    viewModel.selectUser(post)
+                                                    showListView = false
+                                                }
+                                            )
+                                            androidx.compose.material3.HorizontalDivider(
+                                                color = Color(0xFFF0F0F0),
+                                                modifier = Modifier.padding(horizontal = 20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Empty state overlay when no dish posts
@@ -861,5 +1003,89 @@ private fun formatTimeAgo(timestamp: Long): String {
         hours > 0 -> "${hours}h ago"
         minutes > 0 -> "${minutes}m ago"
         else -> "Just now"
+    }
+}
+
+@Composable
+private fun MapListItem(
+    post: MapUserMarker,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Dish thumbnail
+        Box(
+            modifier = Modifier
+                .size(60.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFFF5EDE3)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!post.latestDishImage.isNullOrBlank()) {
+                NetworkImage(
+                    imageUrl = post.latestDishImage,
+                    contentDescription = post.latestDishName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    Icons.Filled.Restaurant,
+                    contentDescription = null,
+                    tint = Color(0xFF9B2335).copy(alpha = 0.5f),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = post.latestDishName ?: "Unknown Dish",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = Color(0xFF2D2F2F),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = post.latestRestaurantName ?: post.username,
+                fontSize = 13.sp,
+                color = Color(0xFF767777),
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+            )
+            if (post.latestPostTime != null && post.latestPostTime > 0L) {
+                Text(
+                    text = formatTimeAgo(post.latestPostTime),
+                    fontSize = 11.sp,
+                    color = Color(0xFFAAAAAA)
+                )
+            }
+        }
+        // Star rating badge
+        if (post.latestRating != null && post.latestRating > 0) {
+            Box(
+                modifier = Modifier
+                    .background(Color(0xFF9B2335), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 10.dp, vertical = 4.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Star, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                    Spacer(Modifier.width(3.dp))
+                    Text(
+                        text = "%.1f".format(post.latestRating),
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
     }
 }

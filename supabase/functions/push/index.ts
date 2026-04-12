@@ -203,6 +203,7 @@ Deno.serve(async (req) => {
       JSON.stringify({
         success: result.success,
         ticket: result.ticket,
+        error: result.error,
         user_id: record.user_id,
         event_type: record.event_type,
         token_type: tokenType,

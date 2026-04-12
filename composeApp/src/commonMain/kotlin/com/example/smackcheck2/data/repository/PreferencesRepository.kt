@@ -50,6 +50,31 @@ class PreferencesRepository(private val preferencesManager: PreferencesManager) 
     suspend fun isDay1RetentionTracked(): Boolean = preferencesManager.isDay1RetentionTracked()
     suspend fun setDay1RetentionTracked() = preferencesManager.setDay1RetentionTracked()
 
+    suspend fun getBookmarks(): Set<String> {
+        return try {
+            preferencesManager.getBookmarks()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    suspend fun toggleBookmark(ratingId: String): Boolean {
+        val current = getBookmarks().toMutableSet()
+        val isNowBookmarked = if (current.contains(ratingId)) {
+            current.remove(ratingId)
+            false
+        } else {
+            current.add(ratingId)
+            true
+        }
+        preferencesManager.saveBookmarks(current)
+        return isNowBookmarked
+    }
+
+    suspend fun isBookmarked(ratingId: String): Boolean {
+        return getBookmarks().contains(ratingId)
+    }
+
     suspend fun clearAllSettings(): Result<Unit> {
         return try {
             preferencesManager.clearAll()

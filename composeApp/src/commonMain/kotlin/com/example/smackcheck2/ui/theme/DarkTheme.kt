@@ -42,4 +42,9 @@ object DarkThemeColors {
     
     // Divider
     val Divider = Color(0xFF3A3A3A)
+
+    // Feed-specific Figma colors
+    val PrimaryDark = Color(0xFF8B4445)
+    val PrimaryRed = Color(0xFFE04050)
+    val MaroonAccent = Color(0xFFCC7A7B)
 }

@@ -111,6 +111,8 @@ data class DishDto(
     val imageUrl: String? = null,
     @SerialName("restaurant_id")
     val restaurantId: String,
+    @SerialName("restaurant_name")
+    val restaurantName: String? = null,
     @SerialName("created_at")
     val createdAt: String? = null
 )

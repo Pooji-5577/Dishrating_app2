@@ -54,21 +54,30 @@ class AuthRepository {
 
     suspend fun checkUsernameAvailable(username: String): Result<Boolean> {
         return try {
-            val response = client.functions.invoke(
-                function = "check-username",
-                body = UsernameCheckRequest(username)
-            )
-            val responseText = response.body<String>()
-            val parsed = json.decodeFromString<UsernameCheckResponse>(responseText)
-            if (parsed.available) {
-                Result.success(true)
+            // Direct PostgREST query — much faster than edge function (no cold start)
+            val existing = client.postgrest["profiles"]
+                .select {
+                    filter { ilike("username", username) }
+                }
+                .decodeSingleOrNull<UsernameCheckRow>()
+
+            if (existing != null) {
+                Result.failure(Exception("Username '$username' is already taken."))
             } else {
-                Result.failure(Exception(parsed.error ?: "Username is not available."))
+                Result.success(true)
             }
         } catch (e: Exception) {
-            Result.failure(Exception("Could not check username availability. Please try again."))
+            // decodeSingleOrNull throws if multiple rows — treat as taken
+            if (e.message?.contains("multiple") == true || e.message?.contains("expected single") == true) {
+                Result.failure(Exception("Username '$username' is already taken."))
+            } else {
+                Result.failure(Exception("Could not check username availability. Please try again."))
+            }
         }
     }
+
+    @Serializable
+    private data class UsernameCheckRow(val id: String = "")
 
     private suspend fun upsertProfile(profile: ProfileDto): ProfileDto {
         try {

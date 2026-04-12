@@ -224,6 +224,46 @@ class SocialMapRepository {
         }
     }
 
+    /**
+     * Get the current user's own dish posts for the "My Ratings" map mode.
+     */
+    suspend fun getMyRatingPosts(limit: Int = 200): Result<List<MapUserMarker>> {
+        return try {
+            val currentUserId = client.auth.currentUserOrNull()?.id
+                ?: return Result.failure(Exception("Not signed in"))
+
+            val result = postgrest.rpc(
+                function = "get_all_dish_posts",
+                parameters = AllDishPostsParams(p_limit = limit)
+            ).decodeList<NearbyDishPostDto>()
+
+            val markers = result
+                .filter { it.user_id == currentUserId }
+                .map { dto ->
+                    MapUserMarker(
+                        userId = dto.user_id,
+                        username = dto.username ?: "Unknown",
+                        avatarUrl = dto.avatar_url,
+                        latitude = dto.latitude ?: 0.0,
+                        longitude = dto.longitude ?: 0.0,
+                        latestRatingId = dto.rating_id,
+                        latestDishId = dto.dish_id,
+                        latestDishName = dto.dish_name,
+                        latestDishImage = dto.dish_image,
+                        latestRating = dto.rating,
+                        latestRestaurantId = dto.restaurant_id,
+                        latestRestaurantName = dto.restaurant_name,
+                        latestPostTime = dto.posted_at?.let { parseTimestamp(it) },
+                        isCurrentUser = true
+                    )
+                }
+            Result.success(markers)
+        } catch (e: Exception) {
+            println("SocialMapRepository: Error fetching my rating posts: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
     private fun parseTimestamp(timestamp: String): Long {
         return try {
             kotlinx.datetime.Instant.parse(timestamp).toEpochMilliseconds()
