@@ -72,6 +72,8 @@ data class ProfileSetupUiState(
  */
 data class ProfileUiState(
     val user: User? = null,
+    val userRatings: List<FeedItem> = emptyList(),
+    val isRatingsLoading: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
