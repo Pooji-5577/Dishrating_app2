@@ -1,6 +1,5 @@
 package com.example.smackcheck2.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,98 +12,63 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.NotificationsNone
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Dish
+import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.model.Review
-import com.example.smackcheck2.ui.components.RestaurantHeroSection
-import com.example.smackcheck2.ui.components.StarRatingDisplay
-import com.example.smackcheck2.ui.components.TopRatedDishCard
+import com.example.smackcheck2.ui.components.BottomNavBar
 import com.example.smackcheck2.ui.components.LoadingState
-import com.example.smackcheck2.ui.theme.CardShape
-import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.ui.components.NavItem
+import com.example.smackcheck2.util.formatOneDecimal
 import com.example.smackcheck2.util.formatRelativeTime
-import com.example.smackcheck2.viewmodel.PhotoState
 import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import kotlin.math.roundToInt
 
-private val detailNavItems = listOf(
-    NavItem(
-        "Home",
-        { Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.Home, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    NavItem(
-        "Map",
-        { Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    NavItem(
-        "Rate",
-        { Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    NavItem(
-        "Feed",
-        { Icon(Icons.Filled.People, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    NavItem(
-        "Profile",
-        { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    )
-)
+private val DetailBackground = Color(0xFFF6F6F6)
+private val DetailPrimary = Color(0xFF642223)
+private val DetailPrimaryLight = Color(0xFFA95858)
+private val DetailText = Color(0xFF151515)
+private val DetailMuted = Color(0xFF6F6F6F)
 
 @Composable
 fun RestaurantDetailScreen(
@@ -115,49 +79,41 @@ fun RestaurantDetailScreen(
     onNavItemClick: (Int) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val photoStates by photoViewModel?.photoStates?.collectAsState()
-        ?: remember { androidx.compose.runtime.mutableStateOf(emptyMap<String, PhotoState>()) }
-    val colors = appColors()
 
     LaunchedEffect(restaurantId) {
         viewModel.loadRestaurant(restaurantId)
     }
 
     when {
-        uiState.isLoading -> {
-            LoadingState(message = "Loading restaurant...")
-        }
+        uiState.isLoading -> LoadingState(message = "Loading restaurant...")
         uiState.errorMessage != null -> {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(DetailBackground),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Error,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = colors.Error
-                    )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = uiState.errorMessage ?: "An error occurred",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colors.TextPrimary
+                        text = uiState.errorMessage ?: "Unable to load restaurant",
+                        color = DetailText,
+                        style = MaterialTheme.typography.bodyLarge
                     )
-                    Button(onClick = { viewModel.retry(restaurantId) }) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { viewModel.retry(restaurantId) },
+                        colors = ButtonDefaults.buttonColors(containerColor = DetailPrimary)
+                    ) {
                         Text("Retry")
                     }
                 }
             }
         }
+
         uiState.restaurant != null -> {
             val restaurant = uiState.restaurant!!
-            val listState = rememberLazyListState()
+            val heroImage = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
 
-            // Trigger Google Places full photo load
             LaunchedEffect(restaurant.id) {
                 photoViewModel?.loadFullPhotos(
                     restaurantId = restaurant.id,
@@ -167,226 +123,103 @@ fun RestaurantDetailScreen(
                 )
             }
 
-            // Collapsing toolbar: compute header alpha based on scroll
-            val headerAlpha by remember {
-                derivedStateOf {
-                    val firstItem = listState.firstVisibleItemIndex
-                    if (firstItem > 0) 1f
-                    else {
-                        val offset = listState.firstVisibleItemScrollOffset.toFloat()
-                        (offset / 300f).coerceIn(0f, 1f)
-                    }
-                }
-            }
-            val animatedAlpha by animateFloatAsState(targetValue = headerAlpha)
-
             Scaffold(
-                containerColor = colors.Background,
+                containerColor = DetailBackground,
+                topBar = {
+                    DetailTopBar(onNavigateBack = onNavigateBack)
+                },
                 bottomBar = {
-                    NavigationBar(
-                        containerColor = colors.Surface,
-                        tonalElevation = 0.dp
-                    ) {
-                        detailNavItems.forEachIndexed { index, item ->
-                            val isSelected = index == 1 // Map tab active
-                            NavigationBarItem(
-                                selected = isSelected,
-                                onClick = { onNavItemClick(index) },
-                                icon = {
-                                    if (isSelected) item.selectedIcon() else item.unselectedIcon()
-                                },
-                                label = {
-                                    Text(
-                                        text = item.label,
-                                        fontSize = 11.sp
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = colors.Primary,
-                                    selectedTextColor = colors.Primary,
-                                    unselectedIconColor = colors.TextSecondary,
-                                    unselectedTextColor = colors.TextSecondary,
-                                    indicatorColor = colors.Primary.copy(alpha = 0.1f)
-                                )
-                            )
-                        }
-                    }
+                    BottomNavBar(
+                        selectedItem = NavItem.MAP,
+                        onHomeClick = { onNavItemClick(0) },
+                        onMapClick = { onNavItemClick(1) },
+                        onCameraClick = { onNavItemClick(2) },
+                        onExploreClick = { onNavItemClick(3) },
+                        onProfileClick = { onNavItemClick(4) },
+                        modifier = Modifier.background(DetailBackground)
+                    )
                 }
             ) { paddingValues ->
-                Box(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues)
+                        .background(DetailBackground),
+                    contentPadding = PaddingValues(bottom = 12.dp)
                 ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        // Hero section
-                        item(key = "hero") {
-                            RestaurantHeroSection(
-                                restaurant = restaurant
-                            )
-                        }
+                    item("hero") {
+                        RestaurantHero(
+                            restaurant = restaurant,
+                            imageUrl = heroImage
+                        )
+                    }
 
-                        // Top Rated Dishes section
-                        if (uiState.topDishes.isNotEmpty()) {
-                            item(key = "top_dishes_header") {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Top Rated Dishes",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.TextPrimary
-                                    )
-                                    Text(
-                                        text = "See All",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colors.Primary,
-                                        fontWeight = FontWeight.Medium
-                                    )
-                                }
-                            }
+                    item("chips") {
+                        DetailChipRow(restaurant = restaurant)
+                    }
 
-                            item(key = "top_dishes_row") {
-                                LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(uiState.topDishes, key = { it.id }) { dish ->
-                                        TopRatedDishCard(
-                                            dish = dish,
-                                            isBookmarked = false,
-                                            onBookmarkClick = { /* TODO */ },
-                                            onClick = { /* TODO: navigate to dish detail */ }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // All Dishes section (if there are dishes not in top)
-                        if (uiState.dishes.isNotEmpty()) {
-                            item(key = "menu_header") {
-                                Text(
-                                    text = "Menu",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.TextPrimary,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                                )
-                            }
-
-                            items(uiState.dishes, key = { "dish_${it.id}" }) { dish ->
-                                DishListItem(
-                                    dish = dish,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-
-                        // Recent Reviews section
-                        item(key = "reviews_header") {
+                    item("top-dishes-title") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Text(
-                                text = "Recent Reviews",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.TextPrimary,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                text = "Top Rated Dishes",
+                                color = DetailText,
+                                fontWeight = FontWeight.ExtraBold,
+                                fontSize = 20.sp
                             )
-                        }
-
-                        if (uiState.reviews.isEmpty()) {
-                            item(key = "no_reviews") {
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    shape = CardShape,
-                                    colors = CardDefaults.cardColors(containerColor = colors.SurfaceVariant)
-                                ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(24.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Restaurant,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(40.dp),
-                                            tint = colors.TextTertiary
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "No reviews yet. Be the first!",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = colors.TextSecondary
-                                        )
-                                    }
-                                }
-                            }
-                        } else {
-                            items(uiState.reviews.take(5), key = { "review_${it.id}" }) { review ->
-                                DetailReviewCard(
-                                    review = review,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-
-                        item(key = "bottom_spacer") {
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "VIEW ALL",
+                                color = DetailPrimary,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
                         }
                     }
 
-                    // Collapsing top bar overlay
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .height(56.dp)
-                            .graphicsLayer { alpha = 1f }
-                    ) {
-                        // Filled background that fades in
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer { alpha = animatedAlpha }
-                                .background(colors.Background)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            IconButton(onClick = onNavigateBack) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White
-                                )
+                    if (uiState.topDishes.isNotEmpty()) {
+                        item("top-dishes-list") {
+                            LazyRow(
+                                contentPadding = PaddingValues(horizontal = 24.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(uiState.topDishes, key = { it.id }) { dish ->
+                                    FeaturedDishCard(
+                                        dish = dish,
+                                        estimatedPrice = uiState.reviews.firstOrNull { it.dishId == dish.id }?.price
+                                    )
+                                }
                             }
+                        }
+                    }
 
-                            // Restaurant name fades in as header fills
+                    item("recent-title") {
+                        Text(
+                            text = "Recent Reviews",
+                            color = DetailText,
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 18.sp,
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 20.dp)
+                        )
+                    }
+
+                    if (uiState.reviews.isEmpty()) {
+                        item("no-reviews") {
                             Text(
-                                text = restaurant.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .graphicsLayer { alpha = animatedAlpha }
+                                text = "No reviews yet.",
+                                color = DetailMuted,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                        }
+                    } else {
+                        items(uiState.reviews.take(4), key = { it.id }) { review ->
+                            DetailReviewRow(
+                                review = review,
+                                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                             )
                         }
                     }
@@ -396,185 +229,380 @@ fun RestaurantDetailScreen(
     }
 }
 
-/**
- * Redesigned review card for restaurant detail — italic quoted text style
- */
 @Composable
-private fun DetailReviewCard(
+private fun DetailTopBar(onNavigateBack: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.White)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = onNavigateBack) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back",
+                tint = DetailPrimary
+            )
+        }
+        Text(
+            text = "SmackCheck",
+            color = DetailText,
+            fontSize = 22.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = {}) {
+            Icon(
+                imageVector = Icons.Filled.NotificationsNone,
+                contentDescription = "Notifications",
+                tint = DetailText
+            )
+        }
+        Box(
+            modifier = Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF2D2D2D)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Person,
+                contentDescription = "Profile",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun RestaurantHero(
+    restaurant: Restaurant,
+    imageUrl: String?
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(420.dp)
+    ) {
+        if (imageUrl != null) {
+            KamelImage(
+                resource = asyncPainterResource(imageUrl),
+                contentDescription = restaurant.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFFE9E4E0)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Restaurant,
+                    contentDescription = null,
+                    tint = Color(0xFF9B9B9B),
+                    modifier = Modifier.size(54.dp)
+                )
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.30f),
+                            Color.Transparent,
+                            DetailBackground
+                        )
+                    )
+                )
+        )
+
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(horizontal = 24.dp, vertical = 20.dp)
+        ) {
+            if (restaurant.averageRating >= 4.5f) {
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(DetailPrimary)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(13.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${formatOneDecimal(restaurant.averageRating)} Premium Choice",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            Text(
+                text = restaurant.name,
+                fontFamily = FontFamily.Serif,
+                color = Color.Black,
+                fontWeight = FontWeight.Bold,
+                fontSize = 28.sp
+            )
+
+            if (!restaurant.tagline.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = restaurant.tagline,
+                    color = Color.Black.copy(alpha = 0.88f),
+                    fontStyle = FontStyle.Italic,
+                    fontSize = 14.sp,
+                    lineHeight = 24.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailChipRow(restaurant: Restaurant) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (restaurant.cuisine.isNotBlank()) {
+                InfoChip(text = restaurant.cuisine)
+            }
+            if (restaurant.isOpenNow == true) {
+                InfoChip(text = "Open Now", showDot = true)
+            }
+        }
+        if (restaurant.city.isNotBlank()) {
+            InfoChip(text = "${restaurant.city} • Nearby", leadingPin = true)
+        }
+    }
+}
+
+@Composable
+private fun InfoChip(
+    text: String,
+    showDot: Boolean = false,
+    leadingPin: Boolean = false
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(DetailPrimaryLight)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (showDot || leadingPin) {
+            Text(
+                text = if (leadingPin) "◦" else "•",
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = 15.sp
+        )
+    }
+}
+
+@Composable
+private fun FeaturedDishCard(
+    dish: Dish,
+    estimatedPrice: Double?
+) {
+    Card(
+        modifier = Modifier.width(230.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(Color(0xFFDFDFDF))
+        ) {
+            if (dish.imageUrl != null) {
+                KamelImage(
+                    resource = asyncPainterResource(dish.imageUrl),
+                    contentDescription = dish.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Restaurant,
+                    contentDescription = null,
+                    tint = Color(0xFF9B9B9B),
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(46.dp)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(DetailPrimary),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = null,
+                    tint = Color.White
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(10.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFFF1E8E8))
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Star,
+                    contentDescription = null,
+                    tint = DetailPrimary,
+                    modifier = Modifier.size(12.dp)
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                    text = formatOneDecimal(dish.rating.toDouble()),
+                    color = DetailPrimary,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = dish.name,
+            color = DetailPrimary,
+            fontFamily = FontFamily.Serif,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 18.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            text = formatPrice(estimatedPrice),
+            color = DetailText,
+            fontWeight = FontWeight.Bold,
+            fontSize = 20.sp
+        )
+    }
+}
+
+@Composable
+private fun DetailReviewRow(
     review: Review,
     modifier: Modifier = Modifier
 ) {
-    val colors = appColors()
-
-    Card(
+    Row(
         modifier = modifier.fillMaxWidth(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        verticalAlignment = Alignment.Top
     ) {
-        Column(
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
+                .size(52.dp)
+                .clip(CircleShape)
+                .background(Color(0xFFE0E0E0)),
+            contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(colors.Primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (review.userProfileUrl != null) {
-                        KamelImage(
-                            resource = asyncPainterResource(review.userProfileUrl!!),
-                            contentDescription = review.userName,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            onFailure = {
-                                Text(
-                                    text = review.userName.firstOrNull()?.uppercase() ?: "?",
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.Primary,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        )
-                    } else {
-                        Text(
-                            text = review.userName.firstOrNull()?.uppercase() ?: "?",
-                            fontWeight = FontWeight.Bold,
-                            color = colors.Primary,
-                            fontSize = 14.sp
-                        )
-                    }
-                }
+            if (review.userProfileUrl != null) {
+                KamelImage(
+                    resource = asyncPainterResource(review.userProfileUrl),
+                    contentDescription = review.userName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = review.userName.firstOrNull()?.uppercase() ?: "?",
+                    color = DetailPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
 
-                Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = review.userName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.TextPrimary
-                    )
-                    Text(
-                        text = formatRelativeTime(review.createdAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.TextTertiary
-                    )
-                }
-
-                StarRatingDisplay(
-                    rating = review.rating,
-                    starSize = 14.dp
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = review.userName,
+                    color = DetailText,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp
+                )
+                Text(
+                    text = formatRelativeTime(review.createdAt),
+                    color = DetailMuted,
+                    fontSize = 13.sp
                 )
             }
 
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                repeat(5) { index ->
+                    Icon(
+                        imageVector = Icons.Filled.Star,
+                        contentDescription = null,
+                        tint = if (index < review.rating.roundToInt()) DetailPrimary else Color(0xFFD0C7C7),
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+
             if (review.comment.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "\u201C${review.comment}\u201D",
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = "\"${review.comment}\"",
+                    color = Color(0xFF2D2D2D),
+                    fontFamily = FontFamily.Serif,
                     fontStyle = FontStyle.Italic,
-                    color = colors.TextSecondary,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis
+                    fontSize = 15.sp,
+                    lineHeight = 26.sp,
+                    modifier = Modifier.padding(top = 2.dp)
                 )
             }
         }
     }
 }
 
-/**
- * Simple dish list item for the full menu section
- */
-@Composable
-private fun DishListItem(
-    dish: Dish,
-    modifier: Modifier = Modifier
-) {
-    val colors = appColors()
-
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Dish image
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(colors.SurfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!dish.imageUrl.isNullOrEmpty()) {
-                    KamelImage(
-                        resource = asyncPainterResource(dish.imageUrl!!),
-                        contentDescription = dish.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onFailure = {
-                            Icon(
-                                imageVector = Icons.Filled.Restaurant,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = colors.TextTertiary
-                            )
-                        }
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Filled.Restaurant,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = colors.TextTertiary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = dish.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.TextPrimary
-                )
-                if (dish.rating > 0f) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = com.example.smackcheck2.ui.theme.StarColor
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = String.format("%.1f", dish.rating),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.TextSecondary
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "No ratings yet",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.TextTertiary
-                    )
-                }
-            }
-        }
-    }
+private fun formatPrice(price: Double?): String {
+    if (price == null || price <= 0.0) return "Price unavailable"
+    val rounded = price.roundToInt()
+    return "$$rounded"
 }

@@ -110,6 +110,25 @@ class DatabaseRepository {
     }
 
     /**
+     * Get restaurant by linked Google Place ID
+     */
+    suspend fun getRestaurantByGooglePlaceId(placeId: String): Result<Restaurant?> {
+        return try {
+            val restaurant = postgrest["restaurants"]
+                .select {
+                    filter {
+                        eq("google_place_id", placeId)
+                    }
+                }
+                .decodeSingleOrNull<RestaurantDto>()
+                ?.toRestaurant()
+            Result.success(restaurant)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Ensure a restaurant exists in the DB (e.g. when selected from Google Places).
      * If the restaurant ID is not found, inserts it. Optionally adds a dish photo as the restaurant image.
      */

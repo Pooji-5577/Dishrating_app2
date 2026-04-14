@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.theme.StarColor
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.formatOneDecimal
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
@@ -146,7 +147,7 @@ fun RestaurantHeroSection(
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
-                    text = String.format("%.1f", restaurant.averageRating),
+                    text = formatOneDecimal(restaurant.averageRating),
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
                     color = Color.White

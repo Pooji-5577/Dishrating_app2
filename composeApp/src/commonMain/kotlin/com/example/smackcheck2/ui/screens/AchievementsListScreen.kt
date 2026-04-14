@@ -62,7 +62,7 @@ import com.example.smackcheck2.gamification.GamificationViewModel
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
 
 // ── Brand palette (same as DarkProfileScreen) ────────────────────────────────
-private val ABg         = Color(0xFFF5EDE3)
+private val ABg         = Color(0xFFF6F6F6)
 private val ACardWhite  = Color(0xFFFFFFFF)
 private val ADeepMaroon = Color(0xFF3B1011)
 private val AWarmMaroon = Color(0xFF642223)
@@ -144,6 +144,11 @@ fun AchievementsListScreen(
     val streak  = progressState.streakCount.coerceAtLeast(gameState.streakDays)
     val xp      = progressState.currentXp.coerceAtLeast(gameState.totalXp)
 
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ABg)
+    ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -394,6 +399,7 @@ fun AchievementsListScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
+    }
     }
 }
 

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.ui.theme.StarColor
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.formatOneDecimal
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
@@ -139,7 +140,7 @@ fun TopRatedDishCard(
                             )
                             Spacer(modifier = Modifier.width(3.dp))
                             Text(
-                                text = String.format("%.1f", dish.rating),
+                                text = formatOneDecimal(dish.rating.toDouble()),
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White

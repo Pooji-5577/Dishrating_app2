@@ -29,6 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -83,12 +85,13 @@ import com.example.smackcheck2.model.User
 import com.example.smackcheck2.ui.components.ReviewPostCard
 import com.example.smackcheck2.ui.theme.LocalThemeState
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.formatOneDecimal
 import com.example.smackcheck2.viewmodel.ProfileViewModel
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
 // ── Brand palette ────────────────────────────────────────────────────────────
-private val ProfileBg       = Color(0xFFF5EDE3)
+private val ProfileBg       = Color(0xFFF6F6F6)
 private val CardWhite       = Color(0xFFFFFFFF)
 private val DeepMaroon      = Color(0xFF3B1011)
 private val WarmMaroon      = Color(0xFF642223)
@@ -97,6 +100,7 @@ private val LightBlush      = Color(0xFFFDE8E8)
 private val MutedGrey       = Color(0xFF767777)
 private val DividerGrey     = Color(0xFFEAE0D8)
 private val StreakRed       = Color(0xFF9B2335)
+private const val DefaultBioText = "Just getting started on my food journey.\nTrying every dish I can find — one plate at a time."
 
 // ── Level title mapping ───────────────────────────────────────────────────────
 private fun levelTitle(level: Int): String = when {
@@ -130,7 +134,9 @@ fun DarkProfileScreen(
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToAccount: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
-    onNavigateToProgress: () -> Unit = {}
+    onNavigateToProgress: () -> Unit = {},
+    onNavigateToHelpFaq: () -> Unit = {},
+    onNavigateToContactSupport: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val themeState = LocalThemeState.current
@@ -261,37 +267,59 @@ fun DarkProfileScreen(
                 // Title badge
                 Box(
                     modifier = Modifier
-                        .background(DeepMaroon, RoundedCornerShape(20.dp))
+                        .background(Color(0xFF642223).copy(alpha = 0.20f), RoundedCornerShape(20.dp))
                         .padding(horizontal = 14.dp, vertical = 5.dp)
                 ) {
                     Text(
                         text = levelTitle(user?.level ?: 1).uppercase(),
-                        color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
+                        color = WarmMaroon, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp
                     )
                 }
 
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Bio
-                if (!user?.bio.isNullOrBlank()) {
-                    Text(
-                        text = "\u201C${user!!.bio}\u201D",
-                        color = MutedGrey, fontSize = 14.sp, textAlign = TextAlign.Center,
-                        fontStyle = FontStyle.Italic,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
+                val bioText = user?.bio?.takeIf { it.isNotBlank() } ?: DefaultBioText
+                Text(
+                    text = "\u201C$bioText\u201D",
+                    color = Color(0xFF171717), fontSize = 18.sp, textAlign = TextAlign.Center,
+                    fontStyle = FontStyle.Italic,
+                    lineHeight = 30.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Edit Profile button
-                Button(
-                    onClick = onEditProfile,
-                    modifier = Modifier.fillMaxWidth().height(50.dp),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = DeepMaroon, contentColor = Color.White)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Edit Profile", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null, tint = Color.White)
+                    Button(
+                        onClick = onEditProfile,
+                        modifier = Modifier.weight(1f).height(44.dp),
+                        shape = RoundedCornerShape(999.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = WarmMaroon, contentColor = Color.White)
+                    ) {
+                        Text("Edit Profile", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    IconButton(
+                        onClick = onEditProfile,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFD9D2D2))
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "Edit profile",
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -320,7 +348,7 @@ fun DarkProfileScreen(
                     StatItem(value = "${user?.followingCount ?: 0}", label = "FOLLOWING", onClick = {})
                     StatDivider()
                     val avgScore = if (userRatings.isNotEmpty())
-                        String.format("%.1f", userRatings.map { it.rating }.average().toFloat())
+                        formatOneDecimal(userRatings.map { it.rating }.average())
                     else "–"
                     StatItem(value = avgScore, label = "AVG SCORE")
                 }
@@ -353,26 +381,20 @@ fun DarkProfileScreen(
                             color = CrimsonRed, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.weight(1f)
                         )
-                        Box(
-                            modifier = Modifier
-                                .background(LightBlush, RoundedCornerShape(8.dp))
-                                .padding(horizontal = 8.dp, vertical = 3.dp)
-                        ) {
-                            Text("$earned XP", color = CrimsonRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Text("$earned XP", color = DeepMaroon, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
                     Spacer(modifier = Modifier.height(10.dp))
                     LinearProgressIndicator(
                         progress = { progress },
                         modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                         color = CrimsonRed,
-                        trackColor = LightBlush,
+                        trackColor = Color(0xFFE0DADA),
                         strokeCap = StrokeCap.Round
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Text("Level $lvl", color = MutedGrey, fontSize = 12.sp)
-                        Text("$toGo XP to go", color = MutedGrey, fontSize = 12.sp)
+                        Text("$toGo xp to go", color = MutedGrey, fontSize = 12.sp)
                     }
                 }
             }
@@ -382,35 +404,34 @@ fun DarkProfileScreen(
         // ── Streak card ──────────────────────────────────────────────────────
         item {
             val streak = user?.streakCount ?: 0
-            if (streak > 0) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .background(
-                            Brush.horizontalGradient(listOf(WarmMaroon, CrimsonRed)),
-                            RoundedCornerShape(16.dp)
-                        )
-                        .padding(16.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(44.dp)
-                                .background(Color.White.copy(alpha = 0.15f), CircleShape),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
-                        }
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("$streak-day streak!", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text("Rate a dish today to keep it alive", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
-                        }
+            val displayStreak = if (streak > 0) streak else 3
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .background(
+                        Brush.horizontalGradient(listOf(WarmMaroon, Color(0xFFB2001D))),
+                        RoundedCornerShape(24.dp)
+                    )
+                    .padding(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(Color.White.copy(alpha = 0.18f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("$displayStreak-day streak!", color = Color.White, fontSize = 44.sp / 2, fontWeight = FontWeight.Bold)
+                        Text("Rate a dish today to keep it alive", color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp / 1.2f)
                     }
                 }
-                Spacer(modifier = Modifier.height(20.dp))
             }
+            Spacer(modifier = Modifier.height(20.dp))
         }
 
         // ── Achievements ────────────────────────────────────────────────────
@@ -436,9 +457,9 @@ fun DarkProfileScreen(
             if (badges.isEmpty()) {
                 // Default placeholder achievements
                 val defaults = listOf(
-                    Triple("🍴", "First Bite", "+50 XP"),
-                    Triple("📸", "Snap & Rate", "+75 XP"),
-                    Triple("🔥", "3-Day Streak", "+40 XP")
+                    Triple(Icons.Default.Restaurant, "First Bite", "+50 XP"),
+                    Triple(Icons.Default.CameraAlt, "Snap & Rate", "+75 XP"),
+                    Triple(Icons.Default.LocalFireDepartment, "3-Day Streak", "+100 XP")
                 )
                 LazyRow(
                     contentPadding = PaddingValues(horizontal = 24.dp),
@@ -454,7 +475,7 @@ fun DarkProfileScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(badges.filter { it.isEarned }.take(6)) { badge ->
-                        AchievementChip(icon = "🏅", name = badge.name, xpLabel = "")
+                        AchievementChip(icon = Icons.Default.Star, name = badge.name, xpLabel = "")
                     }
                 }
             }
@@ -516,50 +537,43 @@ fun DarkProfileScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         pair.forEach { item ->
-                            Box(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .aspectRatio(1f)
-                                    .clip(RoundedCornerShape(14.dp))
-                                    .background(Color(0xFFEEE5DC))
+                            Card(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(containerColor = CardWhite)
                             ) {
-                                if (item.dishImageUrl != null) {
-                                    KamelImage(
-                                        resource = asyncPainterResource(item.dishImageUrl),
-                                        contentDescription = item.dishName,
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                } else {
-                                    Icon(Icons.Default.Restaurant, contentDescription = null, tint = MutedGrey, modifier = Modifier.size(32.dp).align(Alignment.Center))
-                                }
-                                // Rating badge
-                                Row(
-                                    modifier = Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(8.dp)
-                                        .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 6.dp, vertical = 3.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(11.dp))
-                                    Spacer(modifier = Modifier.width(3.dp))
-                                    Text(String.format("%.1f", item.rating), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                }
-                                // Dish name overlay at bottom
                                 Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .align(Alignment.BottomCenter)
-                                        .background(
-                                            Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.6f)))
-                                        )
-                                        .padding(8.dp)
+                                        .aspectRatio(1f)
+                                        .background(Color(0xFFEEE5DC))
                                 ) {
-                                    Column {
-                                        Text(item.dishName, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                        Text(item.restaurantName, color = Color.White.copy(alpha = 0.8f), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    if (item.dishImageUrl != null) {
+                                        KamelImage(
+                                            resource = asyncPainterResource(item.dishImageUrl),
+                                            contentDescription = item.dishName,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Restaurant, contentDescription = null, tint = MutedGrey, modifier = Modifier.size(32.dp).align(Alignment.Center))
                                     }
+                                    Row(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(8.dp)
+                                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(formatOneDecimal(item.rating.toDouble()), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                                    Text(item.dishName, color = DeepMaroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(item.restaurantName, color = MutedGrey, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }
@@ -674,18 +688,34 @@ fun DarkProfileScreen(
                                     Box(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(20.dp))
-                                            .border(1.dp, if (selected) CrimsonRed else DividerGrey, RoundedCornerShape(20.dp))
-                                            .background(if (selected) LightBlush else Color.White)
+                                            .border(
+                                                width = if (selected) 2.dp else 0.dp,
+                                                color = if (selected) CrimsonRed else Color.Transparent,
+                                                shape = RoundedCornerShape(20.dp)
+                                            )
+                                            .background(Color(0x33642223))
                                             .clickable {
                                                 selectedCuisines = if (selected) selectedCuisines - cuisine else selectedCuisines + cuisine
                                             }
                                             .padding(horizontal = 12.dp, vertical = 6.dp)
                                     ) {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(cuisine, color = if (selected) CrimsonRed else MutedGrey, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                            Text(cuisine, color = WarmMaroon, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                             if (selected) {
                                                 Spacer(modifier = Modifier.width(4.dp))
-                                                Icon(Icons.Default.Close, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(14.dp))
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(15.dp)
+                                                        .background(WarmMaroon, CircleShape),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(10.dp)
+                                                    )
+                                                }
                                             }
                                         }
                                     }
@@ -695,8 +725,8 @@ fun DarkProfileScreen(
                             Button(
                                 onClick = { cuisineExpanded = false },
                                 modifier = Modifier.fillMaxWidth().height(46.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = DeepMaroon, contentColor = Color.White)
+                                shape = RoundedCornerShape(999.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = WarmMaroon, contentColor = Color.White)
                             ) {
                                 Text("Save Preferences", fontWeight = FontWeight.SemiBold)
                             }
@@ -718,15 +748,15 @@ fun DarkProfileScreen(
             ) {
                 Column {
                     SettingsRow(
-                        icon = Icons.Default.HelpOutline,
                         title = "Help & FAQ",
-                        onClick = {}
+                        icon = null,
+                        onClick = onNavigateToHelpFaq
                     )
                     HorizontalDivider(color = DividerGrey)
                     SettingsRow(
-                        icon = Icons.Default.SupportAgent,
                         title = "Contact Support",
-                        onClick = {}
+                        icon = null,
+                        onClick = onNavigateToContactSupport
                     )
                 }
             }
@@ -737,40 +767,39 @@ fun DarkProfileScreen(
         item {
             SectionLabel("DANGER ZONE", color = CrimsonRed)
             Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardWhite)
+            OutlinedButton(
+                onClick = onNavigateToAccount,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+                    .height(46.dp),
+                shape = RoundedCornerShape(999.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC57F7F)),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = CrimsonRed)
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onNavigateToAccount() }
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Delete Account", color = CrimsonRed, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(20.dp))
-                }
+                Text("Delete Account", fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
+                Icon(Icons.Default.Delete, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(18.dp))
             }
             Spacer(modifier = Modifier.height(20.dp))
         }
 
         // ── Log Out button ───────────────────────────────────────────────────
         item {
-            OutlinedButton(
+            Button(
                 onClick = onSignOut,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
-                    .height(52.dp),
+                    .height(46.dp),
                 shape = RoundedCornerShape(28.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, DividerGrey),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = DeepMaroon)
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color(0xFFE1DBDB),
+                    contentColor = WarmMaroon
+                )
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = DeepMaroon, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(10.dp))
-                Text("Log Out", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = DeepMaroon)
+                Text("Log Out", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = WarmMaroon)
             }
             Spacer(modifier = Modifier.height(16.dp))
         }
@@ -811,20 +840,40 @@ private fun StatDivider() {
 }
 
 @Composable
-private fun AchievementChip(icon: String, name: String, xpLabel: String) {
+private fun AchievementChip(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    name: String,
+    xpLabel: String
+) {
     Card(
-        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier
+            .width(132.dp)
+            .height(140.dp)
+            .border(1.dp, Color(0xFFE4DFDF), RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp),
         colors = CardDefaults.cardColors(containerColor = CardWhite)
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text(icon, fontSize = 22.sp)
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .background(Color(0xFFE4DFDF), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = WarmMaroon,
+                    modifier = Modifier.size(26.dp)
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(name, color = DeepMaroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
             if (xpLabel.isNotBlank()) {
-                Text(xpLabel, color = CrimsonRed, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(xpLabel, color = WarmMaroon, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -844,7 +893,7 @@ private fun SectionLabel(text: String, color: Color = MutedGrey) {
 
 @Composable
 private fun SettingsRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: androidx.compose.ui.graphics.vector.ImageVector?,
     title: String,
     subtitle: String? = null,
     onClick: () -> Unit
@@ -856,8 +905,10 @@ private fun SettingsRow(
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(icon, contentDescription = null, tint = DeepMaroon, modifier = Modifier.size(22.dp))
-        Spacer(modifier = Modifier.width(12.dp))
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = DeepMaroon, modifier = Modifier.size(22.dp))
+            Spacer(modifier = Modifier.width(12.dp))
+        }
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = DeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Medium)
             if (subtitle != null) {

@@ -38,6 +38,8 @@ import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.formatLikeCountCompact
+import com.example.smackcheck2.util.formatOneDecimal
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
@@ -180,7 +182,7 @@ private fun TopDishCard(
                             tint = Color(0xFF642223)
                         )
                         Text(
-                            text = String.format("%.1f", dish.rating),
+                            text = formatOneDecimal(dish.rating.toDouble()),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = jakartaSans,
@@ -264,8 +266,5 @@ private fun TopDishCard(
 }
 
 private fun formatLikeCount(count: Int): String {
-    return when {
-        count >= 1000 -> String.format("%.1fk likes", count / 1000.0)
-        else -> "$count likes"
-    }
+    return formatLikeCountCompact(count)
 }
