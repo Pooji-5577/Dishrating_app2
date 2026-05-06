@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -29,7 +30,6 @@ import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Fastfood
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Restaurant
@@ -44,9 +44,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -58,11 +63,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.gamification.GamificationViewModel
+import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
 
 // ── Brand palette (same as DarkProfileScreen) ────────────────────────────────
-private val ABg         = Color(0xFFF5EDE3)
+private val ABg         = Color(0xFFF6F6F6)
 private val ACardWhite  = Color(0xFFFFFFFF)
 private val ADeepMaroon = Color(0xFF3B1011)
 private val AWarmMaroon = Color(0xFF642223)
@@ -144,6 +151,16 @@ fun AchievementsListScreen(
     val streak  = progressState.streakCount.coerceAtLeast(gameState.streakDays)
     val xp      = progressState.currentXp.coerceAtLeast(gameState.totalXp)
 
+    var photoUrl by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        try { photoUrl = AuthRepository().getCurrentUser()?.profilePhotoUrl } catch (_: Exception) {}
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ABg)
+    ) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -155,6 +172,7 @@ fun AchievementsListScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -164,9 +182,6 @@ fun AchievementsListScreen(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("SmackCheck", color = ADeepMaroon, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = {}) {
-                    Icon(Icons.Default.Notifications, contentDescription = null, tint = ADeepMaroon, modifier = Modifier.size(22.dp))
-                }
                 Box(
                     modifier = Modifier
                         .size(34.dp)
@@ -174,7 +189,16 @@ fun AchievementsListScreen(
                         .background(AWarmMaroon),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    if (photoUrl != null) {
+                        NetworkImage(
+                            imageUrl = photoUrl!!,
+                            contentDescription = null,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    }
                 }
                 Spacer(modifier = Modifier.width(12.dp))
             }
@@ -344,8 +368,9 @@ fun AchievementsListScreen(
                 weeklyChallenges.filter { it.isCompleted }.forEach { c ->
                     add(Triple(c.icon, c.title, "COMPLETE"))
                 }
-                if (streak == 0 && weeklyChallenges.none { it.isCompleted }) {
-                    add(Triple(Icons.Filled.CalendarToday, "Weekly Regular", ""))
+                // Show in-progress weekly challenges too
+                weeklyChallenges.filter { !it.isCompleted }.forEach { c ->
+                    add(Triple(c.icon, c.title, "${(c.progress * 100).toInt()}%"))
                 }
             }
 
@@ -394,6 +419,7 @@ fun AchievementsListScreen(
                 Spacer(modifier = Modifier.height(12.dp))
             }
         }
+    }
     }
 }
 

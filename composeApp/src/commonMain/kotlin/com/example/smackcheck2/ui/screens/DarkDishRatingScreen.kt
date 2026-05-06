@@ -110,11 +110,15 @@ fun DarkDishRatingScreen(
     xpEarned: Int? = null,
     errorMessage: String? = null,
     onNavigateBack: () -> Unit,
+    onRatingComplete: () -> Unit = onNavigateBack,
     onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurant: Restaurant?) -> Unit,
     onPriceChange: (String) -> Unit = {},
     onDismissError: () -> Unit = {},
     onAddRestaurantManually: (() -> Unit)? = null,
-    onSearchRestaurants: ((String) -> Unit)? = null
+    onSearchRestaurants: ((String) -> Unit)? = null,
+    detectedChain: String? = null,
+    detectedType: String? = null,
+    currencySymbol: String = "\u20B9 "
 ) {
     var rating by remember { mutableFloatStateOf(0f) }
     var comment by remember { mutableStateOf("") }
@@ -142,6 +146,26 @@ fun DarkDishRatingScreen(
         errorMessage?.let {
             snackbarHostState.showSnackbar(it)
             onDismissError()
+        }
+    }
+
+    // When AI detected a restaurant chain, seed the picker search so we surface that chain first.
+    LaunchedEffect(showRestaurantPicker, detectedChain) {
+        if (showRestaurantPicker && !detectedChain.isNullOrBlank() && restaurantSearchQuery.isBlank()) {
+            restaurantSearchQuery = detectedChain
+            onSearchRestaurants?.invoke(detectedChain)
+        }
+    }
+
+    // Pre-fill the "Add New Place" form with AI-detected chain/type when opened.
+    LaunchedEffect(showAddNewPlaceForm) {
+        if (showAddNewPlaceForm) {
+            if (newPlaceName.isBlank() && !detectedChain.isNullOrBlank()) {
+                newPlaceName = detectedChain
+            }
+            if (newPlaceCuisine.isBlank() && !detectedType.isNullOrBlank()) {
+                newPlaceCuisine = detectedType
+            }
         }
     }
 
@@ -181,7 +205,7 @@ fun DarkDishRatingScreen(
             dishName = dishName,
             imageBytes = imageBytes,
             xpEarned = xpEarned ?: calculateXP(savedRating, savedComment, savedTags, imageBytes != null),
-            onContinue = onNavigateBack
+            onContinue = onRatingComplete
         )
         return
     }
@@ -231,7 +255,7 @@ fun DarkDishRatingScreen(
                         imageBytes = imageBytes,
                         contentDescription = dishName,
                         modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
-                        contentScale = ContentScale.Crop
+                        contentScale = ContentScale.Fit
                     )
                 } else {
                     Icon(Icons.Default.Restaurant, contentDescription = null, tint = RosePink.copy(alpha = 0.5f), modifier = Modifier.size(64.dp))
@@ -525,7 +549,7 @@ fun DarkDishRatingScreen(
                     onPriceChange(filtered)
                 },
                 placeholder = { Text("Price (optional)", color = RosePink) },
-                prefix = { Text("₹ ", color = DeepMaroon, fontWeight = FontWeight.SemiBold) },
+                prefix = { Text(currencySymbol, color = DeepMaroon, fontWeight = FontWeight.SemiBold) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),

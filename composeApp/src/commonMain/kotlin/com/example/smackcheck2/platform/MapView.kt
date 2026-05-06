@@ -20,5 +20,6 @@ expect fun PlatformMapView(
     zoom: Float = 14f,
     markers: List<MapMarker> = emptyList(),
     onMarkerClick: (String) -> Unit = {},
+    showMyLocation: Boolean = false,
     modifier: Modifier = Modifier
 )

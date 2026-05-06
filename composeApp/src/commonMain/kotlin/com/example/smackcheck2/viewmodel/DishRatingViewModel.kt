@@ -125,11 +125,11 @@ class DishRatingViewModel : ViewModel() {
                 println("DishRatingViewModel: ✓ User profile verified: ${user.id}")
             } catch (e: Exception) {
                 println("DishRatingViewModel: ✗ Error ensuring profile: ${e.message}")
-                _uiState.update { 
+                _uiState.update {
                     it.copy(
-                        isSubmitting = false, 
-                        errorMessage = "Failed to verify user profile: ${e.message}"
-                    ) 
+                        isSubmitting = false,
+                        errorMessage = "Could not verify your profile. Please try again."
+                    )
                 }
                 return@launch
             }
@@ -191,7 +191,7 @@ class DishRatingViewModel : ViewModel() {
                             _uiState.update {
                                 it.copy(
                                     isSubmitting = false,
-                                    errorMessage = "Failed to save restaurant: ${error.message}"
+                                    errorMessage = "Could not save restaurant. Please try again."
                                 )
                             }
                             return@launch
@@ -204,7 +204,8 @@ class DishRatingViewModel : ViewModel() {
                 val dishResult = databaseRepository.createOrGetDish(
                     name = currentState.dishName,
                     restaurantId = restaurantId,
-                    imageUrl = imageUrl
+                    imageUrl = imageUrl,
+                    restaurantName = selectedRestaurant?.name
                 )
 
                 val dish = dishResult.getOrElse { error ->
@@ -213,7 +214,7 @@ class DishRatingViewModel : ViewModel() {
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
-                            errorMessage = "Failed to create dish: ${error.message}"
+                            errorMessage = "Could not save dish. Please try again."
                         )
                     }
                     return@launch
@@ -336,16 +337,17 @@ class DishRatingViewModel : ViewModel() {
                         _uiState.update {
                             it.copy(
                                 isSubmitting = false,
-                                errorMessage = error.message ?: "Failed to submit rating"
+                                errorMessage = "Failed to submit rating. Please try again."
                             )
                         }
                     }
                 )
             } catch (e: Exception) {
+                println("DishRatingViewModel: ✗ Unexpected error: ${e.message}")
                 _uiState.update {
                     it.copy(
                         isSubmitting = false,
-                        errorMessage = e.message ?: "Failed to submit rating"
+                        errorMessage = "Something went wrong. Please try again."
                     )
                 }
             }

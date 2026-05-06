@@ -41,6 +41,24 @@ class SocialMapViewModel(
         loadCurrentUserProfile()
         loadNearbyUsers() // Load all world posts immediately, no GPS needed
         loadMyRatings()
+        checkExistingLocationPermission()
+    }
+
+    /**
+     * On init, if the system permission is already granted (e.g. user granted it
+     * earlier via the onboarding screen), automatically fetch the current location
+     * so the "Location Required" prompt doesn't appear unnecessarily.
+     */
+    private fun checkExistingLocationPermission() {
+        viewModelScope.launch {
+            try {
+                val service = locationService ?: return@launch
+                if (service.hasLocationPermission()) {
+                    _uiState.update { it.copy(locationPermissionGranted = true) }
+                    requestCurrentLocation()
+                }
+            } catch (_: Exception) { }
+        }
     }
 
     /**

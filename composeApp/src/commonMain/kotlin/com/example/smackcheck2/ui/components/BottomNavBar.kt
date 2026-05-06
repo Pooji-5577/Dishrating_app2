@@ -77,47 +77,55 @@ fun BottomNavBar(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Home
-                NavBarItem(
-                    icon = Icons.Filled.Home,
-                    label = "HOME",
-                    isSelected = selectedItem == NavItem.HOME,
-                    selectedColor = Color(0xFF89726D),
-                    onClick = onHomeClick,
-                    fontFamily = jakartaSans
-                )
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    NavBarItem(
+                        icon = Icons.Filled.Home,
+                        label = "HOME",
+                        isSelected = selectedItem == NavItem.HOME,
+                        selectedColor = Color(0xFF9B2335),
+                        onClick = onHomeClick,
+                        fontFamily = jakartaSans
+                    )
+                }
 
                 // Map
-                NavBarItem(
-                    icon = Icons.Filled.Map,
-                    label = "MAP",
-                    isSelected = selectedItem == NavItem.MAP,
-                    selectedColor = Color(0xFF9B2335),
-                    onClick = onMapClick,
-                    fontFamily = jakartaSans
-                )
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    NavBarItem(
+                        icon = Icons.Filled.Map,
+                        label = "MAP",
+                        isSelected = selectedItem == NavItem.MAP,
+                        selectedColor = Color(0xFF9B2335),
+                        onClick = onMapClick,
+                        fontFamily = jakartaSans
+                    )
+                }
 
-                // Camera (center) - placeholder space, actual button overlays
-                Box(modifier = Modifier.size(52.dp))
+                // Camera (center) - equal-weight placeholder so camera overlay lands at 50%
+                Box(modifier = Modifier.weight(1f))
 
                 // Explore
-                NavBarItem(
-                    icon = Icons.Filled.Explore,
-                    label = "EXPLORE",
-                    isSelected = selectedItem == NavItem.EXPLORE,
-                    selectedColor = Color(0xFF9B2335),
-                    onClick = onExploreClick,
-                    fontFamily = jakartaSans
-                )
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    NavBarItem(
+                        icon = Icons.Filled.Explore,
+                        label = "EXPLORE",
+                        isSelected = selectedItem == NavItem.EXPLORE,
+                        selectedColor = Color(0xFF9B2335),
+                        onClick = onExploreClick,
+                        fontFamily = jakartaSans
+                    )
+                }
 
                 // Profile
-                NavBarItem(
-                    icon = Icons.Filled.Person,
-                    label = "PROFILE",
-                    isSelected = selectedItem == NavItem.PROFILE,
-                    selectedColor = Color(0xFF9B2335),
-                    onClick = onProfileClick,
-                    fontFamily = jakartaSans
-                )
+                Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    NavBarItem(
+                        icon = Icons.Filled.Person,
+                        label = "PROFILE",
+                        isSelected = selectedItem == NavItem.PROFILE,
+                        selectedColor = Color(0xFF9B2335),
+                        onClick = onProfileClick,
+                        fontFamily = jakartaSans
+                    )
+                }
             }
         }
 
@@ -185,7 +193,8 @@ private fun NavBarItem(
             fontWeight = if (isSelected) FontWeight.Bold else FontWeight.SemiBold,
             fontFamily = fontFamily,
             color = color,
-            letterSpacing = 1.sp
+            letterSpacing = 0.5.sp,
+            maxLines = 1
         )
     }
 }

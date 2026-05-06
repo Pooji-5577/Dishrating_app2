@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.asStateFlow
 data class CommonLocationData(
     val latitude: Double,
     val longitude: Double,
-    val city: String?
+    val city: String?,
+    val countryCode: String? = null
 )
 
 /**
@@ -40,8 +41,8 @@ object SharedLocationState {
     /**
      * Called by the platform layer when location is detected
      */
-    fun onLocationDetected(latitude: Double, longitude: Double, city: String?) {
-        val data = CommonLocationData(latitude, longitude, city)
+    fun onLocationDetected(latitude: Double, longitude: Double, city: String?, countryCode: String? = null) {
+        val data = CommonLocationData(latitude, longitude, city, countryCode)
         _currentLocation.value = data
         _locationState.value = CommonLocationState.Success(data)
     }

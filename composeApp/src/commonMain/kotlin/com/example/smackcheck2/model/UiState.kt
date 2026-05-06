@@ -117,6 +117,8 @@ data class SearchUiState(
     val selectedCity: String? = null,
     val restaurantsAndCafesOnly: Boolean = false,
     val results: List<Restaurant> = emptyList(),
+    val availableCuisines: List<String> = emptyList(),
+    val availableCities: List<String> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val locationError: String? = null,
@@ -144,6 +146,7 @@ data class DishDetailUiState(
     val restaurant: Restaurant? = null,
     val reviews: List<Review> = emptyList(),
     val relatedDishes: List<Dish> = emptyList(),
+    val featuredReview: Review? = null,
     val isFavorite: Boolean = false,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
@@ -270,7 +273,8 @@ data class SocialFeedUiState(
     val scrollToRatingId: String? = null,
     val scrollToIndex: Int? = null,
     val storyUsers: List<UserSummary> = emptyList(),
-    val topDishes: List<FeedItem> = emptyList()
+    val topDishes: List<FeedItem> = emptyList(),
+    val nearbyRestaurantCount: Int = 0
 )
 
 enum class FeedFilter { FOLLOWING, TRENDING, NEARBY, MY_RATINGS }
@@ -318,6 +322,17 @@ data class FollowListUiState(
 )
 
 /**
+ * Discover users UI state (Find Friends)
+ */
+data class DiscoverUsersUiState(
+    val users: List<UserSummary> = emptyList(),
+    val isLoading: Boolean = false,
+    val isRefreshing: Boolean = false,
+    val errorMessage: String? = null,
+    val togglingUserIds: Set<String> = emptySet()
+)
+
+/**
  * Dish capture UI state for camera capture and AI detection
  */
 data class DishCaptureUiState(
@@ -335,6 +350,8 @@ data class DishCaptureUiState(
     val alternatives: List<String> = emptyList(),
     val isAIDetected: Boolean = false,
     val itemType: String = "unknown", // "food", "beverage", or "unknown"
+    val detectedRestaurantChain: String? = null,
+    val detectedRestaurantType: String? = null,
     val isEditingName: Boolean = false,
     val editedName: String = "",
     val errorMessage: String? = null,
@@ -380,6 +397,8 @@ data class DishCaptureUiState(
         if (alternatives != other.alternatives) return false
         if (isAIDetected != other.isAIDetected) return false
         if (itemType != other.itemType) return false
+        if (detectedRestaurantChain != other.detectedRestaurantChain) return false
+        if (detectedRestaurantType != other.detectedRestaurantType) return false
         if (isEditingName != other.isEditingName) return false
         if (editedName != other.editedName) return false
         if (errorMessage != other.errorMessage) return false
@@ -403,6 +422,8 @@ data class DishCaptureUiState(
         result = 31 * result + alternatives.hashCode()
         result = 31 * result + isAIDetected.hashCode()
         result = 31 * result + itemType.hashCode()
+        result = 31 * result + (detectedRestaurantChain?.hashCode() ?: 0)
+        result = 31 * result + (detectedRestaurantType?.hashCode() ?: 0)
         result = 31 * result + isEditingName.hashCode()
         result = 31 * result + editedName.hashCode()
         result = 31 * result + (errorMessage?.hashCode() ?: 0)
@@ -446,6 +467,8 @@ data class ImageDetectionResult(
     val alternatives: List<String> = emptyList(),
     val isAIDetected: Boolean = false,
     val itemType: String = "unknown",
+    val restaurantChain: String? = null,
+    val restaurantType: String? = null,
     val debugInfo: String? = null,
     val isAnalyzing: Boolean = false,
     val editedName: String = "",

@@ -26,7 +26,8 @@ data class LocationResult(
     val latitude: Double,
     val longitude: Double,
     val cityName: String?,
-    val fullAddress: String? = null
+    val fullAddress: String? = null,
+    val countryCode: String? = null
 )
 
 /**

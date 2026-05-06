@@ -44,17 +44,8 @@ class SearchViewModel(
     private val searchQuery = MutableStateFlow("")
 
 
-    val availableCuisines = listOf(
-        "Italian", "Japanese", "Indian", "Mexican", "Chinese",
-        "Thai", "American", "French", "Mediterranean", "Korean"
-    )
-
-    val availableCities = listOf(
-        "New York", "Los Angeles", "Chicago", "Houston", "Phoenix",
-        "San Francisco", "Seattle", "Miami", "Boston", "Denver"
-    )
-
     init {
+        loadFilterOptions()
         // Debounced search — waits 400ms after user stops typing
         viewModelScope.launch {
             searchQuery
@@ -70,6 +61,23 @@ class SearchViewModel(
         }
     }
 
+
+    private fun loadFilterOptions() {
+        viewModelScope.launch {
+            try {
+                val cuisinesResult = databaseRepository.getDistinctCuisines()
+                val citiesResult = databaseRepository.getDistinctCities()
+                _uiState.update { state ->
+                    state.copy(
+                        availableCuisines = cuisinesResult.getOrDefault(emptyList()),
+                        availableCities = citiesResult.getOrDefault(emptyList())
+                    )
+                }
+            } catch (e: Exception) {
+                println("SearchViewModel: Failed to load filter options: ${e.message}")
+            }
+        }
+    }
 
     fun onQueryChange(query: String) {
         _uiState.update { it.copy(query = query) }

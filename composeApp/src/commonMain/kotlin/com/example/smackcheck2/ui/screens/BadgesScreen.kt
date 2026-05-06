@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -30,6 +31,8 @@ import com.example.smackcheck2.ui.components.LoadingState
 import com.example.smackcheck2.ui.components.UserProgressDashboard
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
 
+private val AchievementBg = androidx.compose.ui.graphics.Color(0xFFF6F6F6)
+
 /**
  * Badges Screen composable
  * Displays all earned and available badges
@@ -46,6 +49,7 @@ fun BadgesScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     Scaffold(
+        containerColor = AchievementBg,
         topBar = {
             TopAppBar(
                 title = { Text("Badges") },
@@ -74,6 +78,7 @@ fun BadgesScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .background(AchievementBg)
                         .padding(paddingValues)
                         .verticalScroll(rememberScrollState())
                 ) {
@@ -135,6 +140,7 @@ fun UserProgressScreen(
     val uiState by viewModel.uiState.collectAsState()
     
     Scaffold(
+        containerColor = AchievementBg,
         topBar = {
             TopAppBar(
                 title = { Text("Your Progress") },
@@ -163,6 +169,7 @@ fun UserProgressScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .background(AchievementBg)
                         .padding(paddingValues)
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp),

@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +44,11 @@ fun ProfileSetupScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val colors = appColors()
+    val bg = Color(0xFFF6F6F6)
+    val accent = Color(0xFF642223)
+    val textPrimary = Color(0xFF1E1E1E)
+    val textSecondary = Color(0xFF6F6F6F)
+    val fieldBorder = Color(0xFFA79A94)
     val snackbarHostState = remember { SnackbarHostState() }
     val focusManager = LocalFocusManager.current
     val imagePicker = LocalImagePicker.current
@@ -57,7 +63,7 @@ fun ProfileSetupScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = colors.Background
+        containerColor = bg
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -73,7 +79,8 @@ fun ProfileSetupScreen(
                 text = "Set Up Your Profile",
                 style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold,
-                color = colors.TextPrimary
+                color = textPrimary,
+                fontSize = 48.sp / 1.5f
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -81,7 +88,8 @@ fun ProfileSetupScreen(
             Text(
                 text = "Choose a username so others can find you",
                 style = MaterialTheme.typography.bodyMedium,
-                color = colors.TextSecondary
+                color = textSecondary,
+                fontSize = 17.sp
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -91,7 +99,7 @@ fun ProfileSetupScreen(
                 modifier = Modifier
                     .size(120.dp)
                     .clip(CircleShape)
-                    .background(colors.SurfaceVariant)
+                    .background(Color(0xFFF0F1F1))
                     .clickable {
                         scope.launch {
                             imagePicker?.pickFromGallery()?.let { result ->
@@ -114,7 +122,7 @@ fun ProfileSetupScreen(
                         imageVector = Icons.Default.CameraAlt,
                         contentDescription = "Add Photo",
                         modifier = Modifier.size(48.dp),
-                        tint = colors.TextSecondary
+                        tint = textSecondary
                     )
                 }
 
@@ -135,7 +143,8 @@ fun ProfileSetupScreen(
             Text(
                 text = "Add Photo (optional)",
                 style = MaterialTheme.typography.bodySmall,
-                color = colors.TextSecondary
+                color = textSecondary,
+                fontSize = 17.sp
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -148,7 +157,8 @@ fun ProfileSetupScreen(
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Filled.AlternateEmail,
-                        contentDescription = null
+                        contentDescription = null,
+                        tint = Color(0xFF5A4A43)
                     )
                 },
                 trailingIcon = when {
@@ -192,7 +202,17 @@ fun ProfileSetupScreen(
                 ),
                 singleLine = true,
                 shape = TextFieldShape,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = fieldBorder,
+                    unfocusedBorderColor = fieldBorder,
+                    focusedContainerColor = bg,
+                    unfocusedContainerColor = bg,
+                    focusedLabelColor = textSecondary,
+                    unfocusedLabelColor = textSecondary,
+                    focusedTextColor = textPrimary,
+                    unfocusedTextColor = textPrimary
+                )
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -202,8 +222,11 @@ fun ProfileSetupScreen(
                 onClick = { viewModel.saveProfile { onComplete() } },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(50.dp),
+                    .height(56.dp),
                 enabled = !uiState.isSaving && !uiState.isCheckingUsername && !uiState.isUploadingPhoto
+                ,
+                shape = RoundedCornerShape(999.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.White)
             ) {
                 if (uiState.isSaving) {
                     CircularProgressIndicator(
@@ -214,7 +237,8 @@ fun ProfileSetupScreen(
                 } else {
                     Text(
                         text = "Continue",
-                        style = MaterialTheme.typography.labelLarge
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
             }
@@ -225,8 +249,8 @@ fun ProfileSetupScreen(
             TextButton(onClick = onComplete) {
                 Text(
                     text = "Skip for now",
-                    color = colors.TextSecondary,
-                    fontSize = 14.sp
+                    color = textSecondary,
+                    fontSize = 17.sp
                 )
             }
 

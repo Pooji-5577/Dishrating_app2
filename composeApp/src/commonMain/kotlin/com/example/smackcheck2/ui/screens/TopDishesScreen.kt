@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -146,7 +149,7 @@ fun TopDishListCard(
             
             Spacer(modifier = Modifier.width(12.dp))
             
-            // Dish image placeholder
+            // Dish image
             Box(
                 modifier = Modifier
                     .size(70.dp)
@@ -154,12 +157,29 @@ fun TopDishListCard(
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    modifier = Modifier.size(28.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
-                )
+                if (dish.imageUrl != null) {
+                    KamelImage(
+                        resource = asyncPainterResource(dish.imageUrl),
+                        contentDescription = dish.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        onFailure = {
+                            Icon(
+                                imageVector = Icons.Filled.Restaurant,
+                                contentDescription = null,
+                                modifier = Modifier.size(28.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                            )
+                        }
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Restaurant,
+                        contentDescription = null,
+                        modifier = Modifier.size(28.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.5f)
+                    )
+                }
             }
             
             Spacer(modifier = Modifier.width(12.dp))

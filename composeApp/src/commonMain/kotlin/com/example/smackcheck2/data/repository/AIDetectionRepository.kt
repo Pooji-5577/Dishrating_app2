@@ -19,6 +19,8 @@ data class DishDetectionResult(
     val cuisine: String?,
     val isAIDetected: Boolean,
     val itemType: String = "unknown", // "food", "beverage", or "unknown"
+    val restaurantChain: String? = null, // e.g. "Starbucks" when branded packaging is visible
+    val restaurantType: String? = null,  // e.g. "cafe", "pizzeria", "fast food"
     val debugInfo: String? = null,
     val isOutage: Boolean = false // true when AI service is unavailable
 )
@@ -119,6 +121,8 @@ class AIDetectionRepository {
                 val confidenceMatch = Regex("\"confidence\"\\s*:\\s*([\\d.]+)").find(responseText)
                 val cuisineMatch = Regex("\"cuisine\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
                 val itemTypeMatch = Regex("\"itemType\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+                val chainMatch = Regex("\"restaurantChain\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
+                val typeMatch = Regex("\"restaurantType\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
                 val errorMatch = Regex("\"error\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
                 val extracted = dishNameMatch?.groupValues?.getOrNull(1) ?: ""
                 val extractedConf = confidenceMatch?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: 0f
@@ -128,6 +132,8 @@ class AIDetectionRepository {
                     cuisine = cuisineMatch?.groupValues?.getOrNull(1) ?: "",
                     confidence = extractedConf,
                     itemType = itemTypeMatch?.groupValues?.getOrNull(1) ?: "unknown",
+                    restaurantChain = chainMatch?.groupValues?.getOrNull(1) ?: "",
+                    restaurantType = typeMatch?.groupValues?.getOrNull(1) ?: "",
                     error = errorMatch?.groupValues?.getOrNull(1)
                 )
             }
@@ -167,7 +173,9 @@ class AIDetectionRepository {
                 // Detected if we have a real name — removed the confidence > 0.1 gate
                 isAIDetected = dishName != "Unknown",
                 itemType = itemType,
-                debugInfo = "OK via Edge Function (type=$itemType, conf=${edgeResponse.confidence})"
+                restaurantChain = edgeResponse.restaurantChain.takeIf { it.isNotBlank() },
+                restaurantType = edgeResponse.restaurantType.takeIf { it.isNotBlank() },
+                debugInfo = "OK via Edge Function (type=$itemType, conf=${edgeResponse.confidence}, chain=${edgeResponse.restaurantChain})"
             )
 
         } catch (e: Exception) {
@@ -227,5 +235,7 @@ private data class EdgeFunctionResponse(
     val description: String = "",
     val ingredients: List<String> = emptyList(),
     val itemType: String = "unknown",
+    val restaurantChain: String = "",
+    val restaurantType: String = "",
     val error: String? = null
 )

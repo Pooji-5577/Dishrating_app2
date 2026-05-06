@@ -82,7 +82,7 @@ data class RestaurantDto(
     val city: String,
     val cuisine: String,
     @SerialName("image_urls")
-    val imageUrls: List<String> = emptyList(),
+    val imageUrls: List<String>? = null,
     @SerialName("average_rating")
     val averageRating: Float = 0f,
     @SerialName("review_count")
@@ -92,7 +92,7 @@ data class RestaurantDto(
     @SerialName("google_place_id")
     val googlePlaceId: String? = null,
     @SerialName("photo_urls")
-    val photoUrls: List<String> = emptyList(),
+    val photoUrls: List<String>? = null,
     @SerialName("created_at")
     val createdAt: String? = null
 )
@@ -107,12 +107,18 @@ data class DishDto(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val id: String? = null,
     val name: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("image_url")
     val imageUrl: String? = null,
     @SerialName("restaurant_id")
     val restaurantId: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("restaurant_name")
     val restaurantName: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     @SerialName("created_at")
     val createdAt: String? = null
 )

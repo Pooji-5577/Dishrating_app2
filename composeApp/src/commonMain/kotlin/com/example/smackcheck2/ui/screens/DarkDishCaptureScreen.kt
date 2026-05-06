@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,21 +18,24 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.animation.core.RepeatMode
@@ -49,7 +53,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -90,7 +93,7 @@ fun DarkDishCaptureScreen(
     viewModel: DishCaptureViewModel,
     imagePicker: ImagePicker?,
     onNavigateBack: () -> Unit,
-    onImageCaptured: (imageUri: String, dishName: String, imageBytes: ByteArray?, allImages: List<CapturedImage>) -> Unit,
+    onImageCaptured: (imageUri: String, dishName: String, imageBytes: ByteArray?, allImages: List<CapturedImage>, cuisine: String?, confidence: Float, restaurantChain: String?, restaurantType: String?) -> Unit,
     onAddManually: ((String) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -141,33 +144,32 @@ fun DarkDishCaptureScreen(
         )
     }
 
+    var showPickerSheet by remember { mutableStateOf(uiState.imageUri == null) }
+
+    // Re-show picker whenever imageUri resets to null (e.g. after "Try Again")
+    LaunchedEffect(uiState.imageUri) {
+        if (uiState.imageUri == null) showPickerSheet = true
+    }
+
     RequestCameraPermission(
         onPermissionResult = { granted ->
             if (granted) {
                 coroutineScope.launch {
-                    imagePicker?.captureImage()?.let { result ->
+                    val result = imagePicker?.captureImage()
+                    if (result != null) {
                         viewModel.onImageCaptured(result)
+                    } else {
+                        showPickerSheet = true
                     }
                 }
+            } else {
+                showPickerSheet = true
             }
         }
     ) { requestCameraPermission ->
 
-        Box(modifier = Modifier.fillMaxSize().background(DeepMaroon)) {
-            if (uiState.imageUri == null) {
-                CameraCaptureView(
-                    onCaptureClick = { requestCameraPermission() },
-                    onGalleryClick = {
-                        coroutineScope.launch {
-                            imagePicker?.pickFromGallery()?.let { result ->
-                                viewModel.onImageCaptured(result)
-                            }
-                        }
-                    },
-                    onNavigateBack = onNavigateBack,
-                    imagePickerAvailable = imagePicker != null
-                )
-            } else {
+        Box(modifier = Modifier.fillMaxSize().background(if (uiState.imageUri == null) Color.Transparent else DeepMaroon)) {
+            if (uiState.imageUri != null) {
                 ImagePreviewWithAI(
                     allImages = uiState.allImages,
                     selectedImageIndex = uiState.selectedImageIndex,
@@ -204,18 +206,97 @@ fun DarkDishCaptureScreen(
                             uiState.imageUri!!,
                             viewModel.getFinalDishName(),
                             viewModel.getImageBytes(),
-                            viewModel.getAllImages()
+                            viewModel.getAllImages(),
+                            uiState.detectedCuisine,
+                            uiState.detectionConfidence,
+                            uiState.detectedRestaurantChain,
+                            uiState.detectedRestaurantType
                         )
                     },
                     imagePicker = imagePicker
                 )
+            }
+
+            if (showPickerSheet && uiState.imageUri == null) {
+                androidx.compose.material3.ModalBottomSheet(
+                    onDismissRequest = { onNavigateBack() },
+                    containerColor = Color.White,
+                    shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 24.dp, end = 24.dp, bottom = 32.dp, top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = "Add a dish photo",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = WarmMaroon,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFFF6F6F6))
+                                .clickable {
+                                    showPickerSheet = false
+                                    requestCameraPermission()
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.size(48.dp).background(WarmMaroon, RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                            Column {
+                                Text("Take Photo", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color(0xFF2D2F2F))
+                                Text("Open camera", fontSize = 13.sp, color = Color(0xFF888888))
+                            }
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color(0xFFF6F6F6))
+                                .clickable {
+                                    showPickerSheet = false
+                                    coroutineScope.launch {
+                                        val result = imagePicker?.pickFromGallery()
+                                        if (result != null) viewModel.onImageCaptured(result)
+                                        else showPickerSheet = true
+                                    }
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier.size(48.dp).background(WarmMaroon, RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                            Column {
+                                Text("Choose from Gallery", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color(0xFF2D2F2F))
+                                Text("Pick an existing photo", fontSize = 13.sp, color = Color(0xFF888888))
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 }
 
 @Composable
-private fun CameraCaptureView(
+private fun _unused_CameraCaptureView(
     onCaptureClick: () -> Unit,
     onGalleryClick: () -> Unit,
     onNavigateBack: () -> Unit,
@@ -293,23 +374,6 @@ private fun CameraCaptureView(
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
-
-                // AI badge
-                Row(
-                    modifier = Modifier
-                        .background(CrimsonRed.copy(alpha = 0.2f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = null,
-                        tint = CrimsonRed,
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("AI VISION ENABLED", color = CrimsonRed, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                }
             }
         }
 
@@ -322,18 +386,6 @@ private fun CameraCaptureView(
         ) {
             IconButton(onClick = onNavigateBack) {
                 Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
-            }
-            Spacer(modifier = Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .background(CrimsonRed.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("AI VISION ENABLED", color = CrimsonRed, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                }
             }
             Spacer(modifier = Modifier.weight(1f))
             // Flash toggle top-right
@@ -445,203 +497,90 @@ private fun ImagePreviewWithAI(
     val displayedImage = allImages.getOrNull(selectedImageIndex)
     val displayedImageBytes = displayedImage?.bytes ?: imageBytes
 
-    Box(modifier = Modifier.fillMaxSize().background(DeepMaroon)) {
-        // Full-bleed dish photo with corner bracket accents
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (displayedImageBytes != null && displayedImageBytes.isNotEmpty()) {
-                ByteArrayImage(
-                    imageBytes = displayedImageBytes,
-                    contentDescription = "Captured dish",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(Color(0xFF1A0708)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Restaurant, contentDescription = null, tint = RosePink.copy(alpha = 0.3f), modifier = Modifier.size(120.dp))
-                }
-            }
-            // Decorative corner bracket accents on the photo
-            if (!isAnalyzing && isAIDetected) {
-                val bracketColor = CrimsonRed.copy(alpha = 0.7f)
-                Box(modifier = Modifier.fillMaxSize().drawWithContent {
-                    drawContent()
-                    val s = 28.dp.toPx()
-                    val stroke = 3.dp.toPx()
-                    val inset = 16.dp.toPx()
-                    // Top-left
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, inset + s), androidx.compose.ui.geometry.Offset(inset, inset), stroke)
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, inset), androidx.compose.ui.geometry.Offset(inset + s, inset), stroke)
-                    // Top-right
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset - s, inset), androidx.compose.ui.geometry.Offset(size.width - inset, inset), stroke)
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset, inset), androidx.compose.ui.geometry.Offset(size.width - inset, inset + s), stroke)
-                    // Bottom-left
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, size.height - inset - s), androidx.compose.ui.geometry.Offset(inset, size.height - inset), stroke)
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, size.height - inset), androidx.compose.ui.geometry.Offset(inset + s, size.height - inset), stroke)
-                    // Bottom-right
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset - s, size.height - inset), androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset), stroke)
-                    drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset - s), androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset), stroke)
-                })
-            }
-        }
-
-        // Analyzing overlay
-        if (isAnalyzing) {
-            Box(
-                modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = CrimsonRed, modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("AI Detecting Dish...", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    }
-                }
-            }
-        }
-
-        // Top bar overlay
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CreamWhite)
+    ) {
+        // Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 48.dp, start = 8.dp, end = 8.dp),
+                .padding(top = 48.dp, start = 8.dp, end = 16.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onNavigateBack) {
-                Icon(Icons.Default.Close, contentDescription = "Close", tint = Color.White)
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = DeepMaroon
+                )
             }
-            // AROMA PROFILE chip — top-left after close, shown when dish is detected
-            if (isAIDetected && !isAnalyzing) {
-                Box(
-                    modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Text(
-                        "AROMA PROFILE",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.sp
-                    )
-                }
-            }
+            Text(
+                text = "SmackCheck",
+                color = DeepMaroon,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold
+            )
             Spacer(modifier = Modifier.weight(1f))
-            if (isAIDetected) {
-                Box(
-                    modifier = Modifier
-                        .background(CrimsonRed.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("AI VISION ENABLED", color = CrimsonRed, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.size(48.dp))
-        }
-
-        // Image count badge
-        if (allImages.size > 1) {
+            Icon(
+                imageVector = Icons.Default.Notifications,
+                contentDescription = "Notifications",
+                tint = DeepMaroon,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
             Box(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 100.dp, end = 16.dp)
-                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(CrimsonRed),
+                contentAlignment = Alignment.Center
             ) {
-                Text("${selectedImageIndex + 1}/${allImages.size}", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Profile",
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp)
+                )
             }
         }
 
-        // Bottom card overlay
-        if (showConfirmation && !isAnalyzing) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
+        // Scrollable body
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // AI IDENTIFIED card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
-                // Thumbnail strip
-                if (allImages.size > 1) {
-                    ImageThumbnailStrip(
-                        images = allImages,
-                        selectedIndex = selectedImageIndex,
-                        canAddMore = canAddMoreImages,
-                        onSelectImage = onSelectImage,
-                        onRemoveImage = onRemoveImage,
-                        onAddMoreFromGallery = onAddMoreFromGallery,
-                        imagePicker = imagePicker
-                    )
-                }
-
-                // Detection result card
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    colors = CardDefaults.cardColors(containerColor = CreamWhite)
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(20.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Error banner
-                        if (errorMessage != null && !isAIDetected) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFFFFF3E0), RoundedCornerShape(8.dp))
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFE65100), modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(errorMessage, color = Color(0xFFE65100), fontSize = 12.sp)
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                        }
-
-                        // Status row: DISH RECOGNIZED + confidence badge
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                text = if (isAIDetected) "DISH RECOGNIZED" else "MANUAL ENTRY",
-                                color = DeepMaroon,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            )
-                            if (isAIDetected) {
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .background(
-                                            Brush.horizontalGradient(listOf(CrimsonRed, WarmMaroon)),
-                                            RoundedCornerShape(4.dp)
-                                        )
-                                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                                ) {
-                                    Text(
-                                        text = "${(confidence * 100).toInt()}% MATCH",
-                                        color = Color.White,
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        letterSpacing = 0.5.sp
-                                    )
-                                }
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Dish name or editing field
+                    Icon(
+                        imageVector = Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = CrimsonRed,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (isAIDetected) "AI IDENTIFIED" else "MANUAL ENTRY",
+                            color = CrimsonRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                         if (isEditingName) {
                             OutlinedTextField(
                                 value = editedName,
@@ -670,223 +609,196 @@ private fun ImagePreviewWithAI(
                                 }
                             )
                         } else {
-                            Text(
-                                text = detectedDishName ?: "Unknown Dish",
-                                color = DeepMaroon,
-                                fontSize = 22.sp,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-
-                        // Cuisine and AI analysis
-                        if (cuisine != null && isAIDetected && !isEditingName) {
-                            Spacer(modifier = Modifier.height(12.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(14.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("GEMINI AI ANALYSIS", color = DeepMaroon, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-                            }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = cuisine,
-                                color = WarmMaroon,
-                                fontSize = 13.sp,
-                                textAlign = TextAlign.Center,
-                                fontStyle = FontStyle.Italic
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-                        // Action buttons
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            OutlinedButton(
-                                onClick = if (isEditingName) onCancelEdit else onEditClick,
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, WarmMaroon.copy(alpha = 0.3f))
-                            ) {
-                                Icon(Icons.Default.Edit, contentDescription = null, tint = DeepMaroon, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Edit Name", color = DeepMaroon, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                            }
-
-                            Button(
-                                onClick = onConfirm,
-                                modifier = Modifier.weight(1f).height(48.dp),
-                                enabled = (!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown") ||
-                                        (isEditingName && editedName.isNotBlank()),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = CrimsonRed,
-                                    contentColor = Color.White,
-                                    disabledContainerColor = CrimsonRed.copy(alpha = 0.3f),
-                                    disabledContentColor = Color.White.copy(alpha = 0.5f)
-                                ),
-                                shape = RoundedCornerShape(12.dp)
-                            ) {
-                                Text("Rate Now", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    text = "\"${detectedDishName ?: "Unknown Dish"}\"",
+                                    color = DeepMaroon,
+                                    fontSize = 20.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontStyle = FontStyle.Italic,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                IconButton(onClick = onEditClick, modifier = Modifier.size(32.dp)) {
+                                    Icon(Icons.Default.Edit, contentDescription = "Edit name", tint = WarmMaroon, modifier = Modifier.size(16.dp))
+                                }
                             }
                         }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // Save to Journal — ghost button
-                        OutlinedButton(
-                            onClick = { /* Save to Journal – future feature */ },
-                            modifier = Modifier.fillMaxWidth().height(46.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, WarmMaroon.copy(alpha = 0.25f))
-                        ) {
-                            Icon(Icons.Default.Bookmark, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Save to Journal", color = WarmMaroon, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        if (errorMessage != null && !isAIDetected) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Warning, contentDescription = null, tint = Color(0xFFE65100), modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(errorMessage, color = Color(0xFFE65100), fontSize = 11.sp)
+                            }
                         }
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Bottom retake strip
-                Row(
+            // Dish image card
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = DeepMaroon),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(DeepMaroon)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
+                        .aspectRatio(1f)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { onRetake() }
-                    ) {
+                    if (displayedImageBytes != null && displayedImageBytes.isNotEmpty()) {
+                        ByteArrayImage(
+                            imageBytes = displayedImageBytes,
+                            contentDescription = "Captured dish",
+                            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
                         Box(
-                            modifier = Modifier.size(48.dp).background(WarmMaroon.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+                            modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Default.Restaurant, contentDescription = null, tint = RosePink.copy(alpha = 0.3f), modifier = Modifier.size(80.dp))
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("TAKE ANOTHER", color = RosePink, fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp)
                     }
 
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable {
-                            // handled by add more from gallery
-                            onAddMoreFromGallery()
-                        }
-                    ) {
+                    // Analyzing overlay
+                    if (isAnalyzing) {
                         Box(
-                            modifier = Modifier.size(48.dp).background(WarmMaroon.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(20.dp)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = CrimsonRed, modifier = Modifier.size(40.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("AI Detecting Dish...", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            }
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("FROM GALLERY", color = RosePink, fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp)
+                    }
+
+                    // Corner bracket accents
+                    if (!isAnalyzing && isAIDetected) {
+                        val bracketColor = CrimsonRed.copy(alpha = 0.8f)
+                        Box(modifier = Modifier.fillMaxSize().drawWithContent {
+                            drawContent()
+                            val s = 28.dp.toPx(); val stroke = 3.dp.toPx(); val inset = 14.dp.toPx()
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, inset + s), androidx.compose.ui.geometry.Offset(inset, inset), stroke)
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, inset), androidx.compose.ui.geometry.Offset(inset + s, inset), stroke)
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset - s, inset), androidx.compose.ui.geometry.Offset(size.width - inset, inset), stroke)
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset, inset), androidx.compose.ui.geometry.Offset(size.width - inset, inset + s), stroke)
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, size.height - inset - s), androidx.compose.ui.geometry.Offset(inset, size.height - inset), stroke)
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(inset, size.height - inset), androidx.compose.ui.geometry.Offset(inset + s, size.height - inset), stroke)
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset - s, size.height - inset), androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset), stroke)
+                            drawLine(bracketColor, androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset - s), androidx.compose.ui.geometry.Offset(size.width - inset, size.height - inset), stroke)
+                        })
+                    }
+
+                    // Image count badge
+                    if (allImages.size > 1) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(10.dp)
+                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text("${selectedImageIndex + 1}/${allImages.size}", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        }
                     }
                 }
             }
+
+            // Thumbnail strip for multiple images
+            if (allImages.size > 1) {
+                ImageThumbnailStrip(
+                    images = allImages,
+                    selectedIndex = selectedImageIndex,
+                    canAddMore = canAddMoreImages,
+                    onSelectImage = onSelectImage,
+                    onRemoveImage = onRemoveImage,
+                    onAddMoreFromGallery = onAddMoreFromGallery,
+                    imagePicker = imagePicker
+                )
+            }
+
+            // TAKE ANOTHER | FROM GALLERY
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                CaptureActionButton(
+                    icon = { Icon(Icons.Default.CameraAlt, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(28.dp)) },
+                    label = "TAKE ANOTHER",
+                    onClick = onRetake,
+                    modifier = Modifier.weight(1f)
+                )
+                CaptureActionButton(
+                    icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(28.dp)) },
+                    label = "FROM GALLERY",
+                    onClick = onAddMoreFromGallery,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
 
-        // AI IDENTIFIED banner — centered below top bar when dish is identified
-        if (isAIDetected && !isAnalyzing && !detectedDishName.isNullOrBlank()) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 112.dp)
-                    .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        buildString {
-                            append("AI IDENTIFIED  ")
-                            append("\u201C")
-                            append(detectedDishName)
-                            append("\u201D")
-                        },
-                        color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        // ENHANCED BY SMACKCHECK AI badge at bottom when confirmed
-        if (isAIDetected && !isAnalyzing) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = if (showConfirmation) 8.dp else 96.dp)
-                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
-                    .padding(horizontal = 12.dp, vertical = 5.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(11.dp))
-                    Spacer(modifier = Modifier.width(5.dp))
-                    Text(
-                        "ENHANCED BY SMACKCHECK AI",
-                        color = Color.White.copy(alpha = 0.9f), fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp
-                    )
-                }
-            }
-        }
-
-        // If still analyzing, show bottom controls for retake
-        if (!showConfirmation && !isAnalyzing && uiState_imageExists(allImages)) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .background(DeepMaroon)
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { onRetake() }
-                    ) {
-                        Box(
-                            modifier = Modifier.size(48.dp).background(WarmMaroon.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("TAKE ANOTHER", color = RosePink, fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp)
-                    }
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.clickable { onAddMoreFromGallery() }
-                    ) {
-                        Box(
-                            modifier = Modifier.size(48.dp).background(WarmMaroon.copy(alpha = 0.5f), RoundedCornerShape(14.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("FROM GALLERY", color = RosePink, fontSize = 9.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.5.sp)
-                    }
-                }
-            }
+        // Post to Feed button
+        Button(
+            onClick = onConfirm,
+            enabled = !isAnalyzing && ((!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown") || (isEditingName && editedName.isNotBlank())),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp)
+                .height(52.dp),
+            shape = RoundedCornerShape(99.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = CrimsonRed,
+                contentColor = Color.White,
+                disabledContainerColor = CrimsonRed.copy(alpha = 0.4f),
+                disabledContentColor = Color.White.copy(alpha = 0.6f)
+            )
+        ) {
+            Text("Post to Feed", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
-private fun uiState_imageExists(allImages: List<CapturedImage>): Boolean = allImages.isNotEmpty()
+@Composable
+private fun CaptureActionButton(
+    icon: @Composable () -> Unit,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.clickable { onClick() },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            icon()
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                color = WarmMaroon,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.5.sp
+            )
+        }
+    }
+}
 
 @Composable
 private fun ImageThumbnailStrip(

@@ -31,10 +31,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.smackcheck2.platform.RequestCameraPermission
 import com.example.smackcheck2.platform.RequestLocationPermission
@@ -58,12 +60,17 @@ fun PermissionsOnboardingScreen(
     var locationGranted by remember { mutableIntStateOf(-1) } // -1 = pending
 
     val colors = appColors()
+    val bg = Color(0xFFF6F6F6)
+    val accent = Color(0xFF642223)
+    val iconBg = accent.copy(alpha = 0.12f)
+    val textPrimary = Color(0xFF1E1E1E)
+    val textSecondary = Color(0xFF6F6F6F)
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .zIndex(50f)
-            .background(colors.Background),
+            .background(bg),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -77,7 +84,7 @@ fun PermissionsOnboardingScreen(
                 text = "SmackCheck",
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
-                color = colors.Primary
+                color = accent
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -85,7 +92,7 @@ fun PermissionsOnboardingScreen(
             Text(
                 text = "A few permissions to get started",
                 style = MaterialTheme.typography.bodyLarge,
-                color = colors.TextSecondary,
+                color = textSecondary,
                 textAlign = TextAlign.Center
             )
 
@@ -95,7 +102,11 @@ fun PermissionsOnboardingScreen(
                 icon = Icons.Filled.LocationOn,
                 title = "Location",
                 description = "Detect nearby restaurants automatically",
-                colors = colors
+                colors = colors,
+                iconBg = iconBg,
+                iconTint = accent,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -104,7 +115,11 @@ fun PermissionsOnboardingScreen(
                 icon = Icons.Filled.CameraAlt,
                 title = "Camera",
                 description = "Take photos of your dishes",
-                colors = colors
+                colors = colors,
+                iconBg = iconBg,
+                iconTint = accent,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -113,22 +128,26 @@ fun PermissionsOnboardingScreen(
                 icon = Icons.Filled.Notifications,
                 title = "Notifications",
                 description = "Get notified about likes, comments & more",
-                colors = colors
+                colors = colors,
+                iconBg = iconBg,
+                iconTint = accent,
+                textPrimary = textPrimary,
+                textSecondary = textSecondary
             )
 
             Spacer(modifier = Modifier.height(56.dp))
 
             Button(
                 onClick = { step = 1 },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = colors.Primary)
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                shape = RoundedCornerShape(22.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = accent)
             ) {
                 Text(
                     text = "Allow Permissions",
-                    modifier = Modifier.padding(vertical = 8.dp),
                     style = MaterialTheme.typography.titleMedium,
-                    color = colors.Background
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold
                 )
             }
 
@@ -137,8 +156,8 @@ fun PermissionsOnboardingScreen(
             TextButton(onClick = { onComplete(false) }) {
                 Text(
                     text = "Maybe Later",
-                    color = colors.TextSecondary,
-                    style = MaterialTheme.typography.bodyMedium
+                    color = textSecondary,
+                    style = MaterialTheme.typography.bodyLarge
                 )
             }
         }
@@ -180,7 +199,11 @@ private fun PermissionRow(
     icon: ImageVector,
     title: String,
     description: String,
-    colors: ThemeColors
+    colors: ThemeColors,
+    iconBg: Color,
+    iconTint: Color,
+    textPrimary: Color,
+    textSecondary: Color
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -190,15 +213,15 @@ private fun PermissionRow(
             modifier = Modifier
                 .size(48.dp)
                 .background(
-                    color = colors.Primary.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(12.dp)
+                    color = iconBg,
+                    shape = RoundedCornerShape(18.dp)
                 ),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = colors.Primary,
+                tint = iconTint,
                 modifier = Modifier.size(24.dp)
             )
         }
@@ -208,14 +231,15 @@ private fun PermissionRow(
         Column {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = colors.TextPrimary
+                color = textPrimary,
+                fontSize = 22.sp / 1.3f
             )
             Text(
                 text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.TextSecondary
+                style = MaterialTheme.typography.bodyLarge,
+                color = textSecondary
             )
         }
     }

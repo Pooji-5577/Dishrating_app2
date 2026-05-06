@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  * Theme state manager for toggling between light and dark themes
  */
 class ThemeState(
-    initialDarkMode: Boolean = true,
+    initialDarkMode: Boolean = false,
     private val preferencesRepository: PreferencesRepository? = null,
     private val coroutineScope: CoroutineScope? = null
 ) {
