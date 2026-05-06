@@ -213,6 +213,19 @@ data class UserMapProfile(
     val latestDishImage: String? = null
 )
 
+/**
+ * Story data model for ephemeral photo stories
+ */
+data class Story(
+    val id: String = "",
+    val userId: String = "",
+    val userName: String = "",
+    val userProfileUrl: String? = null,
+    val imageUrl: String = "",
+    val createdAt: Long = 0L,
+    val expiresAt: Long = 0L
+)
+
 enum class MapMode { NEARBY, MY_RATINGS }
 
 /**

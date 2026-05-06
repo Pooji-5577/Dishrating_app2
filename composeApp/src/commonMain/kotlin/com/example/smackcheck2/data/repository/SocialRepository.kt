@@ -678,6 +678,57 @@ class SocialRepository(
         }
     }
 
+    // ==================== STORIES ====================
+
+    suspend fun uploadStory(userId: String, imageUrl: String): Result<Unit> {
+        return try {
+            val dto = StoryDto(
+                userId = userId,
+                imageUrl = imageUrl
+            )
+            postgrest["stories"].insert(dto)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteStory(storyId: String, userId: String): Result<Unit> {
+        return try {
+            postgrest["stories"].delete {
+                filter {
+                    eq("id", storyId)
+                    eq("user_id", userId)
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getStories(): Result<List<Story>> {
+        return try {
+            val dtos = postgrest["stories"]
+                .select {
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<StoryDto>()
+
+            val stories = dtos.map { dto ->
+                Story(
+                    id = dto.id ?: "",
+                    userId = dto.userId,
+                    imageUrl = dto.imageUrl,
+                    createdAt = parseTimestamp(dto.createdAt)
+                )
+            }
+            Result.success(stories)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     // ==================== PRIVATE HELPERS ====================
 
     private fun parseTimestamp(timestamp: String?): Long {
