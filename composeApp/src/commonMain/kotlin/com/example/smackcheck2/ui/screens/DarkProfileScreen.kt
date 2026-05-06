@@ -6,8 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,21 +29,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.HelpOutline
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -54,11 +45,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -84,14 +72,12 @@ import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.gamification.PointsConfig
 import com.example.smackcheck2.model.FeedItem
-import com.example.smackcheck2.model.NotificationSettings
 import com.example.smackcheck2.model.User
 import com.example.smackcheck2.ui.components.ReviewPostCard
 import com.example.smackcheck2.ui.theme.LocalThemeState
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.util.formatOneDecimal
 import com.example.smackcheck2.viewmodel.ProfileViewModel
-import kotlinx.coroutines.launch
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
@@ -123,7 +109,7 @@ private fun nextLevelTitle(level: Int) = levelTitle(level + 1)
 private fun xpProgress(xp: Int): Float = PointsConfig.levelProgress(xp)
 private fun xpToGo(xp: Int): Int = maxOf(0, PointsConfig.xpForNextLevel(xp) - xp)
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DarkProfileScreen(
     viewModel: ProfileViewModel,
@@ -138,6 +124,7 @@ fun DarkProfileScreen(
     onNavigateToProgress: () -> Unit = {},
     onNavigateToHelpFaq: () -> Unit = {},
     onNavigateToContactSupport: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     onNavHome: () -> Unit = {},
     onNavMap: () -> Unit = {},
     onNavCamera: () -> Unit = {},
@@ -146,24 +133,6 @@ fun DarkProfileScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val themeState = LocalThemeState.current
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-
-    var pushEnabled   by remember { mutableStateOf(true) }
-    var locationEnabled by remember { mutableStateOf(true) }
-    var cuisineExpanded by remember { mutableStateOf(false) }
-
-    val allCuisines = listOf("Japanese", "Italian", "Indian", "Asian", "Mexican", "French",
-        "Chinese", "Thai", "American", "French", "Mediterranean", "Korean")
-    var selectedCuisines by remember { mutableStateOf(emptySet<String>()) }
-
-    // Load persisted notification and cuisine preferences
-    LaunchedEffect(Unit) {
-        preferencesRepository?.let { repo ->
-            val settings = repo.getAppPreferences()
-            pushEnabled = settings.notificationSettings.pushEnabled
-            locationEnabled = settings.privacySettings.showLocation
-        }
-    }
 
     // Profile tab state
     var selectedTab by remember { mutableStateOf(0) } // 0=My Ratings, 1=Saved, 2=Reviews
@@ -202,7 +171,7 @@ fun DarkProfileScreen(
                     Icon(Icons.Default.Search, contentDescription = "Search", tint = DeepMaroon, modifier = Modifier.size(22.dp))
                 }
                 Text("SmackCheck", color = DeepMaroon, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                IconButton(onClick = {}) {
+                IconButton(onClick = onNavigateToSettings) {
                     Icon(Icons.Default.Settings, contentDescription = "Settings", tint = DeepMaroon, modifier = Modifier.size(22.dp))
                 }
             }
@@ -634,193 +603,7 @@ fun DarkProfileScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // ── PREFERENCES ──────────────────────────────────────────────────────
-        item {
-            SectionLabel("PREFERENCES")
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardWhite)
-            ) {
-                Column {
-                    // Push Notifications
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Notifications, contentDescription = null, tint = DeepMaroon, modifier = Modifier.size(22.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Push Notifications", color = DeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = pushEnabled,
-                            onCheckedChange = { newVal ->
-                                pushEnabled = newVal
-                                coroutineScope.launch {
-                                    preferencesRepository?.saveNotificationSettings(
-                                        NotificationSettings(pushEnabled = newVal)
-                                    )
-                                }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = CrimsonRed,
-                                uncheckedThumbColor = Color.White,
-                                uncheckedTrackColor = MutedGrey.copy(alpha = 0.4f)
-                            )
-                        )
-                    }
-                    HorizontalDivider(color = DividerGrey)
-                    // Location Access
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.LocationOn, contentDescription = null, tint = DeepMaroon, modifier = Modifier.size(22.dp))
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Location Access", color = DeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Switch(
-                            checked = locationEnabled,
-                            onCheckedChange = { newVal ->
-                                locationEnabled = newVal
-                                coroutineScope.launch {
-                                    preferencesRepository?.let { repo ->
-                                        val current = repo.getAppPreferences()
-                                        repo.savePrivacySettings(
-                                            current.privacySettings.copy(showLocation = newVal)
-                                        )
-                                    }
-                                }
-                            },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = CrimsonRed,
-                                uncheckedThumbColor = Color.White,
-                                uncheckedTrackColor = MutedGrey.copy(alpha = 0.4f)
-                            )
-                        )
-                    }
-                    HorizontalDivider(color = DividerGrey)
-                    // Cuisine Preferences
-                    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { cuisineExpanded = !cuisineExpanded },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Restaurant, contentDescription = null, tint = DeepMaroon, modifier = Modifier.size(22.dp))
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text("Cuisine Preferences", color = DeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MutedGrey)
-                        }
-                        if (cuisineExpanded) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            FlowRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                allCuisines.forEach { cuisine ->
-                                    val selected = selectedCuisines.contains(cuisine)
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(20.dp))
-                                            .border(
-                                                width = if (selected) 2.dp else 0.dp,
-                                                color = if (selected) CrimsonRed else Color.Transparent,
-                                                shape = RoundedCornerShape(20.dp)
-                                            )
-                                            .background(Color(0x33642223))
-                                            .clickable {
-                                                selectedCuisines = if (selected) selectedCuisines - cuisine else selectedCuisines + cuisine
-                                            }
-                                            .padding(horizontal = 12.dp, vertical = 6.dp)
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(cuisine, color = WarmMaroon, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                            if (selected) {
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Box(
-                                                    modifier = Modifier
-                                                        .size(15.dp)
-                                                        .background(WarmMaroon, CircleShape),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(
-                                                        Icons.Default.Check,
-                                                        contentDescription = null,
-                                                        tint = Color.White,
-                                                        modifier = Modifier.size(10.dp)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Button(
-                                onClick = {
-                                    cuisineExpanded = false
-                                },
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
-                                shape = RoundedCornerShape(999.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = WarmMaroon, contentColor = Color.White)
-                            ) {
-                                Text("Save Preferences", fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-
-        // ── SUPPORT ──────────────────────────────────────────────────────────
-        item {
-            SectionLabel("SUPPORT")
-            Spacer(modifier = Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardWhite)
-            ) {
-                Column {
-                    SettingsRow(
-                        title = "Help & FAQ",
-                        icon = null,
-                        onClick = onNavigateToHelpFaq
-                    )
-                    HorizontalDivider(color = DividerGrey)
-                    SettingsRow(
-                        title = "Contact Support",
-                        icon = null,
-                        onClick = onNavigateToContactSupport
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-
-        // ── DANGER ZONE ──────────────────────────────────────────────────────
-        item {
-            SectionLabel("DANGER ZONE", color = CrimsonRed)
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = onNavigateToAccount,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .height(46.dp),
-                shape = RoundedCornerShape(999.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC57F7F)),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = CrimsonRed)
-            ) {
-                Text("Delete Account", fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), textAlign = TextAlign.Start)
-                Icon(Icons.Default.Delete, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(18.dp))
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-
-        // ── Log Out button ───────────────────────────────────────────────────
+        // ── Log Out button ──────────────────────────────────────────────────
         item {
             Button(
                 onClick = onSignOut,

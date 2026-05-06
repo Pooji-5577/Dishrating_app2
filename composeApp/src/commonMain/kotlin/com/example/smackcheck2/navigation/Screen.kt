@@ -56,6 +56,10 @@ sealed class Screen(val route: String) {
     data object PrivacySettings : Screen("privacy_settings")
     data object HelpFaq : Screen("help_faq")
     data object ContactSupport : Screen("contact_support")
+    data object SettingsMenu : Screen("settings_menu")
+    data object Preferences : Screen("preferences")
+    data object Support : Screen("support")
+    data object DangerZone : Screen("danger_zone")
 
     // Social screens
     data object UserProfile : Screen("user_profile/{userId}") {

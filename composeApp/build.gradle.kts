@@ -58,6 +58,7 @@ kotlin {
             implementation(compose.material3)
             implementation(compose.materialIconsExtended)
             implementation(compose.ui)
+            implementation(compose.animation)
             implementation(compose.components.resources)
             implementation(compose.uiUtil)
             implementation("org.jetbrains.compose.ui:ui-backhandler:1.8.0")

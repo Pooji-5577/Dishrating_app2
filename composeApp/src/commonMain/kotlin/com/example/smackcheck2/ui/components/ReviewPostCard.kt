@@ -56,6 +56,7 @@ fun ReviewPostCard(
     onShareClick: () -> Unit,
     onBookmarkClick: () -> Unit,
     onUserClick: () -> Unit,
+    onDishClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = appColors()
@@ -155,6 +156,7 @@ fun ReviewPostCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(256.dp)
+                        .clickable { onDishClick() }
                 ) {
                     if (feedItem.dishImageUrl != null) {
                         KamelImage(
@@ -234,7 +236,8 @@ fun ReviewPostCard(
                         fontStyle = FontStyle.Italic,
                         fontFamily = newsreader,
                         color = Color(0xFF642223),
-                        lineHeight = 30.sp
+                        lineHeight = 30.sp,
+                        modifier = Modifier.clickable { onDishClick() }
                     )
 
                     // "at Restaurant Name"

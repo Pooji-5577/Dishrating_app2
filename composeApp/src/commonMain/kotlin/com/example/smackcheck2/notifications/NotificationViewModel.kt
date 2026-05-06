@@ -2,6 +2,9 @@ package com.example.smackcheck2.notifications
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.SupabaseClientProvider
+import com.example.smackcheck2.data.repository.NotificationService
+import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +18,8 @@ import kotlinx.coroutines.launch
  * mark-as-read, and logout cleanup.
  */
 class NotificationViewModel : ViewModel() {
+
+    private val notificationService = NotificationService()
 
     // ─── State ───────────────────────────────────────────────────
 
@@ -32,6 +37,9 @@ class NotificationViewModel : ViewModel() {
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    private fun currentUserId(): String? =
+        SupabaseClientProvider.client.auth.currentUserOrNull()?.id
 
     // ─── Initialize Push Notifications ───────────────────────────
 
@@ -62,7 +70,7 @@ class NotificationViewModel : ViewModel() {
                     _pushToken.value = result.token
 
                     // 4. Save token to Supabase
-                    val saveResult = NotificationRepository.savePushTokenToSupabase(result.token)
+                    val saveResult = notificationService.savePushToken(result.token)
                     if (saveResult.isFailure) {
                         println("Token generated but failed to save: ${saveResult.exceptionOrNull()?.message}")
                     }
@@ -86,8 +94,13 @@ class NotificationViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                val notifResult = NotificationRepository.fetchNotifications(limit = 30)
-                val count = NotificationRepository.getUnreadNotificationCount()
+                val userId = currentUserId()
+                if (userId == null) {
+                    _isLoading.value = false
+                    return@launch
+                }
+                val notifResult = notificationService.fetchNotifications(userId, limit = 30)
+                val count = notificationService.getUnreadCount(userId)
 
                 notifResult.onSuccess { list ->
                     _notifications.value = list
@@ -113,7 +126,7 @@ class NotificationViewModel : ViewModel() {
      */
     fun markAsRead(notificationId: String) {
         viewModelScope.launch {
-            NotificationRepository.markNotificationAsRead(notificationId)
+            notificationService.markAsRead(notificationId)
             _unreadCount.value = maxOf(0, _unreadCount.value - 1)
             _notifications.value = _notifications.value.map { notif ->
                 if (notif.id == notificationId) notif.copy(isRead = true) else notif
@@ -126,7 +139,8 @@ class NotificationViewModel : ViewModel() {
      */
     fun markAllAsRead() {
         viewModelScope.launch {
-            NotificationRepository.markAllNotificationsAsRead()
+            val userId = currentUserId() ?: return@launch
+            notificationService.markAllAsRead(userId)
             _unreadCount.value = 0
             _notifications.value = _notifications.value.map { it.copy(isRead = true) }
         }
@@ -140,7 +154,7 @@ class NotificationViewModel : ViewModel() {
      */
     fun cleanupOnLogout() {
         viewModelScope.launch {
-            NotificationRepository.removePushToken()
+            notificationService.removePushToken()
             _pushToken.value = null
             _notifications.value = emptyList()
             _unreadCount.value = 0

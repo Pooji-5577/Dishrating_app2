@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.SocialRepository
-import com.example.smackcheck2.notifications.NotificationRepository
+import com.example.smackcheck2.data.repository.NotificationService
 import com.example.smackcheck2.model.Comment
 import com.example.smackcheck2.model.CommentsUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,6 +17,7 @@ class CommentsViewModel(private val ratingId: String) : ViewModel() {
 
     private val socialRepository = SocialRepository()
     private val authRepository = AuthRepository()
+    private val notificationService = NotificationService()
 
     private val _uiState = MutableStateFlow(CommentsUiState())
     val uiState: StateFlow<CommentsUiState> = _uiState.asStateFlow()
@@ -75,7 +76,7 @@ class CommentsViewModel(private val ratingId: String) : ViewModel() {
                     _uiState.update { it.copy(isSubmitting = false, replyingTo = null) }
                     loadComments()
                     viewModelScope.launch {
-                        NotificationRepository.notifyCommentOnRating(
+                        notificationService.notifyCommentOnRating(
                             ratingId = ratingId,
                             commenterId = user.id,
                             commenterName = user.name
