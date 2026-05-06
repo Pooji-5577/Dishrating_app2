@@ -3,7 +3,7 @@ package com.example.smackcheck2.data.repository
 import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.dto.ProfileDto
 import com.example.smackcheck2.model.User
-import com.example.smackcheck2.notifications.NotificationRepository
+import com.example.smackcheck2.data.repository.NotificationService
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
@@ -31,7 +31,9 @@ private object Apple : OAuthProvider() {
 /**
  * Repository for authentication operations using Supabase Auth
  */
-class AuthRepository {
+class AuthRepository(
+    private val notificationService: NotificationService = NotificationService()
+) {
 
     private val client = SupabaseClientProvider.client
     private val auth = client.auth
@@ -140,7 +142,7 @@ class AuthRepository {
 
                 // Send welcome notification
                 try {
-                    NotificationRepository.notifyWelcome(userId, name)
+                    notificationService.notifyWelcome(userId, name)
                 } catch (e: Exception) {
                     println("AuthRepository: Welcome notification failed: ${e.message}")
                 }

@@ -13,7 +13,7 @@ import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
-import com.example.smackcheck2.notifications.NotificationRepository
+import com.example.smackcheck2.data.repository.NotificationService
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -31,6 +31,7 @@ class SocialFeedViewModel(
     private val authRepository = AuthRepository()
     private val databaseRepository = DatabaseRepository()
     private val realtimeFeedRepository = RealtimeFeedRepository()
+    private val notificationService = NotificationService()
 
     private val crashGuard = CoroutineExceptionHandler { _, throwable ->
         println("SocialFeedViewModel: Uncaught coroutine error: ${throwable::class.simpleName} - ${throwable.message}")
@@ -423,7 +424,7 @@ class SocialFeedViewModel(
                         val item = _uiState.value.feedItems.find { it.id == itemId }
                         if (item != null && item.userId != user.id) {
                             viewModelScope.launch {
-                                NotificationRepository.notifyReviewLiked(
+                                notificationService.notifyReviewLiked(
                                     reviewOwnerId = item.userId,
                                     likerName = user.name,
                                     dishName = item.dishName,

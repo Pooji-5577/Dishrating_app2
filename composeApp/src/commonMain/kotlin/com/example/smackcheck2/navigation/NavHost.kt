@@ -1,9 +1,5 @@
 package com.example.smackcheck2.navigation
 
-import com.example.smackcheck2.analytics.Analytics
-import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.backhandler.BackHandler
-import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -117,20 +113,14 @@ import com.example.smackcheck2.viewmodel.SocialFeedViewModel
 import com.example.smackcheck2.viewmodel.SocialMapViewModel
 import com.example.smackcheck2.viewmodel.CommentsViewModel
 import com.example.smackcheck2.viewmodel.NotificationsViewModel
-import com.example.smackcheck2.notifications.NotificationDeepLink
+import com.example.smackcheck2.notifications.NotificationViewModel
+import com.example.smackcheck2.ui.screens.NotificationsScreen
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FollowListUiState
 import com.example.smackcheck2.model.UserProfileUiState
 import io.github.jan.supabase.auth.auth
+import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
-// Main branch additions: gamification, notifications, location state
-import com.example.smackcheck2.gamification.PointsEarnedEvent
-import com.example.smackcheck2.ui.components.PointsEarnedPopup
-import com.example.smackcheck2.notifications.NotificationViewModel
-import com.example.smackcheck2.ui.screens.NotificationsScreen
-import com.example.smackcheck2.location.CommonLocationState
-import com.example.smackcheck2.location.SharedLocationState
-import com.example.smackcheck2.location.requestCurrentLocationDetection
 
 /**
  * Navigation state holder for managing current screen with Compose state
@@ -255,174 +245,87 @@ class NavigationState {
 
 /**
  * Main Navigation Host composable
- * Manages navigation between all screens
+ * Manages navigation between all screens.
+ * Cross-cutting concerns (auth reactions, deep links, location, overlays)
+ * are delegated to [AppCoordinator].
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     val navigationState = remember { NavigationState() }
     val authViewModel: AuthViewModel = viewModel { AuthViewModel() }
     val authState by authViewModel.authState.collectAsState()
 
-    // Shared LocationHomeViewModel across all screens
     val locationHomeViewModel: LocationHomeViewModel = viewModel { LocationHomeViewModel() }
     val locationService = LocalLocationService.current
     val placesService = LocalPlacesService.current
+    val geofencingService = LocalGeofencingService.current
 
-    // Set location and places service once at the top level
-    androidx.compose.runtime.LaunchedEffect(locationService, placesService) {
-        locationHomeViewModel.setLocationService(locationService)
-        locationHomeViewModel.setPlacesService(placesService)
-    }
-
-    // Shared RestaurantPhotoViewModel for Google Places photos (from main)
     val restaurantPhotoViewModel: RestaurantPhotoViewModel = viewModel { RestaurantPhotoViewModel() }
-
-    // Shared GamificationViewModel (from main)
     val gamificationViewModel: GamificationViewModel = viewModel { GamificationViewModel() }
-
-    // Shared NotificationViewModel for push notifications (from main)
     val notificationViewModel: NotificationViewModel = viewModel { NotificationViewModel() }
-
-    // Shared SocialFeedViewModel — created early so feed pre-loads on auth
     val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel(preferencesRepository) }
 
-    // Points-earned popup state (from main)
-    var pointsEvent by remember { mutableStateOf<PointsEarnedEvent?>(null) }
-    LaunchedEffect(Unit) {
-        gamificationViewModel.pointsEarned.collect { event ->
-            pointsEvent = event
-        }
-    }
+    val imagePicker = LocalImagePicker.current
+    val shareService = LocalShareService.current
 
-    // Observe SharedLocationState and auto-update the LocationHomeViewModel (from main)
-    // Skip if user has manually selected a location
-    val locationState by SharedLocationState.locationState.collectAsState()
+    AppCoordinator(
+        preferencesRepository = preferencesRepository,
+        navigationState = navigationState,
+        authViewModel = authViewModel,
+        locationHomeViewModel = locationHomeViewModel,
+        restaurantPhotoViewModel = restaurantPhotoViewModel,
+        gamificationViewModel = gamificationViewModel,
+        notificationViewModel = notificationViewModel,
+        socialFeedViewModel = socialFeedViewModel,
+        locationService = locationService,
+        placesService = placesService,
+        geofencingService = geofencingService,
+        imagePicker = imagePicker,
+        shareService = shareService
+    ) {
+        NavHostContent(
+            navigationState = navigationState,
+            authViewModel = authViewModel,
+            authState = authState,
+            locationHomeViewModel = locationHomeViewModel,
+            locationService = locationService,
+            placesService = placesService,
+            geofencingService = geofencingService,
+            restaurantPhotoViewModel = restaurantPhotoViewModel,
+            gamificationViewModel = gamificationViewModel,
+            notificationViewModel = notificationViewModel,
+            socialFeedViewModel = socialFeedViewModel,
+            preferencesRepository = preferencesRepository,
+            imagePicker = imagePicker,
+            shareService = shareService
+        )
+    }
+}
+
+@Composable
+private fun NavHostContent(
+    navigationState: NavigationState,
+    authViewModel: AuthViewModel,
+    authState: AuthState,
+    locationHomeViewModel: LocationHomeViewModel,
+    locationService: com.example.smackcheck2.platform.LocationService?,
+    placesService: com.example.smackcheck2.platform.PlacesService?,
+    geofencingService: com.example.smackcheck2.platform.GeofencingService?,
+    restaurantPhotoViewModel: RestaurantPhotoViewModel,
+    gamificationViewModel: GamificationViewModel,
+    notificationViewModel: NotificationViewModel,
+    socialFeedViewModel: SocialFeedViewModel,
+    preferencesRepository: PreferencesRepository,
+    imagePicker: com.example.smackcheck2.platform.ImagePicker?,
+    shareService: com.example.smackcheck2.platform.ShareService?
+) {
     val locationUiState by locationHomeViewModel.uiState.collectAsState()
-    LaunchedEffect(locationState) {
-        if (locationUiState.isManuallySelected) return@LaunchedEffect
-        when (val state = locationState) {
-            is CommonLocationState.Success -> {
-                val data = state.data
-                val city = data.city ?: "Unknown Location"
-                locationHomeViewModel.selectLocationWithCoordinates(
-                    city = city,
-                    latitude = data.latitude,
-                    longitude = data.longitude,
-                    countryCode = data.countryCode
-                )
-            }
-            else -> { /* Loading, Idle, Permission, Disabled, Error - handled by individual screens */ }
-        }
-    }
-
-    // Handle system back button press
-    // Always enable back handler to prevent app from closing unexpectedly
-    BackHandler(enabled = true) {
-        when {
-            // If there's a back stack, navigate back
-            navigationState.canGoBack -> {
-                navigationState.navigateBack()
-            }
-            // On home screen, do nothing (stay on home screen instead of exiting)
-            navigationState.currentScreen is Screen.DarkHome -> {
-                // Consume the back press - don't exit the app
-                println("NavHost: On home screen, back press ignored to prevent app exit")
-            }
-            // On other screens (Login, Profile, etc.), navigate back if possible
-            else -> {
-                // Attempt to go back, if not possible, stay on current screen
-                if (!navigationState.navigateBack()) {
-                    println("NavHost: Cannot navigate back, staying on current screen")
-                }
-            }
-        }
-    }
-
     val isAuthenticated = when (authState) {
         is AuthState.Authenticated -> true
         is AuthState.Unauthenticated -> false
         is AuthState.Unknown -> null
     }
 
-    // Initialize push notifications and pre-load feed when authenticated
-    LaunchedEffect(isAuthenticated) {
-        if (isAuthenticated == true) {
-            notificationViewModel.initializePushNotifications()
-            notificationViewModel.refresh()
-            socialFeedViewModel.loadFeed()
-
-            // Day 1 retention tracking
-            try {
-                val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()
-                val firstOpen = preferencesRepository.getFirstOpenTimestamp()
-                if (firstOpen == 0L) {
-                    preferencesRepository.saveFirstOpenTimestamp(now)
-                } else if (!preferencesRepository.isDay1RetentionTracked()) {
-                    val hoursSinceFirstOpen = (now - firstOpen) / (1000 * 60 * 60)
-                    if (hoursSinceFirstOpen >= 24) {
-                        Analytics.track("day_1_retention", mapOf(
-                            "hours_since_first_open" to hoursSinceFirstOpen
-                        ))
-                        preferencesRepository.setDay1RetentionTracked()
-                    }
-                }
-            } catch (_: Exception) { }
-        }
-    }
-    
-    // Route pending push-notification taps to the relevant screen once the
-    // user is authenticated. The Android FCM service (and iOS equivalent)
-    // publishes targets to NotificationDeepLink; we consume each target
-    // after navigating so the same tap isn't replayed on recomposition.
-    val pendingNotificationTarget by NotificationDeepLink.pendingTarget.collectAsState()
-    LaunchedEffect(pendingNotificationTarget, isAuthenticated) {
-        val target = pendingNotificationTarget ?: return@LaunchedEffect
-        if (isAuthenticated != true) return@LaunchedEffect
-        when (target.screen) {
-            "DishDetail" -> {
-                val dishId = target.dishId
-                if (!dishId.isNullOrBlank()) {
-                    navigationState.navigateToWithArgs(Screen.DishDetail, "dishId" to dishId)
-                } else {
-                    navigationState.navigateToMainTab(Screen.SocialFeed)
-                }
-            }
-            "SocialFeed" -> navigationState.navigateToMainTab(Screen.SocialFeed)
-            "GameScreen", "Game" -> navigationState.navigateTo(Screen.Game)
-            "NotificationsList", "Notifications" -> navigationState.navigateTo(Screen.NotificationsList)
-            "UserProfile" -> {
-                val userId = target.userId
-                if (!userId.isNullOrBlank()) {
-                    navigationState.navigateToWithArgs(Screen.UserProfile, "userId" to userId)
-                } else {
-                    navigationState.navigateTo(Screen.DarkHome)
-                }
-            }
-            "Home" -> navigationState.navigateTo(Screen.DarkHome)
-            else -> navigationState.navigateTo(Screen.NotificationsList)
-        }
-        NotificationDeepLink.consume()
-    }
-
-    // Track if we've already requested location permission this session
-    var hasRequestedPermission by remember { mutableStateOf(false) }
-    var shouldShowPermissionDialog by remember { mutableStateOf(false) }
-
-    // Automatically request location permission after authentication, but only on first launch
-    LaunchedEffect(isAuthenticated) {
-        if (isAuthenticated == true && !hasRequestedPermission) {
-            hasRequestedPermission = true
-            val alreadySeen = try {
-                preferencesRepository.hasSeenPermissionsOnboarding()
-            } catch (_: Exception) { false }
-            if (!alreadySeen) {
-                shouldShowPermissionDialog = true
-            }
-        }
-    }
-
-    // Main content with points popup overlay (from main)
     Box(modifier = Modifier.fillMaxSize()) {
     when (navigationState.currentScreen) {
         is Screen.Splash -> {
@@ -1740,46 +1643,6 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onMarkAllRead = { notificationsViewModel.markAllAsRead() }
             )
         }
-    }
-
-    // Points earned popup overlay (always on top) - from main
-    PointsEarnedPopup(
-        event = pointsEvent,
-        onDismissed = { pointsEvent = null },
-        modifier = Modifier.align(Alignment.TopCenter).zIndex(100f)
-    )
-    
-    // Permissions onboarding screen shown on first login (location + camera + notifications)
-    if (shouldShowPermissionDialog && isAuthenticated == true) {
-        PermissionsOnboardingScreen(
-            onComplete = { locationWasGranted ->
-                shouldShowPermissionDialog = false
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                    try {
-                        preferencesRepository.setPermissionsOnboardingSeen()
-                    } catch (_: Exception) { }
-                }
-                if (locationWasGranted) {
-                    // Location granted - trigger automatic location detection
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                        try {
-                            locationService?.getCurrentLocation()?.let { location ->
-                                SharedLocationState.onLocationDetected(
-                                    latitude = location.latitude,
-                                    longitude = location.longitude,
-                                    city = location.cityName ?: "Unknown",
-                                    countryCode = location.countryCode
-                                )
-                                val repository = com.example.smackcheck2.data.repository.SocialMapRepository()
-                                repository.updateUserLocation(location.latitude, location.longitude)
-                            }
-                        } catch (e: Exception) {
-                            println("Auto location detection error: ${e.message}")
-                        }
-                    }
-                }
-            }
-        )
     }
     } // end Box
 }

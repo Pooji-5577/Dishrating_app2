@@ -14,7 +14,9 @@ import kotlin.uuid.Uuid
 /**
  * Repository for database operations using Supabase Postgrest
  */
-class DatabaseRepository {
+class DatabaseRepository(
+    private val schemaAdapter: SupabaseSchemaAdapter = SupabaseSchemaAdapter()
+) {
 
     private val client = SupabaseClientProvider.client
     private val postgrest = client.postgrest
@@ -134,29 +136,19 @@ class DatabaseRepository {
      */
     suspend fun ensureRestaurantExists(restaurant: Restaurant, dishImageUrl: String? = null): Result<Restaurant> {
         return try {
-            // Check if it already exists
             val existing = postgrest["restaurants"]
                 .select { filter { eq("id", restaurant.id) } }
                 .decodeSingleOrNull<RestaurantDto>()
 
             if (existing != null) {
-                // If restaurant has no images yet but we have a dish photo, add it
                 if (existing.imageUrls.isNullOrEmpty() && dishImageUrl != null) {
-                    try {
-                        postgrest["restaurants"].update({
-                            set("image_urls", listOf(dishImageUrl))
-                        }) {
-                            filter { eq("id", restaurant.id) }
-                        }
-                        println("DatabaseRepository: Updated restaurant ${restaurant.id} with dish image")
-                    } catch (_: Exception) { /* non-critical */ }
+                    schemaAdapter.ensureRestaurantImage(restaurant.id, dishImageUrl)
+                    println("DatabaseRepository: Updated restaurant ${restaurant.id} with dish image")
                 }
                 Result.success(existing.toRestaurant())
             } else {
-                // Insert the restaurant with the user's dish photo as its image
                 val imageUrls = if (dishImageUrl != null) listOf(dishImageUrl) else restaurant.imageUrls
                 val dto = RestaurantDto(
-                    // id omitted — let Postgres generate via DEFAULT gen_random_uuid()
                     name = restaurant.name,
                     city = restaurant.city,
                     cuisine = restaurant.cuisine,
@@ -164,9 +156,7 @@ class DatabaseRepository {
                     latitude = restaurant.latitude,
                     longitude = restaurant.longitude
                 )
-                val created = postgrest["restaurants"]
-                    .insert(dto) { select() }
-                    .decodeSingle<RestaurantDto>()
+                val created = schemaAdapter.insertRestaurant(dto).getOrThrow()
                 println("DatabaseRepository: Created new restaurant from Places: ${created.id} — ${created.name}")
                 Result.success(created.toRestaurant())
             }
@@ -657,7 +647,6 @@ class DatabaseRepository {
             return Result.failure(IllegalArgumentException("Dish name cannot be blank"))
         }
         return try {
-            // Check if dish already exists
             val existing = postgrest["dishes"]
                 .select {
                     filter {
@@ -668,27 +657,14 @@ class DatabaseRepository {
                 .decodeSingleOrNull<DishDto>()
 
             if (existing != null) {
-                // Back-fill restaurant_name or image_url if missing
                 val needsImageUpdate = existing.imageUrl == null && imageUrl != null
                 val needsNameUpdate = existing.restaurantName == null && restaurantName != null
                 if (needsImageUpdate || needsNameUpdate) {
-                    try {
-                        postgrest["dishes"].update({
-                            if (needsImageUpdate) set("image_url", imageUrl)
-                            if (needsNameUpdate) set("restaurant_name", restaurantName)
-                        }) {
-                            filter { eq("id", existing.id!!) }
-                        }
-                    } catch (_: Exception) {
-                        // Non-critical — restaurant_name column may not exist; try image-only update
-                        if (needsImageUpdate) {
-                            try {
-                                postgrest["dishes"].update({ set("image_url", imageUrl) }) {
-                                    filter { eq("id", existing.id!!) }
-                                }
-                            } catch (_: Exception) { /* non-critical */ }
-                        }
-                    }
+                    schemaAdapter.backfillDishFields(
+                        dishId = existing.id!!,
+                        imageUrl = if (needsImageUpdate) imageUrl else null,
+                        restaurantName = if (needsNameUpdate) restaurantName else null
+                    )
                     return Result.success(
                         existing.toDish().copy(
                             imageUrl = if (needsImageUpdate) imageUrl else existing.imageUrl,
@@ -701,7 +677,6 @@ class DatabaseRepository {
                 ))
             }
 
-            // Create new dish
             @OptIn(ExperimentalUuidApi::class)
             val dishId = Uuid.random().toString()
             val dto = DishDto(
@@ -711,26 +686,8 @@ class DatabaseRepository {
                 imageUrl = imageUrl,
                 restaurantName = restaurantName
             )
-            val created: DishDto = try {
-                postgrest["dishes"].insert(dto) { select() }.decodeSingle()
-            } catch (e: Exception) {
-                println("DatabaseRepository: createOrGetDish full insert failed (${e.message?.take(120)}), retrying without restaurant_name...")
-                // restaurant_name column may not exist — retry with minimal fields
-                val minimalDto = DishDto(
-                    id = dishId,
-                    name = name,
-                    restaurantId = restaurantId,
-                    imageUrl = imageUrl,
-                    restaurantName = null
-                )
-                try {
-                    postgrest["dishes"].insert(minimalDto) { select() }.decodeSingle()
-                } catch (e2: Exception) {
-                    println("DatabaseRepository: createOrGetDish minimal insert also failed: ${e2.message?.take(120)}")
-                    return Result.failure(e2)
-                }
-            }
-            Result.success(created.toDish().copy(restaurantName = restaurantName ?: created.restaurantName ?: ""))
+            val created = schemaAdapter.insertDish(dto).getOrThrow()
+            Result.success(created.toDish().copy(restaurantName = schemaAdapter.resolveRestaurantName(created, restaurantName)))
         } catch (e: Exception) {
             Result.failure(e)
         }
