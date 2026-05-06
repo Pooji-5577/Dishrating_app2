@@ -7,7 +7,9 @@ import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.datetime.Instant
 
-class SocialRepository {
+class SocialRepository(
+    private val feedAssembler: FeedAssembler = FeedAssembler()
+) {
 
     private val client = SupabaseClientProvider.client
     private val postgrest = client.postgrest
@@ -169,7 +171,7 @@ class SocialRepository {
                 }
                 .decodeList<RatingDto>()
 
-            val feedItems = mapRatingsToFeedItems(ratings, userId)
+            val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, userId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -191,7 +193,7 @@ class SocialRepository {
                 }
                 .decodeList<RatingDto>()
 
-            val feedItems = mapRatingsToFeedItems(ratings, currentUserId)
+            val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, currentUserId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -240,7 +242,7 @@ class SocialRepository {
                     range(offset.toLong(), (offset + limit - 1).toLong())
                 }
                 .decodeList<RatingDto>()
-            val feedItems = mapRatingsToFeedItems(ratings, currentUserId)
+            val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, currentUserId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -320,7 +322,7 @@ class SocialRepository {
             println("SocialRepository[Nearby]: matchedCoords=$matchedByCoords matchedCity=$matchedByCity skipped=$skippedNoData returning=${nearbyRatings.size}")
             if (nearbyRatings.isEmpty()) return Result.success(emptyList())
 
-            val feedItems = mapRatingsToFeedItems(nearbyRatings, currentUserId)
+            val feedItems = feedAssembler.mapRatingsToFeedItems(nearbyRatings, currentUserId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -353,7 +355,7 @@ class SocialRepository {
                 }
                 .decodeList<RatingDto>()
 
-            val feedItems = mapRatingsToFeedItems(ratings, currentUserId)
+            val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, currentUserId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -667,7 +669,7 @@ class SocialRepository {
                 }
                 .decodeList<RatingDto>()
 
-            val feedItems = mapRatingsToFeedItems(ratings, userId)
+            val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, userId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -677,156 +679,6 @@ class SocialRepository {
     }
 
     // ==================== PRIVATE HELPERS ====================
-
-    private suspend fun mapRatingsToFeedItems(
-        ratings: List<RatingDto>,
-        currentUserId: String?
-    ): List<FeedItem> {
-        if (ratings.isEmpty()) return emptyList()
-
-        // Batch fetch all profiles, dishes, and restaurants in parallel instead of N+1 queries
-        val userIds = ratings.map { it.userId }.distinct()
-        val dishIds = ratings.map { it.dishId }.distinct()
-        val restaurantIds = ratings.map { it.restaurantId }.distinct()
-        val ratingIds = ratings.mapNotNull { it.id }
-
-        // Batch fetch all related data (6 bulk queries instead of N*6 individual ones)
-        val profilesMap = try {
-            postgrest["profiles"]
-                .select { filter { isIn("id", userIds) } }
-                .decodeList<ProfileDto>()
-                .associateBy { it.id }
-        } catch (_: Exception) { emptyMap() }
-
-        val dishesMap = try {
-            postgrest["dishes"]
-                .select { filter { isIn("id", dishIds) } }
-                .decodeList<DishDto>()
-                .associateBy { it.id ?: "" }
-        } catch (_: Exception) { emptyMap() }
-
-        // Collect all possible restaurant IDs: from ratings AND from dishes
-        val dishRestaurantIds = dishesMap.values.map { it.restaurantId }.distinct()
-        val allRestaurantIds = (restaurantIds + dishRestaurantIds).distinct()
-        val validRestaurantIds = allRestaurantIds.filter { it.isNotBlank() }
-        println("SocialRepository: Fetching restaurants for IDs: $validRestaurantIds")
-        val restaurantsMap = try {
-            if (validRestaurantIds.isNotEmpty()) {
-                val results = postgrest["restaurants"]
-                    .select { filter { isIn("id", validRestaurantIds) } }
-                    .decodeList<RestaurantDto>()
-                println("SocialRepository: Batch restaurant query returned ${results.size} results: ${results.map { "${it.id}=${it.name}" }}")
-                results.associateBy { it.id ?: "" }
-            } else emptyMap()
-        } catch (e: Exception) {
-            println("SocialRepository: Failed to fetch restaurants: ${e.message}")
-            emptyMap()
-        }
-
-        // Batch fetch all comments counts
-        val commentsCountMap = try {
-            if (ratingIds.isNotEmpty()) {
-                postgrest["comments"]
-                    .select { filter { isIn("rating_id", ratingIds) } }
-                    .decodeList<CommentDto>()
-                    .groupBy { it.ratingId }
-                    .mapValues { it.value.size }
-            } else emptyMap()
-        } catch (_: Exception) { emptyMap() }
-
-        // Batch fetch user's likes for all ratings
-        val likedRatingIds = if (currentUserId != null && ratingIds.isNotEmpty()) {
-            try {
-                postgrest["likes"]
-                    .select {
-                        filter {
-                            eq("user_id", currentUserId)
-                            isIn("rating_id", ratingIds)
-                        }
-                    }
-                    .decodeList<LikeDto>()
-                    .map { it.ratingId }
-                    .toSet()
-            } catch (_: Exception) { emptySet() }
-        } else emptySet()
-
-        // Batch fetch all additional images
-        val additionalImagesMap = try {
-            if (ratingIds.isNotEmpty()) {
-                postgrest["rating_images"]
-                    .select {
-                        filter { isIn("rating_id", ratingIds) }
-                        order("sort_order", Order.ASCENDING)
-                    }
-                    .decodeList<RatingImageDto>()
-                    .groupBy { it.ratingId }
-                    .mapValues { entry -> entry.value.map { it.imageUrl } }
-            } else emptyMap()
-        } catch (_: Exception) { emptyMap() }
-
-        // Fallback: fetch restaurant names individually for any missing from batch
-        // Also include dish restaurant IDs that may differ from rating restaurant IDs
-        val missingRestaurantIds = validRestaurantIds.filter { it !in restaurantsMap }
-        val fallbackRestaurantNames = mutableMapOf<String, String>()
-        for (missingId in missingRestaurantIds.filter { it.isNotBlank() }) {
-            try {
-                val dto = postgrest["restaurants"]
-                    .select {
-                        filter { eq("id", missingId) }
-                    }
-                    .decodeSingleOrNull<RestaurantDto>()
-                if (dto != null) {
-                    fallbackRestaurantNames[missingId] = dto.name
-                    if (dto.id != null) fallbackRestaurantNames[dto.id] = dto.name
-                }
-            } catch (e: Exception) {
-                println("SocialRepository: Fallback restaurant fetch failed for $missingId: ${e.message}")
-            }
-        }
-
-        // Now map ratings to feed items using the pre-fetched data (no more network calls)
-        return ratings.mapNotNull { rating ->
-            val ratingId = rating.id ?: return@mapNotNull null
-            val profile = profilesMap[rating.userId]
-            val dish = dishesMap[rating.dishId]
-            val restaurant = restaurantsMap[rating.restaurantId]
-            // Try dish's restaurantId as fallback (dish may reference a different restaurant ID)
-            val dishRestaurant = if (restaurant == null && dish != null) restaurantsMap[dish.restaurantId] else null
-            val restaurantName = restaurant?.name
-                ?: dishRestaurant?.name
-                ?: dish?.restaurantName  // Use restaurant_name stored directly on the dish
-                ?: fallbackRestaurantNames[rating.restaurantId]
-                ?: fallbackRestaurantNames[dish?.restaurantId ?: ""]
-                ?: "Unknown Restaurant"
-            val additionalImages = additionalImagesMap[ratingId] ?: emptyList()
-
-            val allImages = buildList {
-                rating.imageUrl?.let { add(it) }
-                dish?.imageUrl?.let { if (rating.imageUrl == null) add(it) }
-                addAll(additionalImages)
-            }
-
-            FeedItem(
-                id = ratingId,
-                userId = rating.userId,
-                userProfileImageUrl = profile?.profilePhotoUrl,
-                userName = profile?.name ?: "Unknown",
-                dishImageUrl = allImages.firstOrNull(),
-                dishName = dish?.name ?: "Unknown Dish",
-                dishId = rating.dishId,
-                restaurantName = restaurantName,
-                restaurantCity = (restaurant ?: dishRestaurant)?.city ?: "",
-                rating = rating.rating,
-                likesCount = rating.likesCount,
-                commentsCount = commentsCountMap[ratingId] ?: 0,
-                isLiked = likedRatingIds.contains(ratingId),
-                timestamp = parseTimestamp(rating.createdAt),
-                comment = rating.comment,
-                imageUrls = allImages,
-                price = rating.price
-            )
-        }
-    }
 
     private fun parseTimestamp(timestamp: String?): Long {
         if (timestamp.isNullOrBlank()) return 0L

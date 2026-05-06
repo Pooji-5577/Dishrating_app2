@@ -28,7 +28,9 @@ import kotlinx.datetime.Instant
  * - Real-time comment count updates
  * - Real-time notification updates
  */
-class RealtimeFeedRepository {
+class RealtimeFeedRepository(
+    private val feedAssembler: FeedAssembler = FeedAssembler()
+) {
     
     private val client = SupabaseClientProvider.client
     private val postgrest = client.postgrest
@@ -299,7 +301,7 @@ class RealtimeFeedRepository {
             }
             .decodeList<RatingDto>()
         
-        return mapRatingsToFeedItems(ratings, userId)
+        return feedAssembler.mapRatingsToFeedItems(ratings, userId)
     }
     
     private suspend fun fetchFollowingFeed(userId: String, limit: Int, offset: Int): List<FeedItem> {
@@ -330,7 +332,7 @@ class RealtimeFeedRepository {
             }
             .decodeList<RatingDto>()
         
-        return mapRatingsToFeedItems(ratings, userId)
+        return feedAssembler.mapRatingsToFeedItems(ratings, userId)
     }
     
     private suspend fun fetchNearbyFeed(userId: String, limit: Int, offset: Int): List<FeedItem> {
@@ -347,111 +349,10 @@ class RealtimeFeedRepository {
                 }
                 .decodeSingleOrNull<RatingDto>() ?: return null
             
-            mapRatingsToFeedItems(listOf(rating), currentUserId).firstOrNull()
+            feedAssembler.mapRatingsToFeedItems(listOf(rating), currentUserId).firstOrNull()
         } catch (e: Exception) {
             println("RealtimeFeed: Error fetching feed item: ${e.message}")
             null
-        }
-    }
-    
-    private suspend fun mapRatingsToFeedItems(
-        ratings: List<RatingDto>,
-        currentUserId: String?
-    ): List<FeedItem> {
-        return ratings.mapNotNull { rating ->
-            try {
-                val profile = postgrest["profiles"]
-                    .select { filter { eq("id", rating.userId) } }
-                    .decodeSingleOrNull<ProfileDto>()
-                
-                val dish = postgrest["dishes"]
-                    .select { filter { eq("id", rating.dishId) } }
-                    .decodeSingleOrNull<DishDto>()
-                
-                // Try rating's restaurantId first, then dish's restaurantId as fallback
-                var restaurant: RestaurantDto? = null
-                if (rating.restaurantId.isNotBlank()) {
-                    restaurant = try {
-                        postgrest["restaurants"]
-                            .select { filter { eq("id", rating.restaurantId) } }
-                            .decodeSingleOrNull<RestaurantDto>()
-                    } catch (e: Exception) {
-                        println("RealtimeFeed: Failed to fetch restaurant ${rating.restaurantId}: ${e.message}")
-                        null
-                    }
-                }
-                // Fallback: use dish's restaurantId if different
-                if (restaurant == null && dish != null && dish.restaurantId != rating.restaurantId && dish.restaurantId.isNotBlank()) {
-                    restaurant = try {
-                        postgrest["restaurants"]
-                            .select { filter { eq("id", dish.restaurantId) } }
-                            .decodeSingleOrNull<RestaurantDto>()
-                    } catch (e: Exception) { null }
-                }
-                
-                // Get comments count
-                val commentsCount = try {
-                    postgrest["comments"]
-                        .select {
-                            filter { eq("rating_id", rating.id ?: "") }
-                        }
-                        .decodeList<CommentDto>()
-                        .size
-                } catch (e: Exception) { 0 }
-                
-                // Check if current user liked this rating
-                val isLiked = if (currentUserId != null && rating.id != null) {
-                    try {
-                        val existing = postgrest["likes"]
-                            .select {
-                                filter {
-                                    eq("user_id", currentUserId)
-                                    eq("rating_id", rating.id)
-                                }
-                            }
-                            .decodeSingleOrNull<LikeDto>()
-                        existing != null
-                    } catch (e: Exception) { false }
-                } else false
-                
-                // Fetch additional images
-                val additionalImages = try {
-                    postgrest["rating_images"]
-                        .select {
-                            filter { eq("rating_id", rating.id ?: "") }
-                            order("sort_order", Order.ASCENDING)
-                        }
-                        .decodeList<RatingImageDto>()
-                        .map { it.imageUrl }
-                } catch (e: Exception) { emptyList() }
-                
-                val allImages = buildList {
-                    rating.imageUrl?.let { add(it) }
-                    dish?.imageUrl?.let { if (rating.imageUrl == null) add(it) }
-                    addAll(additionalImages)
-                }
-                
-                FeedItem(
-                    id = rating.id ?: return@mapNotNull null,
-                    userId = rating.userId,
-                    userProfileImageUrl = profile?.profilePhotoUrl,
-                    userName = profile?.name ?: "Unknown",
-                    dishImageUrl = allImages.firstOrNull(),
-                    dishName = dish?.name ?: "Unknown Dish",
-                    restaurantName = restaurant?.name ?: dish?.restaurantName ?: "Unknown Restaurant",
-                    rating = rating.rating,
-                    likesCount = rating.likesCount,
-                    commentsCount = commentsCount,
-                    isLiked = isLiked,
-                    timestamp = parseTimestamp(rating.createdAt),
-                    comment = rating.comment,
-                    imageUrls = allImages,
-                    price = rating.price
-                )
-            } catch (e: Exception) {
-                println("RealtimeFeed: Error mapping rating: ${e.message}")
-                null
-            }
         }
     }
     

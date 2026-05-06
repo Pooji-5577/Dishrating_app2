@@ -236,7 +236,11 @@ fun SocialFeedScreen(
                 item(key = "top_dishes") {
                     TopDishesCarousel(
                         dishes = uiState.topDishes,
-                        onDishClick = onTopDishClick,
+                        onDishClick = { id ->
+                            val feedItem = uiState.topDishes.find { it.id == id }
+                            val navId = feedItem?.dishId?.takeIf { it.isNotBlank() } ?: id
+                            onTopDishClick(navId)
+                        },
                         onSeeAllClick = onSeeAllTopDishes
                     )
                     Spacer(modifier = Modifier.height(40.dp))
@@ -367,7 +371,11 @@ fun SocialFeedScreen(
                                     onCommentClick = { onCommentClick(item.id) },
                                     onShareClick = { onShareClick(item) },
                                     onBookmarkClick = { onBookmarkClick(item.id) },
-                                    onUserClick = { onUserClick(item.userId) }
+                                    onUserClick = { onUserClick(item.userId) },
+                                    onDishClick = {
+                                        val navId = item.dishId.takeIf { it.isNotBlank() } ?: item.id
+                                        onTopDishClick(navId)
+                                    }
                                 )
                             }
                             Spacer(modifier = Modifier.height(24.dp))
