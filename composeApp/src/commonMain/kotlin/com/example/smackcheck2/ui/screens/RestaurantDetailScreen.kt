@@ -78,28 +78,34 @@ import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
+private data class DetailNavItem(
+    val label: String,
+    val selectedIcon: @Composable () -> Unit,
+    val unselectedIcon: @Composable () -> Unit
+)
+
 private val detailNavItems = listOf(
-    NavItem(
+    DetailNavItem(
         "Home",
         { Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(24.dp)) },
         { Icon(Icons.Outlined.Home, contentDescription = null, modifier = Modifier.size(24.dp)) }
     ),
-    NavItem(
+    DetailNavItem(
         "Map",
         { Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(24.dp)) },
         { Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(24.dp)) }
     ),
-    NavItem(
+    DetailNavItem(
         "Rate",
         { Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) },
         { Icon(Icons.Outlined.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) }
     ),
-    NavItem(
+    DetailNavItem(
         "Feed",
         { Icon(Icons.Filled.People, contentDescription = null, modifier = Modifier.size(24.dp)) },
         { Icon(Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(24.dp)) }
     ),
-    NavItem(
+    DetailNavItem(
         "Profile",
         { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) },
         { Icon(Icons.Outlined.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) }
