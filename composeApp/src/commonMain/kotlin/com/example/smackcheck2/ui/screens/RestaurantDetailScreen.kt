@@ -31,6 +31,8 @@ import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -80,6 +82,9 @@ import kotlinx.coroutines.launch
 // Figma design maroon accent
 private val FigmaMaroon = Color(0xFF642223)
 private val FigmaMaroonDot = Color(0xFFBB5B5C)
+private val DetailBackground = Color(0xFFF6F6F6)
+private val DetailText = Color(0xFF333333)
+private val DetailPrimary = FigmaMaroon
 
 @Composable
 fun RestaurantDetailScreen(
