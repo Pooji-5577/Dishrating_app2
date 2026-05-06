@@ -100,6 +100,10 @@ import com.example.smackcheck2.ui.screens.AccountSettingsScreen
 import com.example.smackcheck2.ui.screens.PrivacySettingsScreen
 import com.example.smackcheck2.ui.screens.HelpFaqScreen
 import com.example.smackcheck2.ui.screens.ContactSupportScreen
+import com.example.smackcheck2.ui.screens.SettingsMenuScreen
+import com.example.smackcheck2.ui.screens.PreferencesScreen
+import com.example.smackcheck2.ui.screens.SupportScreen
+import com.example.smackcheck2.ui.screens.DangerZoneScreen
 import com.example.smackcheck2.ui.screens.UserProfileScreen
 import com.example.smackcheck2.ui.screens.FollowersListScreen
 import com.example.smackcheck2.ui.screens.DiscoverUsersScreen
@@ -424,6 +428,7 @@ private fun NavHostContent(
                 onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) },
                 onNavigateToHelpFaq = { navigationState.navigateTo(Screen.HelpFaq) },
                 onNavigateToContactSupport = { navigationState.navigateTo(Screen.ContactSupport) },
+                onNavigateToSettings = { navigationState.navigateTo(Screen.SettingsMenu) },
                 onNavHome = { navigationState.navigateToMainTab(Screen.DarkHome) },
                 onNavMap = { navigationState.navigateToMainTab(Screen.SocialMap) },
                 onNavCamera = { navigationState.navigateTo(Screen.DarkDishCapture) },
@@ -509,6 +514,38 @@ private fun NavHostContent(
                 initialEmail = currentUser?.email ?: "",
                 onNavigateBack = { navigationState.navigateBack() },
                 onNavigateToHelpFaq = { navigationState.navigateTo(Screen.HelpFaq) }
+            )
+        }
+
+        is Screen.SettingsMenu -> {
+            SettingsMenuScreen(
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavigateToAccount = { navigationState.navigateTo(Screen.AccountSettings) },
+                onNavigateToPreferences = { navigationState.navigateTo(Screen.Preferences) },
+                onNavigateToSupport = { navigationState.navigateTo(Screen.Support) },
+                onNavigateToDangerZone = { navigationState.navigateTo(Screen.DangerZone) }
+            )
+        }
+
+        is Screen.Preferences -> {
+            PreferencesScreen(
+                preferencesRepository = preferencesRepository,
+                onNavigateBack = { navigationState.navigateBack() }
+            )
+        }
+
+        is Screen.Support -> {
+            SupportScreen(
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavigateToHelpFaq = { navigationState.navigateTo(Screen.HelpFaq) },
+                onNavigateToContactSupport = { navigationState.navigateTo(Screen.ContactSupport) }
+            )
+        }
+
+        is Screen.DangerZone -> {
+            DangerZoneScreen(
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavigateToAccountSettings = { navigationState.navigateTo(Screen.AccountSettings) }
             )
         }
 
@@ -662,7 +699,12 @@ private fun NavHostContent(
                     )
                 },
                 onAddStoryClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
-                onTopDishClick = { /* TODO: navigate to dish detail */ },
+                onTopDishClick = { dishId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.DishDetail,
+                        "dishId" to dishId
+                    )
+                },
                 onSeeAllTopDishes = { /* TODO: navigate to top dishes list */ },
                 onHomeClick = { navigationState.navigateToMainTab(Screen.DarkHome) },
                 onMapClick = { navigationState.navigateToMainTab(Screen.SocialMap) },
