@@ -113,7 +113,7 @@ CREATE POLICY "Users can update own visits" ON restaurant_visits
 CREATE INDEX IF NOT EXISTS idx_visits_user_id ON restaurant_visits(user_id);
 CREATE INDEX IF NOT EXISTS idx_visits_restaurant_id ON restaurant_visits(restaurant_id);
 
--- ==================== RATING IMAGES TABLE (multiple photos per dish) ====================
+-- ==================== RATING IMAGES TABLE (multiple photos a per dish) ====================
 CREATE TABLE IF NOT EXISTS rating_images (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     rating_id UUID NOT NULL REFERENCES ratings(id) ON DELETE CASCADE,

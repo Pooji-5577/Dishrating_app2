@@ -442,9 +442,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onNavigateToNotifications = { navigationState.navigateTo(Screen.NotificationSettings) },
                 onNavigateToAccount = { navigationState.navigateTo(Screen.AccountSettings) },
                 onNavigateToPrivacy = { navigationState.navigateTo(Screen.PrivacySettings) },
-                onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) },
-                onNavigateToHelpFaq = { navigationState.navigateTo(Screen.HelpFaq) },
-                onNavigateToContactSupport = { navigationState.navigateTo(Screen.ContactSupport) }
+                onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) }
             )
         }
 
