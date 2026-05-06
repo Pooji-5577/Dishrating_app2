@@ -53,7 +53,7 @@ fun App(
     val scope = rememberCoroutineScope()
     val themeState = remember {
         ThemeState(
-            initialDarkMode = true,
+            initialDarkMode = false,
             preferencesRepository = preferencesRepository,
             coroutineScope = scope
         )
