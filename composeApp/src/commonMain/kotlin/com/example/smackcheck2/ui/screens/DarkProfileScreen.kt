@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -77,13 +78,17 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.data.repository.SocialRepository
+import com.example.smackcheck2.gamification.PointsConfig
 import com.example.smackcheck2.model.FeedItem
+import com.example.smackcheck2.model.NotificationSettings
 import com.example.smackcheck2.model.User
 import com.example.smackcheck2.ui.components.ReviewPostCard
 import com.example.smackcheck2.ui.theme.LocalThemeState
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.ProfileViewModel
+import kotlinx.coroutines.launch
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
@@ -111,18 +116,14 @@ private fun levelTitle(level: Int): String = when {
 }
 
 private fun nextLevelTitle(level: Int) = levelTitle(level + 1)
-private fun xpForLevel(level: Int) = level * 300
-private fun xpProgress(xp: Int, level: Int): Float {
-    val base = (level - 1) * 300
-    val cap  = level * 300
-    return ((xp - base).toFloat() / (cap - base).toFloat()).coerceIn(0f, 1f)
-}
-private fun xpToGo(xp: Int, level: Int): Int = maxOf(0, xpForLevel(level) - xp)
+private fun xpProgress(xp: Int): Float = PointsConfig.levelProgress(xp)
+private fun xpToGo(xp: Int): Int = maxOf(0, PointsConfig.xpForNextLevel(xp) - xp)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DarkProfileScreen(
     viewModel: ProfileViewModel,
+    preferencesRepository: PreferencesRepository? = null,
     onNavigateBack: () -> Unit,
     onEditProfile: () -> Unit,
     onSignOut: () -> Unit,
@@ -130,18 +131,35 @@ fun DarkProfileScreen(
     onNavigateToNotifications: () -> Unit = {},
     onNavigateToAccount: () -> Unit = {},
     onNavigateToPrivacy: () -> Unit = {},
-    onNavigateToProgress: () -> Unit = {}
+    onNavigateToProgress: () -> Unit = {},
+    onNavigateToHelpFaq: () -> Unit = {},
+    onNavigateToContactSupport: () -> Unit = {},
+    onNavHome: () -> Unit = {},
+    onNavMap: () -> Unit = {},
+    onNavCamera: () -> Unit = {},
+    onNavExplore: () -> Unit = {},
+    onNavProfile: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val themeState = LocalThemeState.current
+    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // Push Notifications + Location state (local for demo; in prod wire to prefs)
     var pushEnabled   by remember { mutableStateOf(true) }
     var locationEnabled by remember { mutableStateOf(true) }
     var cuisineExpanded by remember { mutableStateOf(false) }
 
-    val allCuisines   = listOf("Japanese", "Italian", "Indian", "Asian", "Mexican", "French")
-    var selectedCuisines by remember { mutableStateOf(setOf("Japanese", "Italian", "Indian", "Asian")) }
+    val allCuisines = listOf("Japanese", "Italian", "Indian", "Asian", "Mexican", "French",
+        "Chinese", "Thai", "American", "French", "Mediterranean", "Korean")
+    var selectedCuisines by remember { mutableStateOf(emptySet<String>()) }
+
+    // Load persisted notification and cuisine preferences
+    LaunchedEffect(Unit) {
+        preferencesRepository?.let { repo ->
+            val settings = repo.getAppPreferences()
+            pushEnabled = settings.notificationSettings.pushEnabled
+            locationEnabled = settings.privacySettings.showLocation
+        }
+    }
 
     // Profile tab state
     var selectedTab by remember { mutableStateOf(0) } // 0=My Ratings, 1=Saved, 2=Reviews
@@ -150,6 +168,7 @@ fun DarkProfileScreen(
     var userRatings by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
     val user = uiState.user
 
+    // Wire selected cuisines to user profile preference tags
     LaunchedEffect(user?.id) {
         val uid = user?.id ?: return@LaunchedEffect
         try {
@@ -170,6 +189,7 @@ fun DarkProfileScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = 20.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -332,9 +352,10 @@ fun DarkProfileScreen(
         item {
             val lvl   = user?.level ?: 1
             val xp    = user?.xp ?: 0
-            val progress = xpProgress(xp, lvl)
-            val toGo  = xpToGo(xp, lvl)
-            val earned = xp - (lvl - 1) * 300
+            val progress = xpProgress(xp)
+            val toGo  = xpToGo(xp)
+            val levelBase = PointsConfig.LEVEL_THRESHOLDS.getOrElse(lvl) { (lvl - 1) * 300 }
+            val earned = maxOf(0, xp - levelBase)
 
             Card(
                 modifier = Modifier
@@ -434,19 +455,18 @@ fun DarkProfileScreen(
         item {
             val badges = user?.badges ?: emptyList()
             if (badges.isEmpty()) {
-                // Default placeholder achievements
-                val defaults = listOf(
-                    Triple("🍴", "First Bite", "+50 XP"),
-                    Triple("📸", "Snap & Rate", "+75 XP"),
-                    Triple("🔥", "3-Day Streak", "+40 XP")
-                )
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    items(defaults) { (icon, name, xp) ->
-                        AchievementChip(icon = icon, name = name, xpLabel = xp)
-                    }
+                    Text(
+                        "Start rating dishes to earn your first achievement!",
+                        color = MutedGrey,
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
+                    )
                 }
             } else {
                 LazyRow(
@@ -622,7 +642,14 @@ fun DarkProfileScreen(
                         Text("Push Notifications", color = DeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         Switch(
                             checked = pushEnabled,
-                            onCheckedChange = { pushEnabled = it; onNavigateToNotifications() },
+                            onCheckedChange = { newVal ->
+                                pushEnabled = newVal
+                                coroutineScope.launch {
+                                    preferencesRepository?.saveNotificationSettings(
+                                        NotificationSettings(pushEnabled = newVal)
+                                    )
+                                }
+                            },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = CrimsonRed,
@@ -642,7 +669,17 @@ fun DarkProfileScreen(
                         Text("Location Access", color = DeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
                         Switch(
                             checked = locationEnabled,
-                            onCheckedChange = { locationEnabled = it },
+                            onCheckedChange = { newVal ->
+                                locationEnabled = newVal
+                                coroutineScope.launch {
+                                    preferencesRepository?.let { repo ->
+                                        val current = repo.getAppPreferences()
+                                        repo.savePrivacySettings(
+                                            current.privacySettings.copy(showLocation = newVal)
+                                        )
+                                    }
+                                }
+                            },
                             colors = SwitchDefaults.colors(
                                 checkedThumbColor = Color.White,
                                 checkedTrackColor = CrimsonRed,
@@ -693,7 +730,9 @@ fun DarkProfileScreen(
                             }
                             Spacer(modifier = Modifier.height(12.dp))
                             Button(
-                                onClick = { cuisineExpanded = false },
+                                onClick = {
+                                    cuisineExpanded = false
+                                },
                                 modifier = Modifier.fillMaxWidth().height(46.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = DeepMaroon, contentColor = Color.White)
@@ -720,13 +759,13 @@ fun DarkProfileScreen(
                     SettingsRow(
                         icon = Icons.Default.HelpOutline,
                         title = "Help & FAQ",
-                        onClick = {}
+                        onClick = onNavigateToHelpFaq
                     )
                     HorizontalDivider(color = DividerGrey)
                     SettingsRow(
                         icon = Icons.Default.SupportAgent,
                         title = "Contact Support",
-                        onClick = {}
+                        onClick = onNavigateToContactSupport
                     )
                 }
             }
@@ -777,6 +816,11 @@ fun DarkProfileScreen(
     }
     com.example.smackcheck2.ui.components.BottomNavBar(
         selectedItem = com.example.smackcheck2.ui.components.NavItem.PROFILE,
+        onHomeClick = onNavHome,
+        onMapClick = onNavMap,
+        onCameraClick = onNavCamera,
+        onExploreClick = onNavExplore,
+        onProfileClick = onNavProfile,
         modifier = Modifier.align(Alignment.BottomCenter)
     )
     } // end Box

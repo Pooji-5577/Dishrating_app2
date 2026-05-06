@@ -38,7 +38,6 @@ actual class LocationService(private val context: Context) {
             return null
         }
 
-        // Check if location services are enabled
         val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
         val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
         val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
@@ -50,22 +49,21 @@ actual class LocationService(private val context: Context) {
             return null
         }
 
-        // Try to get location with timeout
-        return withTimeoutOrNull(15000L) {
+        // Always request a fresh high-accuracy fix so distances are accurate.
+        // Fall back to lastLocation only if the fresh request fails.
+        return withTimeoutOrNull(20000L) {
             try {
-                // First try last known location for quick result
-                val lastLocation = getLastKnownLocation()
-                if (lastLocation != null) {
-                    Log.d(TAG, "Got last known location: ${lastLocation.cityName}")
-                    return@withTimeoutOrNull lastLocation
+                val fresh = getCurrentLocationFromProvider(Priority.PRIORITY_HIGH_ACCURACY)
+                if (fresh != null) {
+                    Log.d(TAG, "Got fresh location: ${fresh.latitude}, ${fresh.longitude}")
+                    return@withTimeoutOrNull fresh
                 }
-
-                // If no last location, request current location
-                Log.d(TAG, "No last location, requesting current location")
-                getCurrentLocationFromProvider()
+                // Fallback to last known if fresh fails
+                Log.d(TAG, "Fresh location null, falling back to last known")
+                getLastKnownLocation()
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting location", e)
-                null
+                getLastKnownLocation()
             }
         }
     }
@@ -81,13 +79,14 @@ actual class LocationService(private val context: Context) {
                         resumed = true
                         if (location != null) {
                             Log.d(TAG, "Last location: ${location.latitude}, ${location.longitude}")
-                            val cityName = getCityFromCoordinates(location.latitude, location.longitude)
+                            val address = getFirstAddress(location.latitude, location.longitude)
                             continuation.resume(
                                 LocationResult(
                                     latitude = location.latitude,
                                     longitude = location.longitude,
-                                    cityName = cityName,
-                                    fullAddress = getAddressFromCoordinates(location.latitude, location.longitude)
+                                    cityName = address?.let { it.locality ?: it.subAdminArea ?: it.adminArea },
+                                    fullAddress = address?.getAddressLine(0),
+                                    countryCode = address?.countryCode
                                 )
                             )
                         } else {
@@ -107,27 +106,29 @@ actual class LocationService(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    private suspend fun getCurrentLocationFromProvider(): LocationResult? {
+    private suspend fun getCurrentLocationFromProvider(
+        priority: Int = Priority.PRIORITY_HIGH_ACCURACY
+    ): LocationResult? {
         return suspendCancellableCoroutine { continuation ->
             val cancellationTokenSource = CancellationTokenSource()
             var resumed = false
 
-            // Use balanced power accuracy for faster results (uses network + GPS)
             fusedLocationClient.getCurrentLocation(
-                Priority.PRIORITY_BALANCED_POWER_ACCURACY,
+                priority,
                 cancellationTokenSource.token
             ).addOnSuccessListener { location ->
                 if (!resumed) {
                     resumed = true
                     if (location != null) {
                         Log.d(TAG, "Current location: ${location.latitude}, ${location.longitude}")
-                        val cityName = getCityFromCoordinates(location.latitude, location.longitude)
+                        val address = getFirstAddress(location.latitude, location.longitude)
                         continuation.resume(
                             LocationResult(
                                 latitude = location.latitude,
                                 longitude = location.longitude,
-                                cityName = cityName,
-                                fullAddress = getAddressFromCoordinates(location.latitude, location.longitude)
+                                cityName = address?.let { it.locality ?: it.subAdminArea ?: it.adminArea },
+                                fullAddress = address?.getAddressLine(0),
+                                countryCode = address?.countryCode
                             )
                         )
                     } else {
@@ -174,7 +175,8 @@ actual class LocationService(private val context: Context) {
                     latitude = address.latitude,
                     longitude = address.longitude,
                     cityName = cityName,
-                    fullAddress = address.getAddressLine(0)
+                    fullAddress = address.getAddressLine(0),
+                    countryCode = address.countryCode
                 )
             }.distinctBy { it.cityName }
         } catch (e: Exception) {
@@ -237,22 +239,15 @@ actual class LocationService(private val context: Context) {
             return LocationOperationResult.Error(LocationErrorReason.LOCATION_SERVICES_DISABLED, emulator)
         }
 
-        // Try to get location with timeout
-        val result = withTimeoutOrNull(15000L) {
+        val result = withTimeoutOrNull(20000L) {
             try {
-                // First try last known location for quick result
-                val lastLocation = getLastKnownLocation()
-                if (lastLocation != null) {
-                    Log.d(TAG, "Got last known location: ${lastLocation.cityName}")
-                    return@withTimeoutOrNull lastLocation
-                }
-
-                // If no last location, request current location
-                Log.d(TAG, "No last location, requesting current location")
-                getCurrentLocationFromProvider()
+                val fresh = getCurrentLocationFromProvider(Priority.PRIORITY_HIGH_ACCURACY)
+                if (fresh != null) return@withTimeoutOrNull fresh
+                Log.d(TAG, "Fresh location null, falling back to last known")
+                getLastKnownLocation()
             } catch (e: Exception) {
                 Log.e(TAG, "Error getting location", e)
-                null
+                getLastKnownLocation()
             }
         }
 
@@ -264,28 +259,15 @@ actual class LocationService(private val context: Context) {
         }
     }
 
-    private fun getCityFromCoordinates(latitude: Double, longitude: Double): String? {
+    private fun getFirstAddress(latitude: Double, longitude: Double): android.location.Address? {
         return try {
             @Suppress("DEPRECATION")
             val addresses = geocoder.getFromLocation(latitude, longitude, 1)
-            addresses?.firstOrNull()?.let { address ->
-                val city = address.locality ?: address.subAdminArea ?: address.adminArea
-                Log.d(TAG, "City from coordinates: $city")
-                city
+            addresses?.firstOrNull()?.also {
+                Log.d(TAG, "Address from coordinates: city=${it.locality}, country=${it.countryCode}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting city from coordinates", e)
-            null
-        }
-    }
-
-    private fun getAddressFromCoordinates(latitude: Double, longitude: Double): String? {
-        return try {
-            @Suppress("DEPRECATION")
-            val addresses = geocoder.getFromLocation(latitude, longitude, 1)
-            addresses?.firstOrNull()?.getAddressLine(0)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting address from coordinates", e)
+            Log.e(TAG, "Error reverse-geocoding coordinates", e)
             null
         }
     }
@@ -315,7 +297,8 @@ actual class LocationService(private val context: Context) {
                     latitude = address.latitude,
                     longitude = address.longitude,
                     cityName = cityName,
-                    fullAddress = address.getAddressLine(0)
+                    fullAddress = address.getAddressLine(0),
+                    countryCode = address.countryCode
                 )
                 Log.d(TAG, "Geocoded $cityName to: ${result.latitude}, ${result.longitude}")
                 result

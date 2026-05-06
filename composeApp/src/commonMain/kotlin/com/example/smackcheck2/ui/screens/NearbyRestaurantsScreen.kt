@@ -16,7 +16,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.data.repository.GeofenceEvent
+import com.example.smackcheck2.platform.LocationResult
 import com.example.smackcheck2.platform.MapMarker
 import com.example.smackcheck2.platform.NearbyRestaurant
 import com.example.smackcheck2.platform.PlatformMapView
@@ -26,7 +29,18 @@ import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.viewmodel.NearbyRestaurantsUiState
 import com.example.smackcheck2.viewmodel.NearbyRestaurantsViewModel
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
-import androidx.compose.ui.layout.ContentScale
+import kotlin.math.*
+
+private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6371.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
+    return r * 2 * atan2(sqrt(a), sqrt(1 - a))
+}
+
+private fun formatDist(km: Double): String =
+    if (km < 1.0) "${(km * 1000).toInt()} m" else "${"%.1f".format(km)} km"
 
 /**
  * Nearby Restaurants Screen
@@ -169,6 +183,7 @@ fun NearbyRestaurantsScreen(
                                 RestaurantsList(
                                     restaurants = state.restaurants,
                                     photoViewModel = photoViewModel,
+                                    currentLocation = state.currentLocation,
                                     onRestaurantClick = onRestaurantClick
                                 )
                             }
@@ -257,6 +272,7 @@ private fun GeofencingStatusBar(monitoredCount: Int) {
 private fun RestaurantsList(
     restaurants: List<NearbyRestaurant>,
     photoViewModel: RestaurantPhotoViewModel,
+    currentLocation: LocationResult?,
     onRestaurantClick: (NearbyRestaurant) -> Unit
 ) {
     LazyColumn(
@@ -265,9 +281,14 @@ private fun RestaurantsList(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(restaurants) { restaurant ->
+            val distanceText = if (currentLocation != null &&
+                restaurant.latitude != 0.0 && restaurant.longitude != 0.0)
+                formatDist(distanceKm(currentLocation.latitude, currentLocation.longitude, restaurant.latitude, restaurant.longitude))
+            else null
             RestaurantCard(
                 restaurant = restaurant,
                 photoViewModel = photoViewModel,
+                distanceText = distanceText,
                 onClick = { onRestaurantClick(restaurant) }
             )
         }
@@ -281,6 +302,7 @@ private fun RestaurantsList(
 private fun RestaurantCard(
     restaurant: NearbyRestaurant,
     photoViewModel: RestaurantPhotoViewModel,
+    distanceText: String?,
     onClick: () -> Unit
 ) {
     val photoStates by photoViewModel.photoStates.collectAsState()
@@ -340,6 +362,26 @@ private fun RestaurantCard(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
+                }
+
+                if (distanceText != null) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = distanceText,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))

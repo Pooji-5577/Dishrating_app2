@@ -170,35 +170,71 @@ fun NetworkImage(
 }
 
 /**
- * Dish image with automatic URL selection
+ * Dish image — loads the real DB URL first, falls back to a generic placeholder icon if none.
  */
 @Composable
 fun DishImage(
     dishName: String,
+    imageUrl: String? = null,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
-    NetworkImage(
-        imageUrl = FoodImages.getDishImageByName(dishName),
-        contentDescription = dishName,
-        modifier = modifier,
-        contentScale = contentScale
-    )
+    if (!imageUrl.isNullOrBlank()) {
+        NetworkImage(
+            imageUrl = imageUrl,
+            contentDescription = dishName,
+            modifier = modifier,
+            contentScale = contentScale
+        )
+    } else {
+        val colors = appColors()
+        Box(
+            modifier = modifier.background(
+                Brush.linearGradient(listOf(colors.Surface, colors.Surface))
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Restaurant,
+                contentDescription = dishName,
+                modifier = Modifier.size(48.dp),
+                tint = colors.TextSecondary.copy(alpha = 0.4f)
+            )
+        }
+    }
 }
 
 /**
- * Restaurant image with automatic URL selection
+ * Restaurant image — loads the real DB / Places URL first, shows icon placeholder if none.
  */
 @Composable
 fun RestaurantImage(
     restaurantName: String,
+    imageUrl: String? = null,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop
 ) {
-    NetworkImage(
-        imageUrl = FoodImages.getRestaurantImageByName(restaurantName),
-        contentDescription = restaurantName,
-        modifier = modifier,
-        contentScale = contentScale
-    )
+    if (!imageUrl.isNullOrBlank()) {
+        NetworkImage(
+            imageUrl = imageUrl,
+            contentDescription = restaurantName,
+            modifier = modifier,
+            contentScale = contentScale
+        )
+    } else {
+        val colors = appColors()
+        Box(
+            modifier = modifier.background(
+                Brush.linearGradient(listOf(colors.Surface, colors.Surface))
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Restaurant,
+                contentDescription = restaurantName,
+                modifier = Modifier.size(48.dp),
+                tint = colors.TextSecondary.copy(alpha = 0.4f)
+            )
+        }
+    }
 }

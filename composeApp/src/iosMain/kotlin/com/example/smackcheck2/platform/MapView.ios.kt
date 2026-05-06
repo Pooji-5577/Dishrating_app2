@@ -83,6 +83,7 @@ actual fun PlatformMapView(
     zoom: Float,
     markers: List<MapMarker>,
     onMarkerClick: (String) -> Unit,
+    showMyLocation: Boolean,
     modifier: Modifier
 ) {
     val delegate = remember(onMarkerClick) { MapViewDelegate(onMarkerClick) }
@@ -97,7 +98,7 @@ actual fun PlatformMapView(
                 setRegion(region, animated = false)
 
                 this.delegate = delegate
-                this.showsUserLocation = true
+                this.showsUserLocation = showMyLocation
                 this.showsCompass = true
                 this.showsScale = true
 

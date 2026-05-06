@@ -17,6 +17,8 @@ import com.google.android.gms.maps.model.BitmapDescriptorFactory
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
@@ -31,6 +33,7 @@ actual fun PlatformMapView(
     zoom: Float,
     markers: List<MapMarker>,
     onMarkerClick: (String) -> Unit,
+    showMyLocation: Boolean,
     modifier: Modifier
 ) {
     val cameraPositionState = rememberCameraPositionState {
@@ -75,7 +78,9 @@ actual fun PlatformMapView(
 
     GoogleMap(
         modifier = modifier,
-        cameraPositionState = cameraPositionState
+        cameraPositionState = cameraPositionState,
+        properties = MapProperties(isMyLocationEnabled = showMyLocation),
+        uiSettings = MapUiSettings(myLocationButtonEnabled = false, zoomControlsEnabled = false)
     ) {
         markers.forEach { marker ->
             Marker(

@@ -39,12 +39,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.ui.theme.appColors
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 
 /**
  * Dark themed Top Dishes Screen - Shows top rated dishes
@@ -203,7 +206,7 @@ private fun DarkTopDishCard(
             
             Spacer(modifier = Modifier.width(16.dp))
             
-            // Dish image placeholder
+            // Dish image (falls back to icon placeholder when missing/failed)
             Box(
                 modifier = Modifier
                     .size(70.dp)
@@ -218,13 +221,31 @@ private fun DarkTopDishCard(
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.Fastfood,
-                    contentDescription = null,
-                    tint = appColors().Primary,
-                    modifier = Modifier.size(32.dp)
-                )
-                
+                val imageUrl = dish.imageUrl
+                if (!imageUrl.isNullOrBlank()) {
+                    KamelImage(
+                        resource = asyncPainterResource(imageUrl),
+                        contentDescription = dish.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                        onFailure = {
+                            Icon(
+                                imageVector = Icons.Default.Fastfood,
+                                contentDescription = null,
+                                tint = appColors().Primary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Fastfood,
+                        contentDescription = null,
+                        tint = appColors().Primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
                 // Bestseller badge for top 3
                 if (rank <= 3) {
                     Box(

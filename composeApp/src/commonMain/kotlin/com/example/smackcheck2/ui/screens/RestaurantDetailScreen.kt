@@ -15,35 +15,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Map
-import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.CameraAlt
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Map
-import androidx.compose.material.icons.outlined.People
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -51,7 +42,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,16 +54,17 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Review
+import com.example.smackcheck2.data.repository.PreferencesRepository
+import com.example.smackcheck2.ui.components.BottomNavBar
+import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.RestaurantHeroSection
-import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.components.TopRatedDishCard
 import com.example.smackcheck2.ui.components.LoadingState
-import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.util.formatRelativeTime
 import com.example.smackcheck2.viewmodel.PhotoState
@@ -77,56 +72,42 @@ import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import kotlinx.coroutines.launch
 
-private data class DetailNavItem(
-    val label: String,
-    val selectedIcon: @Composable () -> Unit,
-    val unselectedIcon: @Composable () -> Unit
-)
-
-private val detailNavItems = listOf(
-    DetailNavItem(
-        "Home",
-        { Icon(Icons.Filled.Home, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.Home, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    DetailNavItem(
-        "Map",
-        { Icon(Icons.Filled.Map, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.Map, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    DetailNavItem(
-        "Rate",
-        { Icon(Icons.Filled.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.CameraAlt, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    DetailNavItem(
-        "Feed",
-        { Icon(Icons.Filled.People, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.People, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    ),
-    DetailNavItem(
-        "Profile",
-        { Icon(Icons.Filled.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) },
-        { Icon(Icons.Outlined.AccountCircle, contentDescription = null, modifier = Modifier.size(24.dp)) }
-    )
-)
+// Figma design maroon accent
+private val FigmaMaroon = Color(0xFF642223)
+private val FigmaMaroonDot = Color(0xFFBB5B5C)
 
 @Composable
 fun RestaurantDetailScreen(
     viewModel: RestaurantDetailViewModel,
     photoViewModel: RestaurantPhotoViewModel? = null,
+    preferencesRepository: PreferencesRepository? = null,
     restaurantId: String,
+    userAvatarUrl: String? = null,
     onNavigateBack: () -> Unit,
-    onNavItemClick: (Int) -> Unit = {}
+    onNotificationClick: () -> Unit = {},
+    onNavItemClick: (Int) -> Unit = {},
+    onNavHome: () -> Unit = {},
+    onNavMap: () -> Unit = {},
+    onNavCamera: () -> Unit = {},
+    onNavExplore: () -> Unit = {},
+    onNavProfile: () -> Unit = {},
+    currencySymbol: String = "$"
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val photoStates by photoViewModel?.photoStates?.collectAsState()
-        ?: remember { androidx.compose.runtime.mutableStateOf(emptyMap<String, PhotoState>()) }
+        ?: remember { mutableStateOf(emptyMap<String, PhotoState>()) }
     val colors = appColors()
+
+    var bookmarkedDishIds by remember { mutableStateOf(emptySet<String>()) }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(restaurantId) {
         viewModel.loadRestaurant(restaurantId)
+        preferencesRepository?.let { repo ->
+            bookmarkedDishIds = repo.getBookmarks()
+        }
     }
 
     when {
@@ -163,7 +144,6 @@ fun RestaurantDetailScreen(
             val restaurant = uiState.restaurant!!
             val listState = rememberLazyListState()
 
-            // Trigger Google Places full photo load
             LaunchedEffect(restaurant.id) {
                 photoViewModel?.loadFullPhotos(
                     restaurantId = restaurant.id,
@@ -173,7 +153,7 @@ fun RestaurantDetailScreen(
                 )
             }
 
-            // Collapsing toolbar: compute header alpha based on scroll
+            // Toolbar background fades in as user scrolls past the hero image
             val headerAlpha by remember {
                 derivedStateOf {
                     val firstItem = listState.firstVisibleItemIndex
@@ -186,194 +166,216 @@ fun RestaurantDetailScreen(
             }
             val animatedAlpha by animateFloatAsState(targetValue = headerAlpha)
 
+            // Resolve hero photo from photoStates — photoStates is collected but hero
+            // previously read only restaurant.photoUrl; this wires them together.
+            val heroPhotoUrl = when (val ps = photoStates[restaurant.id]) {
+                is PhotoState.FullPhotosLoaded -> ps.urls.firstOrNull()
+                is PhotoState.ThumbnailLoaded -> ps.url
+                else -> null
+            } ?: restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
+
             Scaffold(
-                containerColor = colors.Background,
+                containerColor = Color(0xFFF6F6F6),
                 bottomBar = {
-                    NavigationBar(
-                        containerColor = colors.Surface,
-                        tonalElevation = 0.dp
-                    ) {
-                        detailNavItems.forEachIndexed { index, item ->
-                            val isSelected = index == 1 // Map tab active
-                            NavigationBarItem(
-                                selected = isSelected,
-                                onClick = { onNavItemClick(index) },
-                                icon = {
-                                    if (isSelected) item.selectedIcon() else item.unselectedIcon()
-                                },
-                                label = {
-                                    Text(
-                                        text = item.label,
-                                        fontSize = 11.sp
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = colors.Primary,
-                                    selectedTextColor = colors.Primary,
-                                    unselectedIconColor = colors.TextSecondary,
-                                    unselectedTextColor = colors.TextSecondary,
-                                    indicatorColor = colors.Primary.copy(alpha = 0.1f)
-                                )
-                            )
-                        }
-                    }
+                    BottomNavBar(
+                        selectedItem = NavItem.MAP,
+                        onHomeClick = onNavHome,
+                        onMapClick = onNavMap,
+                        onCameraClick = onNavCamera,
+                        onExploreClick = onNavExplore,
+                        onProfileClick = onNavProfile
+                    )
                 }
             ) { paddingValues ->
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(paddingValues)
+                        // Only apply bottom padding — hero must fill edge-to-edge under status bar
+                        .padding(bottom = paddingValues.calculateBottomPadding())
                 ) {
                     LazyColumn(
                         state = listState,
                         modifier = Modifier.fillMaxSize()
                     ) {
-                        // Hero section
+                        // Hero goes full edge-to-edge from top of screen (behind status bar)
+                        // The floating overlay bar handles its own statusBarsPadding
                         item(key = "hero") {
-                            RestaurantHeroSection(
-                                restaurant = restaurant
-                            )
+                            RestaurantHeroSection(restaurant = restaurant.copy(photoUrl = heroPhotoUrl))
                         }
 
-                        // Top Rated Dishes section
-                        if (uiState.topDishes.isNotEmpty()) {
-                            item(key = "top_dishes_header") {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Top Rated Dishes",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.TextPrimary
-                                    )
-                                    Text(
-                                        text = "See All",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = colors.Primary,
-                                        fontWeight = FontWeight.Medium
+                        // Status pills: cuisine · open-now · location city
+                        item(key = "status_tags") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 24.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (restaurant.cuisine.isNotBlank()) {
+                                    StatusPill(text = restaurant.cuisine, background = FigmaMaroon)
+                                }
+                                if (restaurant.isOpenNow == true) {
+                                    StatusPill(
+                                        text = "Open Now",
+                                        background = FigmaMaroonDot,
+                                        dot = true
                                     )
                                 }
+                                if (restaurant.city.isNotBlank()) {
+                                    LocationPill(city = restaurant.city)
+                                }
                             }
+                        }
 
-                            item(key = "top_dishes_row") {
+                        // ── Top Rated Dishes ── always shown (with empty state when no data)
+                        item(key = "top_dishes_header") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(start = 24.dp, end = 24.dp, top = 32.dp, bottom = 0.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                Text(
+                                    text = "Top Rated Dishes",
+                                    fontSize = 24.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = colors.TextPrimary,
+                                    letterSpacing = (-0.6).sp
+                                )
+                                Text(
+                                    text = "VIEW ALL",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = FigmaMaroon,
+                                    letterSpacing = 1.4.sp
+                                )
+                            }
+                        }
+
+                        item(key = "top_dishes_content") {
+                            if (uiState.topDishes.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 24.dp, vertical = 32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "No dishes yet. Be the first to rate one!",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colors.TextSecondary,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            } else {
                                 LazyRow(
-                                    contentPadding = PaddingValues(horizontal = 16.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                                 ) {
                                     items(uiState.topDishes, key = { it.id }) { dish ->
                                         TopRatedDishCard(
                                             dish = dish,
-                                            isBookmarked = false,
-                                            onBookmarkClick = { /* TODO */ },
-                                            onClick = { /* TODO: navigate to dish detail */ }
+                                            isBookmarked = bookmarkedDishIds.contains(dish.id),
+                                            onBookmarkClick = {
+                                                coroutineScope.launch {
+                                                    preferencesRepository?.let { repo ->
+                                                        val newState = repo.toggleBookmark(dish.id)
+                                                        bookmarkedDishIds = if (newState)
+                                                            bookmarkedDishIds + dish.id
+                                                        else
+                                                            bookmarkedDishIds - dish.id
+                                                    }
+                                                }
+                                            },
+                                            onClick = {},
+                                            currencySymbol = currencySymbol
                                         )
                                     }
                                 }
                             }
                         }
 
-                        // All Dishes section (if there are dishes not in top)
-                        if (uiState.dishes.isNotEmpty()) {
-                            item(key = "menu_header") {
-                                Text(
-                                    text = "Menu",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.TextPrimary,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
-                                )
-                            }
-
-                            items(uiState.dishes, key = { "dish_${it.id}" }) { dish ->
-                                DishListItem(
-                                    dish = dish,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-
-                        // Recent Reviews section
+                        // ── Recent Reviews ── always shown
                         item(key = "reviews_header") {
                             Text(
                                 text = "Recent Reviews",
-                                style = MaterialTheme.typography.titleMedium,
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = colors.TextPrimary,
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                letterSpacing = (-0.6).sp,
+                                modifier = Modifier.padding(
+                                    start = 24.dp, end = 24.dp,
+                                    top = 32.dp, bottom = 0.dp
+                                )
                             )
                         }
 
                         if (uiState.reviews.isEmpty()) {
                             item(key = "no_reviews") {
-                                Card(
+                                Box(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(horizontal = 16.dp),
-                                    shape = CardShape,
-                                    colors = CardDefaults.cardColors(containerColor = colors.SurfaceVariant)
+                                        .padding(horizontal = 24.dp, vertical = 32.dp),
+                                    contentAlignment = Alignment.Center
                                 ) {
-                                    Column(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(24.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Restaurant,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(40.dp),
-                                            tint = colors.TextTertiary
-                                        )
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Text(
-                                            text = "No reviews yet. Be the first!",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = colors.TextSecondary
-                                        )
-                                    }
+                                    Text(
+                                        text = "No reviews yet. Be the first!",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = colors.TextSecondary,
+                                        textAlign = TextAlign.Center
+                                    )
                                 }
                             }
                         } else {
-                            items(uiState.reviews.take(5), key = { "review_${it.id}" }) { review ->
-                                DetailReviewCard(
+                            itemsIndexed(uiState.reviews.take(5), key = { _, review -> "review_${review.id}" }) { index, review ->
+                                if (index > 0) {
+                                    Spacer(modifier = Modifier.height(40.dp))
+                                }
+                                FigmaReviewItem(
                                     review = review,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 24.dp)
                                 )
                             }
                         }
 
                         item(key = "bottom_spacer") {
-                            Spacer(modifier = Modifier.height(16.dp))
+                            Spacer(modifier = Modifier.height(32.dp))
                         }
                     }
 
-                    // Collapsing top bar overlay
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .statusBarsPadding()
-                            .height(56.dp)
-                            .graphicsLayer { alpha = 1f }
-                    ) {
-                        // Filled background that fades in
+                    // ── Figma top bar overlay ──
+                    // Outer Box: fills (statusBarHeight + 56dp) by using a Spacer as a
+                    // height anchor. Background and Row each apply statusBarsPadding()
+                    // independently so both have 56dp of usable space below the status bar.
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        // Height anchor: statusBarHeight + 56dp
+                        Spacer(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .height(56.dp)
+                        )
+
+                        // Fading background covers the full anchor area
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .matchParentSize()
                                 .graphicsLayer { alpha = animatedAlpha }
                                 .background(colors.Background)
                         )
 
+                        // Icons row — sits below status bar with full 56dp height
                         Row(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .fillMaxWidth()
+                                .statusBarsPadding()
+                                .height(56.dp)
                                 .padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // Back button
                             IconButton(onClick = onNavigateBack) {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -382,18 +384,58 @@ fun RestaurantDetailScreen(
                                 )
                             }
 
-                            // Restaurant name fades in as header fills
+                            // "SmackCheck" title — centred in available space
                             Text(
-                                text = restaurant.name,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = colors.TextPrimary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .graphicsLayer { alpha = animatedAlpha }
+                                text = "SmackCheck",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.Center
                             )
+
+                            // Notification bell
+                            IconButton(onClick = onNotificationClick) {
+                                Icon(
+                                    imageVector = Icons.Filled.Notifications,
+                                    contentDescription = "Notifications",
+                                    tint = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White
+                                )
+                            }
+
+                            // User avatar (36dp circle)
+                            Box(
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(FigmaMaroon),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!userAvatarUrl.isNullOrBlank()) {
+                                    KamelImage(
+                                        resource = asyncPainterResource(userAvatarUrl),
+                                        contentDescription = "Profile",
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop,
+                                        onFailure = {
+                                            Icon(
+                                                imageVector = Icons.Filled.Restaurant,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Filled.Restaurant,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -403,90 +445,141 @@ fun RestaurantDetailScreen(
 }
 
 /**
- * Redesigned review card for restaurant detail — italic quoted text style
+ * Cuisine / open-now status pill
  */
 @Composable
-private fun DetailReviewCard(
+private fun StatusPill(
+    text: String,
+    background: Color,
+    dot: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .background(background, RoundedCornerShape(999.dp))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (dot) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(Color.White, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            Text(
+                text = text,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+        }
+    }
+}
+
+/**
+ * Location pill — #BB5B5C background with white pin icon and white city text (Figma spec)
+ */
+@Composable
+private fun LocationPill(city: String) {
+    Box(
+        modifier = Modifier
+            .background(FigmaMaroonDot, RoundedCornerShape(999.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.LocationOn,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = Color.White
+            )
+            Text(
+                text = city,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color.White
+            )
+        }
+    }
+}
+
+/**
+ * Review item matching the Figma design:
+ * 56dp circular avatar | name + timestamp row | star row | italic quoted comment
+ */
+@Composable
+private fun FigmaReviewItem(
     review: Review,
     modifier: Modifier = Modifier
 ) {
     val colors = appColors()
 
-    Card(
+    Row(
         modifier = modifier.fillMaxWidth(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
+        // Avatar — 56dp circle
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(colors.SurfaceVariant),
+            contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(colors.Primary.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (review.userProfileUrl != null) {
-                        KamelImage(
-                            resource = asyncPainterResource(review.userProfileUrl!!),
-                            contentDescription = review.userName,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            onFailure = {
-                                Text(
-                                    text = review.userName.firstOrNull()?.uppercase() ?: "?",
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.Primary,
-                                    fontSize = 14.sp
-                                )
-                            }
-                        )
-                    } else {
-                        Text(
-                            text = review.userName.firstOrNull()?.uppercase() ?: "?",
-                            fontWeight = FontWeight.Bold,
-                            color = colors.Primary,
-                            fontSize = 14.sp
-                        )
+            if (!review.userProfileUrl.isNullOrEmpty()) {
+                KamelImage(
+                    resource = asyncPainterResource(review.userProfileUrl!!),
+                    contentDescription = review.userName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    onFailure = {
+                        AvatarInitial(review.userName, colors.TextPrimary)
                     }
-                }
+                )
+            } else {
+                AvatarInitial(review.userName, colors.TextPrimary)
+            }
+        }
 
-                Spacer(modifier = Modifier.width(10.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = review.userName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.TextPrimary
-                    )
-                    Text(
-                        text = formatRelativeTime(review.createdAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.TextTertiary
-                    )
-                }
-
-                StarRatingDisplay(
-                    rating = review.rating,
-                    starSize = 14.dp
+        // Right column
+        Column(modifier = Modifier.weight(1f)) {
+            // Name + timestamp on same row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = review.userName,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.TextPrimary
+                )
+                Text(
+                    text = formatRelativeTime(review.createdAt),
+                    fontSize = 12.sp,
+                    color = FigmaMaroon
                 )
             }
 
+            // Stars directly below name
+            Spacer(modifier = Modifier.height(2.dp))
+            StarRow(rating = review.rating)
+
+            // Italic quoted comment — Newsreader 18sp per Figma spec
             if (review.comment.isNotBlank()) {
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "\u201C${review.comment}\u201D",
-                    style = MaterialTheme.typography.bodyMedium,
+                    fontSize = 18.sp,
                     fontStyle = FontStyle.Italic,
-                    color = colors.TextSecondary,
-                    maxLines = 4,
+                    color = colors.TextPrimary,
+                    lineHeight = 28.sp,
+                    maxLines = 6,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -494,93 +587,38 @@ private fun DetailReviewCard(
     }
 }
 
-/**
- * Simple dish list item for the full menu section
- */
 @Composable
-private fun DishListItem(
-    dish: Dish,
-    modifier: Modifier = Modifier
-) {
-    val colors = appColors()
+private fun AvatarInitial(name: String, textColor: Color) {
+    Text(
+        text = name.firstOrNull()?.uppercase() ?: "?",
+        fontSize = 20.sp,
+        fontWeight = FontWeight.Bold,
+        color = textColor
+    )
+}
 
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = colors.CardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+@Composable
+private fun StarRow(rating: Float) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Dish image
-            Box(
-                modifier = Modifier
-                    .size(60.dp)
-                    .clip(MaterialTheme.shapes.medium)
-                    .background(colors.SurfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!dish.imageUrl.isNullOrEmpty()) {
-                    KamelImage(
-                        resource = asyncPainterResource(dish.imageUrl!!),
-                        contentDescription = dish.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                        onFailure = {
-                            Icon(
-                                imageVector = Icons.Filled.Restaurant,
-                                contentDescription = null,
-                                modifier = Modifier.size(24.dp),
-                                tint = colors.TextTertiary
-                            )
-                        }
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Filled.Restaurant,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = colors.TextTertiary
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = dish.name,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = colors.TextPrimary
-                )
-                if (dish.rating > 0f) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Star,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = com.example.smackcheck2.ui.theme.StarColor
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = String.format("%.1f", dish.rating),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = colors.TextSecondary
-                        )
-                    }
-                } else {
-                    Text(
-                        text = "No ratings yet",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.TextTertiary
-                    )
-                }
-            }
+        val full = rating.toInt().coerceIn(0, 5)
+        repeat(full) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = FigmaMaroon
+            )
+        }
+        repeat((5 - full).coerceAtLeast(0)) {
+            Icon(
+                imageVector = Icons.Filled.Star,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = FigmaMaroon.copy(alpha = 0.25f)
+            )
         }
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -145,7 +146,12 @@ fun ProgressDashboardScreen(
     progressViewModel: UserProgressViewModel,
     gamificationViewModel: GamificationViewModel,
     onNavigateBack: () -> Unit,
-    onViewAllAchievements: () -> Unit
+    onViewAllAchievements: () -> Unit,
+    onNavHome: () -> Unit = {},
+    onNavMap: () -> Unit = {},
+    onNavCamera: () -> Unit = {},
+    onNavExplore: () -> Unit = {},
+    onNavProfile: () -> Unit = {}
 ) {
     val progressState  by progressViewModel.uiState.collectAsState()
     val gameState      by gamificationViewModel.uiState.collectAsState()
@@ -155,10 +161,11 @@ fun ProgressDashboardScreen(
     val level       = progressState.level.coerceAtLeast(gameState.level)
     val xp          = progressState.currentXp.coerceAtLeast(gameState.totalXp)
     val streak      = progressState.streakCount.coerceAtLeast(gameState.streakDays)
-    val maxXp       = (level * 300).coerceAtLeast(100)
-    val xpProgress  = ((xp - (level - 1) * 300).toFloat() / (level * 300 - (level - 1) * 300).toFloat()).coerceIn(0f, 1f)
-    val xpBase      = (level - 1) * 300
-    val xpCap       = level * 300
+    val maxXp       = com.example.smackcheck2.gamification.PointsConfig.xpForNextLevel(xp).coerceAtLeast(100)
+    val xpProgress  = com.example.smackcheck2.gamification.PointsConfig.levelProgress(xp)
+    val levelThresholds = com.example.smackcheck2.gamification.PointsConfig.LEVEL_THRESHOLDS
+    val xpBase      = levelThresholds.getOrElse(level) { (level - 1) * 300 }
+    val xpCap       = maxXp
 
     val earnedBadges   = progressState.badges.filter { it.isEarned }
     val unearnedBadges = progressState.badges.filter { !it.isEarned }
@@ -198,7 +205,10 @@ fun ProgressDashboardScreen(
         // ── Top bar ──────────────────────────────────────────────────────────
         item {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onNavigateBack) {
@@ -207,9 +217,6 @@ fun ProgressDashboardScreen(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text("SmackCheck", color = PDeepMaroon, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = {}) {
-                    Icon(Icons.Default.Notifications, null, tint = PDeepMaroon, modifier = Modifier.size(22.dp))
-                }
                 // Avatar
                 Box(
                     modifier = Modifier.size(34.dp).clip(CircleShape).background(PWarmMaroon),
@@ -557,6 +564,11 @@ fun ProgressDashboardScreen(
     }
     com.example.smackcheck2.ui.components.BottomNavBar(
         selectedItem = com.example.smackcheck2.ui.components.NavItem.PROFILE,
+        onHomeClick = onNavHome,
+        onMapClick = onNavMap,
+        onCameraClick = onNavCamera,
+        onExploreClick = onNavExplore,
+        onProfileClick = onNavProfile,
         modifier = Modifier.align(Alignment.BottomCenter)
     )
     } // end Box

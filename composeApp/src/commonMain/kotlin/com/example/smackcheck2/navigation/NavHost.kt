@@ -37,6 +37,7 @@ import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.ui.screens.AllRestaurantsScreen
 import com.example.smackcheck2.ui.screens.BadgesScreen
 import com.example.smackcheck2.ui.screens.DarkDishCaptureScreen
+import com.example.smackcheck2.ui.screens.DarkDishConfirmScreen
 import com.example.smackcheck2.ui.screens.DarkDishRatingScreen
 import com.example.smackcheck2.ui.screens.DarkGameScreen
 import com.example.smackcheck2.ui.screens.DarkHomeScreen
@@ -105,6 +106,8 @@ import com.example.smackcheck2.ui.screens.HelpFaqScreen
 import com.example.smackcheck2.ui.screens.ContactSupportScreen
 import com.example.smackcheck2.ui.screens.UserProfileScreen
 import com.example.smackcheck2.ui.screens.FollowersListScreen
+import com.example.smackcheck2.ui.screens.DiscoverUsersScreen
+import com.example.smackcheck2.viewmodel.DiscoverUsersViewModel
 import com.example.smackcheck2.ui.screens.CommentsScreen
 import com.example.smackcheck2.ui.screens.NotificationsListScreen
 import com.example.smackcheck2.ui.screens.SocialMapScreen
@@ -114,6 +117,7 @@ import com.example.smackcheck2.viewmodel.SocialFeedViewModel
 import com.example.smackcheck2.viewmodel.SocialMapViewModel
 import com.example.smackcheck2.viewmodel.CommentsViewModel
 import com.example.smackcheck2.viewmodel.NotificationsViewModel
+import com.example.smackcheck2.notifications.NotificationDeepLink
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FollowListUiState
 import com.example.smackcheck2.model.UserProfileUiState
@@ -168,6 +172,25 @@ class NavigationState {
     var allCapturedImages by mutableStateOf<List<CapturedImage>>(emptyList())
         private set
 
+    var dishCuisine by mutableStateOf<String?>(null)
+        private set
+
+    var dishConfidence by mutableStateOf(0f)
+        private set
+
+    var detectedChain by mutableStateOf<String?>(null)
+        private set
+
+    var detectedType by mutableStateOf<String?>(null)
+        private set
+
+    fun updateDishMeta(cuisine: String?, confidence: Float, chain: String? = null, type: String? = null) {
+        dishCuisine = cuisine
+        dishConfidence = confidence
+        detectedChain = chain
+        detectedType = type
+    }
+
     fun navigateTo(screen: Screen) {
         backStack.add(currentScreen)
         currentScreen = screen
@@ -202,6 +225,14 @@ class NavigationState {
         currentScreen = Screen.DarkHome
     }
 
+    /**
+     * Switch to a primary tab (home, map, feed, profile) without stacking duplicate destinations.
+     */
+    fun navigateToMainTab(screen: Screen) {
+        backStack.clear()
+        currentScreen = screen
+    }
+
     fun updateImageBytes(bytes: ByteArray?) {
         imageBytes = bytes
     }
@@ -215,6 +246,10 @@ class NavigationState {
         dishName = ""
         imageBytes = null
         allCapturedImages = emptyList()
+        dishCuisine = null
+        dishConfidence = 0f
+        detectedChain = null
+        detectedType = null
     }
 }
 
@@ -273,7 +308,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 locationHomeViewModel.selectLocationWithCoordinates(
                     city = city,
                     latitude = data.latitude,
-                    longitude = data.longitude
+                    longitude = data.longitude,
+                    countryCode = data.countryCode
                 )
             }
             else -> { /* Loading, Idle, Permission, Disabled, Error - handled by individual screens */ }
@@ -335,15 +371,54 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         }
     }
     
+    // Route pending push-notification taps to the relevant screen once the
+    // user is authenticated. The Android FCM service (and iOS equivalent)
+    // publishes targets to NotificationDeepLink; we consume each target
+    // after navigating so the same tap isn't replayed on recomposition.
+    val pendingNotificationTarget by NotificationDeepLink.pendingTarget.collectAsState()
+    LaunchedEffect(pendingNotificationTarget, isAuthenticated) {
+        val target = pendingNotificationTarget ?: return@LaunchedEffect
+        if (isAuthenticated != true) return@LaunchedEffect
+        when (target.screen) {
+            "DishDetail" -> {
+                val dishId = target.dishId
+                if (!dishId.isNullOrBlank()) {
+                    navigationState.navigateToWithArgs(Screen.DishDetail, "dishId" to dishId)
+                } else {
+                    navigationState.navigateToMainTab(Screen.SocialFeed)
+                }
+            }
+            "SocialFeed" -> navigationState.navigateToMainTab(Screen.SocialFeed)
+            "GameScreen", "Game" -> navigationState.navigateTo(Screen.Game)
+            "NotificationsList", "Notifications" -> navigationState.navigateTo(Screen.NotificationsList)
+            "UserProfile" -> {
+                val userId = target.userId
+                if (!userId.isNullOrBlank()) {
+                    navigationState.navigateToWithArgs(Screen.UserProfile, "userId" to userId)
+                } else {
+                    navigationState.navigateTo(Screen.DarkHome)
+                }
+            }
+            "Home" -> navigationState.navigateTo(Screen.DarkHome)
+            else -> navigationState.navigateTo(Screen.NotificationsList)
+        }
+        NotificationDeepLink.consume()
+    }
+
     // Track if we've already requested location permission this session
     var hasRequestedPermission by remember { mutableStateOf(false) }
     var shouldShowPermissionDialog by remember { mutableStateOf(false) }
-    
-    // Automatically request location permission after authentication
+
+    // Automatically request location permission after authentication, but only on first launch
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated == true && !hasRequestedPermission) {
             hasRequestedPermission = true
-            shouldShowPermissionDialog = true
+            val alreadySeen = try {
+                preferencesRepository.hasSeenPermissionsOnboarding()
+            } catch (_: Exception) { false }
+            if (!alreadySeen) {
+                shouldShowPermissionDialog = true
+            }
         }
     }
 
@@ -432,6 +507,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
 
             DarkProfileScreen(
                 viewModel = profileViewModel,
+                preferencesRepository = preferencesRepository,
                 onNavigateBack = { navigationState.navigateBack() },
                 onEditProfile = { navigationState.navigateTo(Screen.EditProfile) },
                 onSignOut = {
@@ -442,7 +518,14 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onNavigateToNotifications = { navigationState.navigateTo(Screen.NotificationSettings) },
                 onNavigateToAccount = { navigationState.navigateTo(Screen.AccountSettings) },
                 onNavigateToPrivacy = { navigationState.navigateTo(Screen.PrivacySettings) },
-                onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) }
+                onNavigateToProgress = { navigationState.navigateTo(Screen.UserProgress) },
+                onNavigateToHelpFaq = { navigationState.navigateTo(Screen.HelpFaq) },
+                onNavigateToContactSupport = { navigationState.navigateTo(Screen.ContactSupport) },
+                onNavHome = { navigationState.navigateToMainTab(Screen.DarkHome) },
+                onNavMap = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                onNavCamera = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onNavExplore = { navigationState.navigateToMainTab(Screen.SocialFeed) },
+                onNavProfile = { navigationState.navigateToMainTab(Screen.Profile) }
             )
         }
 
@@ -458,7 +541,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
 
             EditProfileScreen(
                 viewModel = editProfileViewModel,
-                onNavigateBack = { navigationState.navigateBack() }
+                onNavigateBack = { navigationState.navigateBack() },
+                onNavHome = { navigationState.navigateToMainTab(Screen.DarkHome) },
+                onNavMap = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                onNavCamera = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onNavExplore = { navigationState.navigateToMainTab(Screen.SocialFeed) },
+                onNavProfile = { navigationState.navigateToMainTab(Screen.Profile) }
             )
         }
 
@@ -618,6 +706,10 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.SocialFeed -> {
             val socialFeedState by socialFeedViewModel.uiState.collectAsState()
             val shareService = LocalShareService.current
+            val socialFeedUserPhoto = when (val state = authState) {
+                is AuthState.Authenticated -> state.user.profilePhotoUrl
+                else -> null
+            }
 
             // Set scroll target if navigated from rating submission
             LaunchedEffect(Unit) {
@@ -631,6 +723,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             SocialFeedScreen(
                 uiState = socialFeedState,
                 onNavigateBack = { navigationState.navigateBack() },
+                currentUserAvatarUrl = socialFeedUserPhoto,
                 onFilterSelected = { filter -> socialFeedViewModel.setFilter(filter) },
                 onLikeClick = { ratingId -> socialFeedViewModel.toggleLike(ratingId) },
                 onCommentClick = { ratingId ->
@@ -655,9 +748,10 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onLoadMore = { socialFeedViewModel.loadMoreFeed() },
                 onScrollComplete = { socialFeedViewModel.clearScrollTarget() },
                 onExploreClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onFindFriendsClick = { navigationState.navigateTo(Screen.DiscoverUsers) },
                 onBookmarkClick = { ratingId -> socialFeedViewModel.toggleBookmark(ratingId) },
-                onMapBannerClick = { navigationState.navigateTo(Screen.SocialMap) },
-                onAvatarClick = { navigationState.navigateTo(Screen.Profile) },
+                onMapBannerClick = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                onAvatarClick = { navigationState.navigateToMainTab(Screen.Profile) },
                 onStoryClick = { userId ->
                     navigationState.navigateToWithArgs(
                         Screen.UserProfile,
@@ -667,14 +761,15 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onAddStoryClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
                 onTopDishClick = { /* TODO: navigate to dish detail */ },
                 onSeeAllTopDishes = { /* TODO: navigate to top dishes list */ },
-                onHomeClick = { /* Already on home/feed */ },
-                onMapClick = { navigationState.navigateTo(Screen.SocialMap) },
+                onHomeClick = { navigationState.navigateToMainTab(Screen.DarkHome) },
+                onMapClick = { navigationState.navigateToMainTab(Screen.SocialMap) },
                 onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
-                onNavExploreClick = { navigationState.navigateTo(Screen.AllRestaurants) },
-                onProfileClick = { navigationState.navigateTo(Screen.Profile) }
+                onNavExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) },
+                onProfileClick = { navigationState.navigateToMainTab(Screen.Profile) },
+                onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) }
             )
         }
-        
+
         is Screen.SocialMap -> {
             val socialMapViewModel: SocialMapViewModel = viewModel {
                 SocialMapViewModel(locationService)
@@ -695,7 +790,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         "dishId" to ratingId
                     )
                 },
-                onRateDishClick = { navigationState.navigateTo(Screen.DishCapture) }
+                onRateDishClick = { navigationState.navigateTo(Screen.DishCapture) },
+                onHomeClick = { navigationState.navigateToMainTab(Screen.DarkHome) },
+                onMapClick = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) },
+                onProfileClick = { navigationState.navigateToMainTab(Screen.Profile) }
             )
         }
         
@@ -727,26 +827,36 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         
         is Screen.RestaurantDetail -> {
             val placesService = LocalPlacesService.current
-            val restaurantDetailViewModel: RestaurantDetailViewModel = viewModel {
+            val restaurantDetailViewModel: RestaurantDetailViewModel = viewModel(key = navigationState.restaurantId) {
                 RestaurantDetailViewModel(placesService = placesService)
             }
+            val currentUser = authViewModel.getCurrentUser()
             RestaurantDetailScreen(
                 viewModel = restaurantDetailViewModel,
                 photoViewModel = restaurantPhotoViewModel,
+                preferencesRepository = preferencesRepository,
                 restaurantId = navigationState.restaurantId,
+                userAvatarUrl = currentUser?.profilePhotoUrl,
                 onNavigateBack = { navigationState.navigateBack() },
+                onNotificationClick = { navigationState.navigateTo(Screen.Notifications) },
                 onNavItemClick = { index ->
                     when (index) {
-                        0 -> navigationState.navigateTo(Screen.Home)
-                        1 -> navigationState.navigateTo(Screen.SocialMap)
-                        2 -> navigationState.navigateTo(Screen.DishCapture)
-                        3 -> navigationState.navigateTo(Screen.SocialFeed)
-                        4 -> navigationState.navigateTo(Screen.Profile)
+                        0 -> navigationState.navigateToMainTab(Screen.DarkHome)
+                        1 -> navigationState.navigateToMainTab(Screen.SocialMap)
+                        2 -> navigationState.navigateTo(Screen.DarkDishCapture)
+                        3 -> navigationState.navigateToMainTab(Screen.SocialFeed)
+                        4 -> navigationState.navigateToMainTab(Screen.Profile)
                     }
-                }
+                },
+                onNavHome = { navigationState.navigateToMainTab(Screen.DarkHome) },
+                onNavMap = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                onNavCamera = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onNavExplore = { navigationState.navigateToMainTab(Screen.SocialFeed) },
+                onNavProfile = { navigationState.navigateToMainTab(Screen.Profile) },
+                currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol
             )
         }
-        
+
         is Screen.LocationPermission -> {
             LocationPermissionScreen(
                 onNavigateBack = { navigationState.navigateBack() },
@@ -762,7 +872,12 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 progressViewModel = userProgressViewModel,
                 gamificationViewModel = progressGamificationViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
-                onViewAllAchievements = { navigationState.navigateTo(Screen.Badges) }
+                onViewAllAchievements = { navigationState.navigateTo(Screen.Badges) },
+                onNavHome = { navigationState.navigateToMainTab(Screen.DarkHome) },
+                onNavMap = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                onNavCamera = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onNavExplore = { navigationState.navigateToMainTab(Screen.SocialFeed) },
+                onNavProfile = { navigationState.navigateToMainTab(Screen.Profile) }
             )
         }
         
@@ -863,7 +978,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.TopDishes -> {
             val uiState by locationHomeViewModel.uiState.collectAsState()
             DarkTopDishesScreen(
-                location = uiState.selectedLocation ?: "New York, NY",
+                location = uiState.selectedLocation ?: "Nearby",
                 dishes = uiState.topDishes,
                 onNavigateBack = { navigationState.navigateBack() },
                 onDishClick = { dishId ->
@@ -878,7 +993,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         is Screen.TopRestaurants -> {
             val uiState by locationHomeViewModel.uiState.collectAsState()
             DarkTopRestaurantsScreen(
-                location = uiState.selectedLocation ?: "New York, NY",
+                location = uiState.selectedLocation ?: "Nearby",
                 restaurants = uiState.topRestaurants,
                 photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
@@ -952,6 +1067,13 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             // Combine database and nearby restaurants
             val combinedRestaurants = (uiState.allRestaurants + nearbyAsRestaurants).distinctBy { it.id }
 
+            // Refresh from live data sources whenever Home screen is entered.
+            LaunchedEffect(Unit) {
+                locationHomeViewModel.refreshHomeData()
+                locationHomeViewModel.refreshUserLocation()
+                socialFeedViewModel.refreshHomeData()
+            }
+
             RequestLocationPermission(
                 onPermissionResult = { granted ->
                     println("NavHost: DarkHome - permission result: $granted")
@@ -973,18 +1095,42 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                     }
                 }
 
+                val currentUserName = when (val state = authState) {
+                    is AuthState.Authenticated -> state.user.name
+                    else -> ""
+                }
+                val currentUserPhoto = when (val state = authState) {
+                    is AuthState.Authenticated -> state.user.profilePhotoUrl
+                    else -> null
+                }
+                val followingUsersState by socialFeedViewModel.uiState.collectAsState()
+                val notifUnreadCount by notificationViewModel.unreadCount.collectAsState()
+
                 DarkHomeScreen(
                     currentLocation = uiState.selectedLocation ?: "Select Location",
+                    userName = currentUserName,
+                    userProfilePhotoUrl = currentUserPhoto,
                     isLoading = uiState.isLoading,
                     allRestaurants = combinedRestaurants,
                     allDishes = uiState.topDishes,
+                    topDishFeedItems = followingUsersState.topDishes,
+                    followingUsers = followingUsersState.storyUsers,
                     noRestaurantsFound = uiState.noRestaurantsFound,
                     photoViewModel = restaurantPhotoViewModel,
+                    currentLatitude = uiState.userLatitude,
+                    currentLongitude = uiState.userLongitude,
+                    hasUnreadNotifications = notifUnreadCount > 0,
                     onLocationClick = {
                         println("NavHost: Location clicked, navigating to LocationSelection")
                         navigationState.navigateTo(Screen.LocationSelection)
                     },
                     onDishClick = { dishId ->
+                        navigationState.navigateToWithArgs(
+                            Screen.DishDetail,
+                            "dishId" to dishId
+                        )
+                    },
+                    onFeedItemDishClick = { dishId ->
                         navigationState.navigateToWithArgs(
                             Screen.DishDetail,
                             "dishId" to dishId
@@ -997,14 +1143,23 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         )
                     },
                     onSearchClick = { navigationState.navigateTo(Screen.Search) },
-                    onMapClick = { navigationState.navigateTo(Screen.SocialMap) },
-                    onProfileClick = { navigationState.navigateTo(Screen.Profile) },
+                    onMapClick = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                    onProfileClick = { navigationState.navigateToMainTab(Screen.Profile) },
                     onGameClick = { navigationState.navigateTo(Screen.Game) },
                     onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
                     onTopDishesClick = { navigationState.navigateTo(Screen.TopDishes) },
                     onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
                     onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) },
-                    onSocialFeedClick = { navigationState.navigateTo(Screen.SocialFeed) },
+                    onChipSelected = { chip ->
+                        val keyword = when (chip) {
+                            "Italian"  -> "Italian"
+                            "Asian"    -> "Asian"
+                            "Desserts" -> "Dessert"
+                            else       -> null
+                        }
+                        locationHomeViewModel.fetchNearbyForCuisine(keyword)
+                    },
+                    onSocialFeedClick = { navigationState.navigateToMainTab(Screen.SocialFeed) },
                     onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) },
                     onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) }
                 )
@@ -1024,17 +1179,18 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 viewModel = dishCaptureViewModel,
                 imagePicker = imagePicker,
                 onNavigateBack = { navigationState.navigateBack() },
-                onImageCaptured = { imageUri, dishName, imageBytes, allImages ->
+                onImageCaptured = { imageUri, dishName, imageBytes, allImages, cuisine, confidence, chain, type ->
                     // Award points for photo upload (from main)
                     gamificationViewModel.recordAction(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_UPLOAD_PHOTO,
                         actionLabel = "Photo Uploaded"
                     )
-                    // Store all images for rating screen
+                    // Store all images and dish meta for confirm screen
                     navigationState.updateImageBytes(imageBytes)
                     navigationState.updateAllCapturedImages(allImages)
+                    navigationState.updateDishMeta(cuisine, confidence, chain, type)
                     navigationState.navigateToWithArgs(
-                        Screen.DarkDishRating,
+                        Screen.DarkDishConfirm,
                         "imageUri" to imageUri,
                         "dishName" to dishName
                     )
@@ -1045,6 +1201,19 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         Screen.ManualDishEntry,
                         "imageUri" to imageUri
                     )
+                }
+            )
+        }
+
+        is Screen.DarkDishConfirm -> {
+            DarkDishConfirmScreen(
+                dishName = navigationState.dishName,
+                imageBytes = navigationState.imageBytes,
+                cuisine = navigationState.dishCuisine,
+                confidence = navigationState.dishConfidence,
+                onNavigateBack = { navigationState.navigateBack() },
+                onRateNow = {
+                    navigationState.navigateTo(Screen.DarkDishRating)
                 }
             )
         }
@@ -1235,18 +1404,15 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 dishRatingViewModel.setRatingLocation(location?.latitude, location?.longitude)
             }
 
-            // Navigate to social feed on success (after showing reward for 6 seconds)
+            // Auto-navigate to home after showing XP reward (fallback if user doesn't tap Continue)
             LaunchedEffect(ratingUiState.isSuccess) {
                 if (ratingUiState.isSuccess) {
-                    kotlinx.coroutines.delay(6000) // Show XP reward for 6 seconds
-                    val ratingId = ratingUiState.submittedRatingId ?: ""
-                    dishRatingViewModel.resetForm()
-                    navigationState.clearCaptureData()
-                    navigationState.popToRoot()
-                    navigationState.navigateToWithArgs(
-                        Screen.SocialFeed,
-                        "ratingId" to ratingId
-                    )
+                    kotlinx.coroutines.delay(6000)
+                    if (ratingUiState.isSuccess) { // still on success screen
+                        dishRatingViewModel.resetForm()
+                        navigationState.clearCaptureData()
+                        navigationState.popToRoot()
+                    }
                 }
             }
 
@@ -1272,6 +1438,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 xpEarned = ratingUiState.xpEarned,
                 errorMessage = ratingUiState.errorMessage,
                 onNavigateBack = { navigationState.navigateBack() },
+                onRatingComplete = {
+                    dishRatingViewModel.resetForm()
+                    navigationState.clearCaptureData()
+                    navigationState.popToRoot()
+                },
                 onSubmitRating = { rating, comment, tags, restaurant ->
                     // Award points for rating a dish (from main)
                     gamificationViewModel.recordAction(
@@ -1291,7 +1462,10 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                 onPriceChange = { dishRatingViewModel.onPriceChange(it) },
                 onDismissError = { dishRatingViewModel.clearError() },
                 onAddRestaurantManually = { navigationState.navigateTo(Screen.ManualRestaurantEntry) },
-                onSearchRestaurants = { query -> searchQuery = query }
+                onSearchRestaurants = { query -> searchQuery = query },
+                detectedChain = navigationState.detectedChain,
+                detectedType = navigationState.detectedType,
+                currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol
             )
         }
 
@@ -1327,10 +1501,10 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                             }
                         }
                         "GameScreen" -> navigationState.navigateTo(Screen.Game)
-                        "SocialFeed" -> navigationState.navigateTo(Screen.SocialFeed)
+                        "SocialFeed" -> navigationState.navigateToMainTab(Screen.SocialFeed)
                     }
                 },
-                onExploreClick = { navigationState.navigateTo(Screen.SocialFeed) }
+                onExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) }
             )
         }
 
@@ -1412,6 +1586,23 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             )
         }
 
+        is Screen.DiscoverUsers -> {
+            val discoverUsersViewModel: DiscoverUsersViewModel = viewModel { DiscoverUsersViewModel() }
+            val discoverState by discoverUsersViewModel.uiState.collectAsState()
+            DiscoverUsersScreen(
+                uiState = discoverState,
+                onNavigateBack = { navigationState.navigateBack() },
+                onUserClick = { user ->
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to user.id
+                    )
+                },
+                onFollowToggle = { user -> discoverUsersViewModel.toggleFollow(user) },
+                onRetry = { discoverUsersViewModel.load() }
+            )
+        }
+
         is Screen.FollowersList -> {
             val targetUserId = navigationState.userId
             val socialRepository = remember { SocialRepository() }
@@ -1455,7 +1646,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         } catch (_: Exception) {}
                     }
                 },
-                onExploreClick = { navigationState.navigateTo(Screen.SocialFeed) }
+                onExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) }
             )
         }
 
@@ -1502,7 +1693,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                         } catch (_: Exception) {}
                     }
                 },
-                onExploreClick = { navigationState.navigateTo(Screen.SocialFeed) }
+                onExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) }
             )
         }
 
@@ -1563,6 +1754,11 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
         PermissionsOnboardingScreen(
             onComplete = { locationWasGranted ->
                 shouldShowPermissionDialog = false
+                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                    try {
+                        preferencesRepository.setPermissionsOnboardingSeen()
+                    } catch (_: Exception) { }
+                }
                 if (locationWasGranted) {
                     // Location granted - trigger automatic location detection
                     kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
@@ -1571,7 +1767,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
                                 SharedLocationState.onLocationDetected(
                                     latitude = location.latitude,
                                     longitude = location.longitude,
-                                    city = location.cityName ?: "Unknown"
+                                    city = location.cityName ?: "Unknown",
+                                    countryCode = location.countryCode
                                 )
                                 val repository = com.example.smackcheck2.data.repository.SocialMapRepository()
                                 repository.updateUserLocation(location.latitude, location.longitude)

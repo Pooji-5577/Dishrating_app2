@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -205,14 +206,36 @@ private fun TopDishCard(
                     maxLines = 1
                 )
 
-                // Restaurant + cuisine
+                // Restaurant + city
                 Text(
                     text = dish.restaurantName,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     fontFamily = jakartaSans,
-                    color = Color.Black
+                    color = Color.Black,
+                    maxLines = 1
                 )
+                if (dish.restaurantCity.isNotBlank()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(11.dp),
+                            tint = Color(0xFF642223)
+                        )
+                        Text(
+                            text = dish.restaurantCity,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontFamily = jakartaSans,
+                            color = Color(0xFF5C5B5B),
+                            maxLines = 1
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 

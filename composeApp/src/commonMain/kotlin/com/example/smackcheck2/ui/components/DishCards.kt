@@ -53,6 +53,7 @@ fun FeaturedDishCard(
     rating: Float,
     calories: Int,
     isFavorite: Boolean,
+    imageUrl: String? = null,
     onClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -74,9 +75,9 @@ fun FeaturedDishCard(
                     .fillMaxWidth()
                     .aspectRatio(1f)
             ) {
-                // Real dish image from network
                 DishImage(
                     dishName = dishName,
+                    imageUrl = imageUrl,
                     modifier = Modifier.fillMaxSize()
                 )
                 
@@ -145,6 +146,7 @@ fun LargeDishCard(
     reviewCount: Int,
     calories: Int,
     isBestseller: Boolean,
+    imageUrl: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -236,6 +238,7 @@ fun LargeDishCard(
             ) {
                 DishImage(
                     dishName = dishName,
+                    imageUrl = imageUrl,
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(RoundedCornerShape(topEnd = 16.dp, bottomEnd = 16.dp))
@@ -324,8 +327,7 @@ fun RestaurantCardDark(
                         NetworkImage(
                             imageUrl = photoUrl,
                             contentDescription = restaurantName,
-                            modifier = Modifier.fillMaxSize(),
-                            fallbackUrl = FoodImages.getRestaurantImageByName(restaurantName)
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
 

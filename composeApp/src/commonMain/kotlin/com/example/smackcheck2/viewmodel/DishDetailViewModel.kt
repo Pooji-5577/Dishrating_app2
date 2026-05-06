@@ -56,10 +56,18 @@ class DishDetailViewModel : ViewModel() {
                     }
                 }
 
-                // 4. Load reviews for this dish
-                val reviewsResult = databaseRepository.getRatingsForDish(dishId)
+                // 4. Load reviews for this dish, filtered to the dish's own restaurant
+                //    so only location-specific reviews are shown.
+                val reviewsResult = databaseRepository.getRatingsForDish(
+                    dishId = dishId,
+                    restaurantId = dish.restaurantId.takeIf { it.isNotBlank() }
+                )
                 reviewsResult.onSuccess { reviews ->
-                    _uiState.update { it.copy(reviews = reviews) }
+                    // Pick the featured review: highest-rated one that has a photo, else highest-rated
+                    val featured = reviews.filter { !it.dishImageUrl.isNullOrBlank() }
+                        .maxByOrNull { it.rating }
+                        ?: reviews.maxByOrNull { it.rating }
+                    _uiState.update { it.copy(reviews = reviews, featuredReview = featured) }
                 }.onFailure { error ->
                     println("DishDetailViewModel: Failed to load reviews: ${error.message}")
                 }

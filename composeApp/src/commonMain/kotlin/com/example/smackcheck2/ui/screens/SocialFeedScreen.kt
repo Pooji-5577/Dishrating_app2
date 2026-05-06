@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -18,7 +19,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MoreHoriz
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.RssFeed
@@ -76,6 +81,7 @@ fun SocialFeedScreen(
     onLoadMore: () -> Unit = {},
     onScrollComplete: () -> Unit = {},
     onExploreClick: () -> Unit = {},
+    onFindFriendsClick: () -> Unit = {},
     onBookmarkClick: (String) -> Unit = {},
     onMapBannerClick: () -> Unit = {},
     onAvatarClick: () -> Unit = {},
@@ -88,7 +94,8 @@ fun SocialFeedScreen(
     onMapClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
     onNavExploreClick: () -> Unit = {},
-    onProfileClick: () -> Unit = {}
+    onProfileClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {}
 ) {
     val colors = appColors()
     val jakartaSans = PlusJakartaSans()
@@ -127,7 +134,7 @@ fun SocialFeedScreen(
             verticalArrangement = Arrangement.spacedBy(0.dp),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
-            // Top bar: SmackCheck branding + user avatar
+            // Top bar: SmackCheck logo + bell (no dot) + user photo
             item(key = "top_bar") {
                 Row(
                     modifier = Modifier
@@ -136,46 +143,78 @@ fun SocialFeedScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "SmackCheck",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = colors.Primary,
-                        fontSize = 24.sp
+                    BasicText(
+                        text = buildAnnotatedString {
+                            pushStyle(SpanStyle(
+                                fontFamily = jakartaSans,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                color = colors.Primary
+                            ))
+                            append("Smack")
+                            pop()
+                            pushStyle(SpanStyle(
+                                fontFamily = jakartaSans,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                color = colors.TextPrimary
+                            ))
+                            append("Check")
+                            pop()
+                        }
                     )
 
-                    Box(
-                        modifier = Modifier
-                            .size(34.dp)
-                            .clip(CircleShape)
-                            .background(colors.Primary.copy(alpha = 0.15f))
-                            .clickable { onAvatarClick() },
-                        contentAlignment = Alignment.Center
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (currentUserAvatarUrl != null) {
-                            KamelImage(
-                                resource = asyncPainterResource(currentUserAvatarUrl),
-                                contentDescription = "Profile",
-                                modifier = Modifier
-                                    .size(34.dp)
-                                    .clip(CircleShape),
-                                contentScale = ContentScale.Crop,
-                                onFailure = {
-                                    Text(
-                                        text = "U",
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.Primary,
-                                        fontSize = 14.sp
-                                    )
-                                }
+                        Box(
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { onNotificationsClick() }
+                                .padding(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Notifications,
+                                contentDescription = "Notifications",
+                                tint = colors.TextPrimary,
+                                modifier = Modifier.size(22.dp)
                             )
-                        } else {
-                            Text(
-                                text = "U",
-                                fontWeight = FontWeight.Bold,
-                                color = colors.Primary,
-                                fontSize = 14.sp
-                            )
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(colors.Primary.copy(alpha = 0.15f))
+                                .clickable { onAvatarClick() },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!currentUserAvatarUrl.isNullOrBlank()) {
+                                KamelImage(
+                                    resource = asyncPainterResource(currentUserAvatarUrl),
+                                    contentDescription = "Profile",
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop,
+                                    onFailure = {
+                                        Icon(
+                                            imageVector = Icons.Filled.Person,
+                                            contentDescription = null,
+                                            tint = colors.Primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = null,
+                                    tint = colors.Primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -211,27 +250,16 @@ fun SocialFeedScreen(
                         .fillMaxWidth()
                         .background(Color.White)
                 ) {
-                    Row(
+                    Text(
+                        text = "From Your Network",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = jakartaSans,
+                        color = Color(0xFF2D2F2F),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 24.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "From Your Network",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontFamily = jakartaSans,
-                            color = Color(0xFF2D2F2F)
-                        )
-                        Icon(
-                            imageVector = Icons.Filled.MoreHoriz,
-                            contentDescription = "More",
-                            tint = Color(0xFF2D2F2F),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
+                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                    )
                     FeedTabRow(
                         selectedTab = uiState.filter,
                         onTabSelected = onFilterSelected
@@ -302,7 +330,13 @@ fun SocialFeedScreen(
                             },
                             action = {
                                 Button(
-                                    onClick = onExploreClick,
+                                    onClick = {
+                                        when (uiState.filter) {
+                                            FeedFilter.FOLLOWING -> onFindFriendsClick()
+                                            FeedFilter.NEARBY -> onMapBannerClick()
+                                            else -> onExploreClick()
+                                        }
+                                    },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = colors.Primary,
                                         contentColor = Color.White
@@ -344,7 +378,7 @@ fun SocialFeedScreen(
                             item(key = "map_banner") {
                                 Box(modifier = Modifier.padding(horizontal = 24.dp)) {
                                     NearbyMapBanner(
-                                        restaurantCount = 8,
+                                        restaurantCount = uiState.nearbyRestaurantCount,
                                         onClick = onMapBannerClick
                                     )
                                 }
@@ -383,7 +417,7 @@ fun SocialFeedScreen(
 
             // Floating Bottom Nav Bar
             BottomNavBar(
-                selectedItem = NavItem.HOME,
+                selectedItem = NavItem.EXPLORE,
                 onHomeClick = onHomeClick,
                 onMapClick = onMapClick,
                 onCameraClick = onCameraClick,

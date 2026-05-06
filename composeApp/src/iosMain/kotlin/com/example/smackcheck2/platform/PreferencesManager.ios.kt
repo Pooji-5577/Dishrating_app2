@@ -18,6 +18,7 @@ actual class PreferencesManager {
         const val LANGUAGE = "language"
         const val FIRST_OPEN_TIMESTAMP = "first_open_timestamp"
         const val DAY1_RETENTION_TRACKED = "day1_retention_tracked"
+        const val PERMISSIONS_ONBOARDING_SEEN = "permissions_onboarding_seen"
         const val BOOKMARKS = "bookmarked_ratings"
     }
 
@@ -27,7 +28,7 @@ actual class PreferencesManager {
     }
 
     actual suspend fun getThemePreference(): ThemePreference {
-        val themeString = userDefaults.stringForKey(THEME_PREF) ?: ThemePreference.SYSTEM.name
+        val themeString = userDefaults.stringForKey(THEME_PREF) ?: ThemePreference.LIGHT.name
         return ThemePreference.valueOf(themeString)
     }
 
@@ -86,6 +87,15 @@ actual class PreferencesManager {
 
     actual suspend fun setDay1RetentionTracked() {
         userDefaults.setBool(true, forKey = DAY1_RETENTION_TRACKED)
+        userDefaults.synchronize()
+    }
+
+    actual suspend fun hasSeenPermissionsOnboarding(): Boolean {
+        return userDefaults.boolForKey(PERMISSIONS_ONBOARDING_SEEN)
+    }
+
+    actual suspend fun setPermissionsOnboardingSeen() {
+        userDefaults.setBool(true, forKey = PERMISSIONS_ONBOARDING_SEEN)
         userDefaults.synchronize()
     }
 

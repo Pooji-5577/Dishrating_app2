@@ -18,6 +18,9 @@ import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.SupabaseClientProvider
 import io.github.jan.supabase.auth.handleDeeplinks
 import com.example.smackcheck2.location.AppLocationManager
+import com.example.smackcheck2.notifications.NotificationDeepLink
+import com.example.smackcheck2.notifications.NotificationRouteTarget
+import com.example.smackcheck2.notifications.SmackCheckFirebaseMessagingService
 import com.example.smackcheck2.platform.AutoLocationManager
 import com.example.smackcheck2.platform.GeofencingService
 import com.example.smackcheck2.platform.ImagePicker
@@ -37,6 +40,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         SupabaseClientProvider.client.handleDeeplinks(intent)
+        handleNotificationIntent(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -62,6 +66,8 @@ class MainActivity : ComponentActivity() {
         SupabaseClientProvider.initializeSession()
         // Handle deep link if app was launched via OAuth redirect
         SupabaseClientProvider.client.handleDeeplinks(intent)
+        // Handle deep link from a tapped push notification, if any
+        handleNotificationIntent(intent)
 
         // Set app context for push notification channels
         com.example.smackcheck2.notifications.SmackCheckNotificationHelper.appContext = applicationContext
@@ -107,6 +113,25 @@ class MainActivity : ComponentActivity() {
             autoLocationManager.stopAutoDetection()
         }
         super.onDestroy()
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        intent ?: return
+        if (!intent.getBooleanExtra(SmackCheckFirebaseMessagingService.EXTRA_FROM_NOTIFICATION, false)) {
+            return
+        }
+        val screen = intent.getStringExtra(SmackCheckFirebaseMessagingService.EXTRA_SCREEN) ?: return
+        NotificationDeepLink.push(
+            NotificationRouteTarget(
+                screen = screen,
+                dishId = intent.getStringExtra(SmackCheckFirebaseMessagingService.EXTRA_DISH_ID),
+                reviewId = intent.getStringExtra(SmackCheckFirebaseMessagingService.EXTRA_REVIEW_ID),
+                ratingId = intent.getStringExtra(SmackCheckFirebaseMessagingService.EXTRA_RATING_ID),
+                userId = intent.getStringExtra(SmackCheckFirebaseMessagingService.EXTRA_USER_ID)
+            )
+        )
+        // Clear the extras so the same notification tap isn't replayed on config change / rotation.
+        intent.removeExtra(SmackCheckFirebaseMessagingService.EXTRA_FROM_NOTIFICATION)
     }
 }
 

@@ -122,7 +122,7 @@ class DatabaseRepository {
 
             if (existing != null) {
                 // If restaurant has no images yet but we have a dish photo, add it
-                if (existing.imageUrls.isEmpty() && dishImageUrl != null) {
+                if (existing.imageUrls.isNullOrEmpty() && dishImageUrl != null) {
                     try {
                         postgrest["restaurants"].update({
                             set("image_urls", listOf(dishImageUrl))
@@ -183,6 +183,36 @@ class DatabaseRepository {
     /**
      * Get restaurants by city (case-insensitive partial match)
      */
+    suspend fun getDistinctCuisines(): Result<List<String>> {
+        return try {
+            val list = postgrest["restaurants"]
+                .select(columns = Columns.list("cuisine")) {}
+                .decodeList<Map<String, String>>()
+                .mapNotNull { it["cuisine"] }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getDistinctCities(): Result<List<String>> {
+        return try {
+            val list = postgrest["restaurants"]
+                .select(columns = Columns.list("city")) {}
+                .decodeList<Map<String, String>>()
+                .mapNotNull { it["city"] }
+                .filter { it.isNotBlank() }
+                .distinct()
+                .sorted()
+            Result.success(list)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     suspend fun getRestaurantsByCity(city: String): Result<List<Restaurant>> {
         return try {
             println("DatabaseRepository: Searching for restaurants in city: $city")
@@ -254,9 +284,23 @@ class DatabaseRepository {
                 ratings.map { it.rating }.average().toFloat()
             } else 0f
 
+            // Fetch uploader (top-rated reviewer) profile
+            val topRating = ratings.maxByOrNull { it.rating }
+            val uploaderProfile = topRating?.let { r ->
+                try {
+                    postgrest["profiles"]
+                        .select { filter { eq("id", r.userId) } }
+                        .decodeSingleOrNull<ProfileDto>()
+                } catch (_: Exception) { null }
+            }
+
             val dish = dishDto.toDish().copy(
                 rating = avgRating,
-                restaurantName = restaurant?.name ?: "Unknown Restaurant"
+                ratingCount = ratings.size,
+                restaurantName = restaurant?.name ?: "Unknown Restaurant",
+                restaurantCity = restaurant?.city ?: "",
+                uploaderName = uploaderProfile?.name ?: "",
+                uploaderProfileUrl = uploaderProfile?.profilePhotoUrl
             )
             Result.success(dish)
         } catch (e: Exception) {
@@ -268,28 +312,55 @@ class DatabaseRepository {
     /**
      * Get all ratings/reviews for a specific dish
      */
-    suspend fun getRatingsForDish(dishId: String): Result<List<Review>> {
+    /**
+     * Get all ratings for a dish, optionally restricted to a specific restaurant
+     * (for location-specific review filtering).
+     *
+     * @param dishId the dish to query reviews for
+     * @param restaurantId when non-null, only reviews posted at this restaurant are returned
+     */
+    suspend fun getRatingsForDish(
+        dishId: String,
+        restaurantId: String? = null
+    ): Result<List<Review>> {
         return try {
             val ratings = postgrest["ratings"]
                 .select {
-                    filter { eq("dish_id", dishId) }
+                    filter {
+                        eq("dish_id", dishId)
+                        if (!restaurantId.isNullOrBlank()) {
+                            eq("restaurant_id", restaurantId)
+                        }
+                    }
                     order("created_at", Order.DESCENDING)
                 }
                 .decodeList<RatingDto>()
 
+            // Batch-fetch profiles and restaurants
+            val userIds = ratings.map { it.userId }.distinct()
+            val restIds = ratings.map { it.restaurantId }.distinct()
+
+            val profilesMap = try {
+                if (userIds.isNotEmpty()) {
+                    postgrest["profiles"]
+                        .select { filter { isIn("id", userIds) } }
+                        .decodeList<ProfileDto>()
+                        .associateBy { it.id }
+                } else emptyMap()
+            } catch (_: Exception) { emptyMap() }
+
+            val restaurantsMap = try {
+                if (restIds.isNotEmpty()) {
+                    postgrest["restaurants"]
+                        .select { filter { isIn("id", restIds) } }
+                        .decodeList<RestaurantDto>()
+                        .associateBy { it.id ?: "" }
+                } else emptyMap()
+            } catch (_: Exception) { emptyMap() }
+
             val reviews = ratings.map { rating ->
-                val profile = postgrest["profiles"]
-                    .select {
-                        filter { eq("id", rating.userId) }
-                    }
-                    .decodeSingleOrNull<ProfileDto>()
-
-                val restaurant = postgrest["restaurants"]
-                    .select {
-                        filter { eq("id", rating.restaurantId) }
-                    }
-                    .decodeSingleOrNull<RestaurantDto>()
-
+                val profile = profilesMap[rating.userId]
+                val restaurant = restaurantsMap[rating.restaurantId]
                 Review(
                     id = rating.id ?: "",
                     userId = rating.userId,
@@ -314,62 +385,203 @@ class DatabaseRepository {
     }
 
     /**
-     * Get top-rated dishes across all restaurants
+     * Get top-rated dishes across all restaurants.
+     * Falls back to querying the dishes table directly when the ratings table is empty.
      */
     suspend fun getTopRatedDishes(limit: Int = 10): Result<List<Dish>> {
         return try {
-            // Get all ratings with dish information
             val ratings = postgrest["ratings"]
                 .select {
                     order("rating", Order.DESCENDING)
-                    limit(100) // Get more ratings to filter unique dishes
+                    limit(100)
                 }
                 .decodeList<RatingDto>()
 
-            // Group by dish ID and calculate average rating
-            val dishRatings = ratings
-                .groupBy { it.dishId }
-                .mapValues { (_, ratings) ->
-                    ratings.map { it.rating }.average().toFloat()
-                }
-                .entries
-                .sortedByDescending { it.value }
-                .take(limit)
+            println("DatabaseRepository: getTopRatedDishes - found ${ratings.size} ratings globally")
 
-            // Fetch dish details for top dishes
-            val topDishes = dishRatings.mapNotNull { (dishId, avgRating) ->
-                try {
-                    val dish = postgrest["dishes"]
-                        .select {
-                            filter { eq("id", dishId) }
-                        }
-                        .decodeSingleOrNull<DishDto>()
+            if (ratings.isNotEmpty()) {
+                // Ratings exist — build dish list from them
+                val dishRatingGroups = ratings.groupBy { it.dishId }
+                val dishRatings = dishRatingGroups
+                    .mapValues { (_, r) -> r.map { it.rating }.average().toFloat() }
+                    .entries
+                    .sortedByDescending { it.value }
+                    .take(limit)
 
-                    if (dish != null) {
-                        // Fetch restaurant name
-                        val restaurant = postgrest["restaurants"]
-                            .select {
-                                filter { eq("id", dish.restaurantId) }
+                val topDishes = dishRatings.mapNotNull { (dishId, avgRating) ->
+                    try {
+                        val dish = postgrest["dishes"]
+                            .select { filter { eq("id", dishId) } }
+                            .decodeSingleOrNull<DishDto>()
+                        if (dish != null) {
+                            val restaurant = postgrest["restaurants"]
+                                .select { filter { eq("id", dish.restaurantId) } }
+                                .decodeSingleOrNull<RestaurantDto>()
+                            val topRating = dishRatingGroups[dishId]?.maxByOrNull { it.rating }
+                            val uploaderProfile = topRating?.let { r ->
+                                try { postgrest["profiles"].select { filter { eq("id", r.userId) } }.decodeSingleOrNull<ProfileDto>() } catch (_: Exception) { null }
                             }
-                            .decodeSingleOrNull<RestaurantDto>()
-
-                        dish.toDish().copy(
-                            rating = avgRating,
-                            restaurantName = restaurant?.name ?: "Unknown Restaurant"
-                        )
-                    } else {
+                            // Prefer any rating photo over a blank dish image — users
+                            // typically attach their dish photo to the rating, not the
+                            // dishes row itself.
+                            val ratingImageUrl = dishRatingGroups[dishId]
+                                ?.firstOrNull { !it.imageUrl.isNullOrBlank() }
+                                ?.imageUrl
+                            dish.toDish().copy(
+                                imageUrl = dish.imageUrl?.takeIf { it.isNotBlank() } ?: ratingImageUrl,
+                                rating = avgRating,
+                                ratingCount = dishRatingGroups[dishId]?.size ?: 0,
+                                restaurantName = restaurant?.name ?: dish.restaurantName ?: "Unknown Restaurant",
+                                restaurantCity = restaurant?.city ?: "",
+                                uploaderName = uploaderProfile?.name ?: "",
+                                uploaderProfileUrl = uploaderProfile?.profilePhotoUrl
+                            )
+                        } else null
+                    } catch (e: Exception) {
+                        println("DatabaseRepository: Error fetching dish $dishId: ${e.message}")
                         null
                     }
-                } catch (e: Exception) {
-                    println("DatabaseRepository: Error fetching dish $dishId: ${e.message}")
-                    null
                 }
-            }
+                println("DatabaseRepository: getTopRatedDishes → ${topDishes.size} rated dishes")
+                Result.success(topDishes)
+            } else {
+                // No ratings yet — fall back to most recently added dishes
+                println("DatabaseRepository: No ratings found, falling back to dishes table")
+                val dishes = postgrest["dishes"]
+                    .select { order("created_at", Order.DESCENDING); limit(limit.toLong()) }
+                    .decodeList<DishDto>()
 
-            Result.success(topDishes)
+                // Batch-fetch restaurants for those dishes
+                val restaurantIds = dishes.map { it.restaurantId }.distinct()
+                val restaurantsMap = if (restaurantIds.isNotEmpty()) {
+                    try {
+                        postgrest["restaurants"]
+                            .select { filter { isIn("id", restaurantIds) } }
+                            .decodeList<RestaurantDto>()
+                            .associateBy { it.id ?: "" }
+                    } catch (_: Exception) { emptyMap() }
+                } else emptyMap()
+
+                val fallbackDishes = dishes.mapNotNull { dto ->
+                    try {
+                        val restaurant = restaurantsMap[dto.restaurantId]
+                        dto.toDish().copy(
+                            restaurantName = restaurant?.name ?: dto.restaurantName ?: "Unknown Restaurant",
+                            restaurantCity = restaurant?.city ?: ""
+                        )
+                    } catch (_: Exception) { null }
+                }
+                println("DatabaseRepository: getTopRatedDishes fallback → ${fallbackDishes.size} dishes")
+                Result.success(fallbackDishes)
+            }
         } catch (e: Exception) {
             println("DatabaseRepository: Error fetching top rated dishes: ${e.message}")
             e.printStackTrace()
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get top-rated dishes restricted to the given restaurant IDs (location-based).
+     * Falls back to querying the dishes table directly when ratings are absent.
+     */
+    suspend fun getTopRatedDishesForRestaurants(restaurantIds: List<String>, limit: Int = 10): Result<List<Dish>> {
+        if (restaurantIds.isEmpty()) return getTopRatedDishes(limit)
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter { isIn("restaurant_id", restaurantIds) }
+                    order("rating", Order.DESCENDING)
+                    limit(100)
+                }
+                .decodeList<RatingDto>()
+
+            println("DatabaseRepository: getTopRatedDishesForRestaurants - ${restaurantIds.size} restaurants, ${ratings.size} ratings")
+
+            if (ratings.isNotEmpty()) {
+                // Ratings exist for this location — use them
+                val dishRatingGroups = ratings.groupBy { it.dishId }
+                val dishRatings = dishRatingGroups
+                    .mapValues { (_, r) -> r.map { it.rating }.average().toFloat() }
+                    .entries
+                    .sortedByDescending { it.value }
+                    .take(limit)
+
+                val topDishes = dishRatings.mapNotNull { (dishId, avgRating) ->
+                    try {
+                        val dish = postgrest["dishes"]
+                            .select { filter { eq("id", dishId) } }
+                            .decodeSingleOrNull<DishDto>()
+                        if (dish != null) {
+                            val restaurant = postgrest["restaurants"]
+                                .select { filter { eq("id", dish.restaurantId) } }
+                                .decodeSingleOrNull<RestaurantDto>()
+                            val topRating = dishRatingGroups[dishId]?.maxByOrNull { it.rating }
+                            val uploaderProfile = topRating?.let { r ->
+                                try { postgrest["profiles"].select { filter { eq("id", r.userId) } }.decodeSingleOrNull<ProfileDto>() } catch (_: Exception) { null }
+                            }
+                            val ratingImageUrl = dishRatingGroups[dishId]
+                                ?.firstOrNull { !it.imageUrl.isNullOrBlank() }
+                                ?.imageUrl
+                            dish.toDish().copy(
+                                imageUrl = dish.imageUrl?.takeIf { it.isNotBlank() } ?: ratingImageUrl,
+                                rating = avgRating,
+                                ratingCount = dishRatingGroups[dishId]?.size ?: 0,
+                                restaurantName = restaurant?.name ?: dish.restaurantName ?: "Unknown Restaurant",
+                                restaurantCity = restaurant?.city ?: "",
+                                uploaderName = uploaderProfile?.name ?: "",
+                                uploaderProfileUrl = uploaderProfile?.profilePhotoUrl
+                            )
+                        } else null
+                    } catch (e: Exception) { null }
+                }
+                println("DatabaseRepository: getTopRatedDishesForRestaurants → ${topDishes.size} rated dishes")
+                Result.success(topDishes)
+            } else {
+                // No ratings for this location yet — query dishes table directly for these restaurants
+                println("DatabaseRepository: No local ratings, falling back to dishes table for ${restaurantIds.size} restaurants")
+                val dishes = postgrest["dishes"]
+                    .select {
+                        filter { isIn("restaurant_id", restaurantIds) }
+                        order("created_at", Order.DESCENDING)
+                        limit(limit.toLong())
+                    }
+                    .decodeList<DishDto>()
+
+                println("DatabaseRepository: Found ${dishes.size} dishes in dishes table for these restaurants")
+
+                // Batch-fetch restaurants
+                val restIds = dishes.map { it.restaurantId }.distinct()
+                val restaurantsMap = if (restIds.isNotEmpty()) {
+                    try {
+                        postgrest["restaurants"]
+                            .select { filter { isIn("id", restIds) } }
+                            .decodeList<RestaurantDto>()
+                            .associateBy { it.id ?: "" }
+                    } catch (_: Exception) { emptyMap() }
+                } else emptyMap()
+
+                val fallbackDishes = dishes.mapNotNull { dto ->
+                    try {
+                        val restaurant = restaurantsMap[dto.restaurantId]
+                        dto.toDish().copy(
+                            restaurantName = restaurant?.name ?: dto.restaurantName ?: "Unknown Restaurant",
+                            restaurantCity = restaurant?.city ?: ""
+                        )
+                    } catch (_: Exception) { null }
+                }
+
+                // If still empty (no dishes in DB for these restaurants), fall back globally
+                if (fallbackDishes.isEmpty()) {
+                    println("DatabaseRepository: Location dishes table also empty, falling back to global")
+                    return getTopRatedDishes(limit)
+                }
+
+                println("DatabaseRepository: getTopRatedDishesForRestaurants fallback → ${fallbackDishes.size} dishes")
+                Result.success(fallbackDishes)
+            }
+        } catch (e: Exception) {
+            println("DatabaseRepository: Error fetching location top dishes: ${e.message}")
             Result.failure(e)
         }
     }
@@ -416,7 +628,12 @@ class DatabaseRepository {
     /**
      * Create or get existing dish
      */
-    suspend fun createOrGetDish(name: String, restaurantId: String, imageUrl: String? = null): Result<Dish> {
+    suspend fun createOrGetDish(
+        name: String,
+        restaurantId: String,
+        imageUrl: String? = null,
+        restaurantName: String? = null
+    ): Result<Dish> {
         if (name.isBlank()) {
             return Result.failure(IllegalArgumentException("Dish name cannot be blank"))
         }
@@ -432,37 +649,84 @@ class DatabaseRepository {
                 .decodeSingleOrNull<DishDto>()
 
             if (existing != null) {
-                // If the existing dish has no image but we now have one, update it
-                if (existing.imageUrl == null && imageUrl != null) {
+                // Back-fill restaurant_name or image_url if missing
+                val needsImageUpdate = existing.imageUrl == null && imageUrl != null
+                val needsNameUpdate = existing.restaurantName == null && restaurantName != null
+                if (needsImageUpdate || needsNameUpdate) {
                     try {
                         postgrest["dishes"].update({
-                            set("image_url", imageUrl)
+                            if (needsImageUpdate) set("image_url", imageUrl)
+                            if (needsNameUpdate) set("restaurant_name", restaurantName)
                         }) {
                             filter { eq("id", existing.id!!) }
                         }
-                        return Result.success(existing.toDish().copy(imageUrl = imageUrl))
-                    } catch (_: Exception) { /* non-critical, return existing */ }
+                    } catch (_: Exception) {
+                        // Non-critical — restaurant_name column may not exist; try image-only update
+                        if (needsImageUpdate) {
+                            try {
+                                postgrest["dishes"].update({ set("image_url", imageUrl) }) {
+                                    filter { eq("id", existing.id!!) }
+                                }
+                            } catch (_: Exception) { /* non-critical */ }
+                        }
+                    }
+                    return Result.success(
+                        existing.toDish().copy(
+                            imageUrl = if (needsImageUpdate) imageUrl else existing.imageUrl,
+                            restaurantName = restaurantName ?: existing.restaurantName ?: ""
+                        )
+                    )
                 }
-                return Result.success(existing.toDish())
+                return Result.success(existing.toDish().copy(
+                    restaurantName = existing.restaurantName ?: restaurantName ?: ""
+                ))
             }
 
             // Create new dish
             @OptIn(ExperimentalUuidApi::class)
+            val dishId = Uuid.random().toString()
             val dto = DishDto(
-                id = Uuid.random().toString(),
+                id = dishId,
                 name = name,
                 restaurantId = restaurantId,
-                imageUrl = imageUrl
+                imageUrl = imageUrl,
+                restaurantName = restaurantName
             )
-            val created = postgrest["dishes"]
-                .insert(dto) {
-                    select()
+            val created: DishDto = try {
+                postgrest["dishes"].insert(dto) { select() }.decodeSingle()
+            } catch (e: Exception) {
+                println("DatabaseRepository: createOrGetDish full insert failed (${e.message?.take(120)}), retrying without restaurant_name...")
+                // restaurant_name column may not exist — retry with minimal fields
+                val minimalDto = DishDto(
+                    id = dishId,
+                    name = name,
+                    restaurantId = restaurantId,
+                    imageUrl = imageUrl,
+                    restaurantName = null
+                )
+                try {
+                    postgrest["dishes"].insert(minimalDto) { select() }.decodeSingle()
+                } catch (e2: Exception) {
+                    println("DatabaseRepository: createOrGetDish minimal insert also failed: ${e2.message?.take(120)}")
+                    return Result.failure(e2)
                 }
-                .decodeSingle<DishDto>()
-            Result.success(created.toDish())
+            }
+            Result.success(created.toDish().copy(restaurantName = restaurantName ?: created.restaurantName ?: ""))
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Batch-fetch all ratings for a list of dish IDs (used to compute avg rating/price per dish)
+     */
+    suspend fun getRatingsByDishIds(dishIds: List<String>): List<RatingDto> {
+        if (dishIds.isEmpty()) return emptyList()
+        return try {
+            postgrest["ratings"]
+                .select { filter { isIn("dish_id", dishIds) } }
+                .decodeList<RatingDto>()
+        } catch (_: Exception) { emptyList() }
     }
 
     // ==================== RATINGS ====================
@@ -604,8 +868,13 @@ class DatabaseRepository {
                         }
                         .decodeSingleOrNull<RestaurantDto>()
 
+                    val createdMillis = try {
+                        rating.createdAt?.let { Instant.parse(it).toEpochMilliseconds() } ?: 0L
+                    } catch (_: Exception) { 0L }
+
                     FeedItem(
                         id = rating.id ?: return@mapNotNull null,
+                        userId = rating.userId,
                         userProfileImageUrl = profile?.profilePhotoUrl,
                         userName = profile?.name ?: "Unknown",
                         dishImageUrl = rating.imageUrl ?: dish?.imageUrl,
@@ -615,7 +884,7 @@ class DatabaseRepository {
                         likesCount = rating.likesCount,
                         commentsCount = 0,
                         isLiked = false,
-                        timestamp = 0L,
+                        timestamp = createdMillis,
                         price = rating.price
                     )
                 } catch (e: Exception) {
@@ -1091,13 +1360,13 @@ class DatabaseRepository {
             name = name,
             city = city,
             cuisine = cuisine,
-            imageUrls = imageUrls,
+            imageUrls = imageUrls ?: emptyList(),
             averageRating = averageRating,
             reviewCount = reviewCount,
             latitude = latitude,
             longitude = longitude,
             googlePlaceId = googlePlaceId,
-            photoUrl = photoUrls.firstOrNull()
+            photoUrl = photoUrls?.firstOrNull()
         )
     }
 
@@ -1106,7 +1375,8 @@ class DatabaseRepository {
             id = id ?: "",
             name = name,
             imageUrl = imageUrl,
-            restaurantId = restaurantId
+            restaurantId = restaurantId,
+            restaurantName = restaurantName ?: ""
         )
     }
 

@@ -158,14 +158,42 @@ class RestaurantDetailViewModel(
     }
 
     /**
-     * Load dishes for the restaurant
+     * Load dishes for the restaurant, enriched with real avg rating + price from DB ratings
      */
     private suspend fun loadDishes(restaurantId: String) {
         val dishesResult = databaseRepository.getDishesForRestaurant(restaurantId)
 
         dishesResult.onSuccess { dishes ->
-            val topDishes = dishes.sortedByDescending { it.rating }.take(6)
-            _uiState.update { it.copy(dishes = dishes, topDishes = topDishes) }
+            if (dishes.isEmpty()) {
+                _uiState.update { it.copy(dishes = emptyList(), topDishes = emptyList()) }
+                return@onSuccess
+            }
+
+            // Batch-fetch all ratings for these dishes — real DB data, no mocks
+            val dishIds = dishes.map { it.id }
+            val ratings = databaseRepository.getRatingsByDishIds(dishIds)
+            val ratingsByDish = ratings.groupBy { it.dishId }
+
+            val enrichedDishes = dishes.map { dish ->
+                val dishRatings = ratingsByDish[dish.id] ?: emptyList()
+                val avgRating = if (dishRatings.isNotEmpty())
+                    dishRatings.map { it.rating }.average().toFloat()
+                else 0f
+                val avgPrice = dishRatings.mapNotNull { it.price }
+                    .let { prices -> if (prices.isNotEmpty()) prices.average() else null }
+                // Use image from first rating if the dish has no stored image
+                val imageUrl = dish.imageUrl
+                    ?: dishRatings.mapNotNull { it.imageUrl }.firstOrNull()
+                dish.copy(
+                    rating = avgRating,
+                    ratingCount = dishRatings.size,
+                    price = avgPrice,
+                    imageUrl = imageUrl
+                )
+            }
+
+            val topDishes = enrichedDishes.sortedByDescending { it.rating }.take(6)
+            _uiState.update { it.copy(dishes = enrichedDishes, topDishes = topDishes) }
         }.onFailure { error ->
             println("RestaurantDetailViewModel: Failed to load dishes: ${error.message}")
             // Don't update error state, just leave dishes empty
