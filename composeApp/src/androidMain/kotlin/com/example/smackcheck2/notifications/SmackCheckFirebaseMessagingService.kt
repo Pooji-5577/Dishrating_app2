@@ -7,6 +7,7 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import com.example.smackcheck2.MainActivity
 import com.example.smackcheck2.R
+import com.example.smackcheck2.data.repository.NotificationService
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import kotlinx.coroutines.CoroutineScope
@@ -49,7 +50,7 @@ class SmackCheckFirebaseMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) {
         println("SmackCheckFCM: New token received, saving to Supabase...")
         CoroutineScope(Dispatchers.IO).launch {
-            NotificationRepository.savePushTokenToSupabase(token)
+            NotificationService().savePushToken(token)
         }
     }
 
