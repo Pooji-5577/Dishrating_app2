@@ -19,6 +19,8 @@ interface DishAnalysisResponse {
   description: string
   ingredients: string[]
   itemType: string  // "food", "beverage", or "unknown"
+  restaurantChain: string  // e.g. "Starbucks" when branded packaging/logo visible, "" otherwise
+  restaurantType: string   // e.g. "cafe", "fast food", "pizzeria", "sushi bar", "" if unclear
   error?: string
 }
 
@@ -27,10 +29,10 @@ const DETECTION_PROMPT = `You are a food and beverage identification expert. Loo
 IMPORTANT: You MUST respond with ONLY a JSON object, no other text before or after.
 
 Response format for FOOD (JSON only):
-{"dish_name":"Pizza Margherita","cuisine":"Italian","confidence":0.9,"item_type":"food","alternatives":["Cheese Pizza","Flatbread"],"description":"Classic Italian pizza with tomato sauce, mozzarella, and basil","ingredients":["tomato sauce","mozzarella","basil","olive oil"]}
+{"dish_name":"Pizza Margherita","cuisine":"Italian","confidence":0.9,"item_type":"food","alternatives":["Cheese Pizza","Flatbread"],"description":"Classic Italian pizza with tomato sauce, mozzarella, and basil","ingredients":["tomato sauce","mozzarella","basil","olive oil"],"restaurant_chain":"","restaurant_type":"pizzeria"}
 
 Response format for BEVERAGE (JSON only):
-{"dish_name":"Cappuccino","cuisine":"Italian","confidence":0.95,"item_type":"beverage","alternatives":["Latte","Coffee"],"description":"Italian espresso-based coffee drink with steamed milk foam","ingredients":["espresso","steamed milk","milk foam"]}
+{"dish_name":"Cappuccino","cuisine":"Italian","confidence":0.95,"item_type":"beverage","alternatives":["Latte","Coffee"],"description":"Italian espresso-based coffee drink with steamed milk foam","ingredients":["espresso","steamed milk","milk foam"],"restaurant_chain":"Starbucks","restaurant_type":"cafe"}
 
 Guidelines:
 1. dish_name: The most common English name for the item (be specific, e.g., "Chicken Tikka Masala" not just "Curry", "Mango Lassi" not just "Drink")
@@ -40,9 +42,11 @@ Guidelines:
 5. alternatives: 1-3 other possible names if you're not 100% sure
 6. description: A brief 1-2 sentence description
 7. ingredients: List of visible or likely ingredients
+8. restaurant_chain: If the image clearly shows branded packaging, a logo, a cup/wrapper, or a recognizable product style from a known chain, return that chain's name (e.g., "Starbucks", "McDonald's", "Domino's", "Costa Coffee", "KFC", "Subway"). If no chain branding is visible, return "".
+9. restaurant_type: The most likely venue type for this item, regardless of chain. Use a short lowercase label: "cafe", "fast food", "pizzeria", "sushi bar", "bakery", "bar", "bistro", "diner", "steakhouse", "ice cream shop", "food truck", "fine dining", "casual dining", "restaurant". Return "" only if truly unclear.
 
 If the image clearly shows neither food nor a beverage, respond with:
-{"dish_name":"Unknown","cuisine":"Unknown","confidence":0.0,"item_type":"unknown","alternatives":[],"description":"Unable to identify food or beverage","ingredients":[]}
+{"dish_name":"Unknown","cuisine":"Unknown","confidence":0.0,"item_type":"unknown","alternatives":[],"description":"Unable to identify food or beverage","ingredients":[],"restaurant_chain":"","restaurant_type":""}
 
 Remember: Output ONLY the JSON, nothing else.`
 
@@ -166,7 +170,9 @@ Deno.serve(async (req) => {
       alternatives: parsedResponse.alternatives || [],
       description: parsedResponse.description || '',
       ingredients: parsedResponse.ingredients || [],
-      itemType
+      itemType,
+      restaurantChain: (parsedResponse.restaurant_chain || parsedResponse.restaurantChain || '').toString().trim(),
+      restaurantType: (parsedResponse.restaurant_type || parsedResponse.restaurantType || '').toString().trim().toLowerCase()
     }
 
     console.log(`Detected: ${dishAnalysis.dishName} (type=${dishAnalysis.itemType}, confidence=${dishAnalysis.confidence})`)
@@ -186,7 +192,7 @@ Deno.serve(async (req) => {
     console.error('Error analyzing dish:', errorMessage)
     
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: errorMessage,
         dishName: 'Unknown',
         cuisine: '',
@@ -194,7 +200,9 @@ Deno.serve(async (req) => {
         alternatives: [],
         description: '',
         ingredients: [],
-        itemType: 'unknown'
+        itemType: 'unknown',
+        restaurantChain: '',
+        restaurantType: ''
       }),
       { 
         status: 400,

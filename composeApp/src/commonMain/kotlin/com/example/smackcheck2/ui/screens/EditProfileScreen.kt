@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -78,7 +79,12 @@ private val GradientEnd = Color(0xFFBE3A50)
 @Composable
 fun EditProfileScreen(
     viewModel: EditProfileViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavHome: () -> Unit = {},
+    onNavMap: () -> Unit = {},
+    onNavCamera: () -> Unit = {},
+    onNavExplore: () -> Unit = {},
+    onNavProfile: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val colors = appColors()
@@ -117,13 +123,16 @@ fun EditProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .padding(bottom = 32.dp),
+                // Extra bottom padding so the Update Profile button clears the
+                // floating BottomNavBar (~88dp tall with its shadow/offset)
+                .padding(bottom = 140.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // ── Top Bar ──
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .statusBarsPadding()
                     .padding(horizontal = 8.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -361,6 +370,11 @@ fun EditProfileScreen(
         // Bottom nav bar
         com.example.smackcheck2.ui.components.BottomNavBar(
             selectedItem = com.example.smackcheck2.ui.components.NavItem.PROFILE,
+            onHomeClick = onNavHome,
+            onMapClick = onNavMap,
+            onCameraClick = onNavCamera,
+            onExploreClick = onNavExplore,
+            onProfileClick = onNavProfile,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
 

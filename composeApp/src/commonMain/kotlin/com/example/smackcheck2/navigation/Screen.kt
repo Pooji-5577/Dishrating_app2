@@ -40,6 +40,7 @@ sealed class Screen(val route: String) {
     // Dark theme screens
     data object DarkHome : Screen("dark_home")
     data object DarkDishCapture : Screen("dark_dish_capture")
+    data object DarkDishConfirm : Screen("dark_dish_confirm")
     data object DarkDishRating : Screen("dark_dish_rating")
     data object DishDetail : Screen("dish_detail/{dishId}") {
         fun createRoute(dishId: String) = "dish_detail/$dishId"
@@ -76,4 +77,7 @@ sealed class Screen(val route: String) {
 
     // Onboarding — set username + profile photo after first sign-in
     data object ProfileSetup : Screen("profile_setup")
+
+    // Find Friends — list of discoverable users
+    data object DiscoverUsers : Screen("discover_users")
 }

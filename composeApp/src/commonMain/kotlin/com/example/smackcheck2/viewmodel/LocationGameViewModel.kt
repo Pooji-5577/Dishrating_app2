@@ -40,8 +40,12 @@ data class LocationHomeUiState(
     val isLoading: Boolean = true,
     val isDetectingLocation: Boolean = false,
     val selectedLocation: String? = null,
+    // Search-center coordinates (city geocode) — used for Google Places nearby lookup
     val currentLatitude: Double? = null,
     val currentLongitude: Double? = null,
+    // User's actual live GPS — used for distance display on restaurant cards
+    val userLatitude: Double? = null,
+    val userLongitude: Double? = null,
     val topRestaurants: List<Restaurant> = emptyList(),
     val topDishes: List<Dish> = emptyList(),
     val allRestaurants: List<Restaurant> = emptyList(),
@@ -50,7 +54,9 @@ data class LocationHomeUiState(
     val error: String? = null,
     val locationError: String? = null,
     val noRestaurantsFound: Boolean = false,
-    val isManuallySelected: Boolean = false
+    val isManuallySelected: Boolean = false,
+    // ISO 3166-1 alpha-2 country code derived from the user's last detected GPS
+    val countryCode: String? = null
 )
 
 /**
@@ -81,14 +87,15 @@ class LocationHomeViewModel : ViewModel() {
                     _uiState.update { it.copy(selectedLocation = savedLocation) }
                     loadDataForLocation(savedLocation)
                 } else {
-                    println("LocationHomeViewModel: No saved location found, using default: New York")
-                    selectLocation("New York")
+                    println("LocationHomeViewModel: No saved location found, loading all restaurants")
+                    _uiState.update { it.copy(selectedLocation = null) }
+                    loadAllRestaurants()
                 }
             } catch (e: Exception) {
                 println("LocationHomeViewModel: Error loading saved location: ${e.message}")
                 e.printStackTrace()
-                // Use default location on error
-                selectLocation("New York")
+                _uiState.update { it.copy(selectedLocation = null) }
+                loadAllRestaurants()
             }
         }
     }
@@ -133,18 +140,50 @@ class LocationHomeViewModel : ViewModel() {
      * @param latitude GPS latitude
      * @param longitude GPS longitude
      */
-    fun selectLocationWithCoordinates(city: String, latitude: Double, longitude: Double, isManual: Boolean = false) {
+    fun selectLocationWithCoordinates(city: String, latitude: Double, longitude: Double, isManual: Boolean = false, countryCode: String? = null) {
         _uiState.update {
             it.copy(
                 selectedLocation = city,
                 currentLatitude = latitude,
                 currentLongitude = longitude,
+                // When auto-detected via GPS, these coords are the user's real position.
+                // When manually selected, leave user GPS untouched.
+                userLatitude = if (!isManual) latitude else it.userLatitude,
+                userLongitude = if (!isManual) longitude else it.userLongitude,
                 isLoading = true,
-                isManuallySelected = if (isManual) true else it.isManuallySelected
+                isManuallySelected = if (isManual) true else it.isManuallySelected,
+                countryCode = countryCode ?: it.countryCode
             )
         }
         println("LocationHomeViewModel: selectLocationWithCoordinates($city, $latitude, $longitude, isManual=$isManual)")
         loadDataForLocation(city, knownLatitude = latitude, knownLongitude = longitude)
+    }
+
+    /**
+     * Fetch the user's live GPS and update [LocationHomeUiState.userLatitude]/[userLongitude]
+     * without changing the selected city or reloading data. Used to keep the distance
+     * shown on restaurant cards in sync with the user's real position.
+     */
+    fun refreshUserLocation() {
+        val service = locationService ?: return
+        viewModelScope.launch {
+            when (val result = service.getCurrentLocationWithDetails()) {
+                is LocationOperationResult.Success -> {
+                    val loc = result.location
+                    _uiState.update {
+                        it.copy(
+                            userLatitude = loc.latitude,
+                            userLongitude = loc.longitude,
+                            countryCode = loc.countryCode ?: it.countryCode
+                        )
+                    }
+                    println("LocationHomeViewModel: refreshUserLocation → ${loc.latitude}, ${loc.longitude}, country=${loc.countryCode}")
+                }
+                is LocationOperationResult.Error -> {
+                    println("LocationHomeViewModel: refreshUserLocation failed: ${result.reason}")
+                }
+            }
+        }
     }
 
     fun useCurrentLocation() {
@@ -162,7 +201,10 @@ class LocationHomeViewModel : ViewModel() {
                     val location = result.location
                     if (location.cityName != null) {
                         _uiState.update {
-                            it.copy(isDetectingLocation = false)
+                            it.copy(
+                                isDetectingLocation = false,
+                                countryCode = location.countryCode ?: it.countryCode
+                            )
                         }
                         selectLocationWithCoordinates(
                             city = location.cityName,
@@ -233,7 +275,73 @@ class LocationHomeViewModel : ViewModel() {
         _uiState.update { it.copy(locationError = null) }
     }
 
+    /**
+     * Refresh Home data from live database/API based on the current selected location.
+     */
+    fun fetchNearbyForCuisine(keyword: String?) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val lat = state.currentLatitude ?: state.userLatitude ?: return@launch
+            val lon = state.currentLongitude ?: state.userLongitude ?: return@launch
+            try {
+                val nearby = placesService?.findNearbyRestaurants(
+                    latitude = lat,
+                    longitude = lon,
+                    radiusInMeters = 5000,
+                    keyword = keyword
+                ) ?: emptyList()
+                _uiState.update { it.copy(nearbyRestaurants = nearby) }
+            } catch (e: Exception) {
+                println("LocationHomeViewModel: fetchNearbyForCuisine failed: ${e.message}")
+            }
+        }
+    }
+
+    fun refreshHomeData() {
+        val currentState = _uiState.value
+        val selectedLocation = currentState.selectedLocation
+        if (!selectedLocation.isNullOrBlank()) {
+            loadDataForLocation(
+                location = selectedLocation,
+                knownLatitude = currentState.currentLatitude,
+                knownLongitude = currentState.currentLongitude
+            )
+        } else {
+            loadAllRestaurants()
+        }
+    }
+
     private val databaseRepository = DatabaseRepository()
+
+    private fun loadAllRestaurants() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                val restaurantsResult = databaseRepository.getRestaurants()
+                val topDishesResult = databaseRepository.getTopRatedDishes(limit = 10)
+                var topDishes = topDishesResult.getOrElse {
+                    println("LocationHomeViewModel: Failed to load top dishes: ${it.message}")
+                    emptyList()
+                }
+                println("LocationHomeViewModel: loadAllRestaurants - topDishes=${topDishes.size}")
+
+                restaurantsResult.onSuccess { restaurants ->
+                    _uiState.update {
+                        it.copy(
+                            allRestaurants = restaurants,
+                            topDishes = topDishes,
+                            isLoading = false,
+                            noRestaurantsFound = restaurants.isEmpty()
+                        )
+                    }
+                }.onFailure {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
 
     private fun loadDataForLocation(location: String, knownLatitude: Double? = null, knownLongitude: Double? = null) {
         viewModelScope.launch {
@@ -349,11 +457,20 @@ class LocationHomeViewModel : ViewModel() {
                             .sortedByDescending { it.averageRating }
                             .take(5)
 
-                        // Fetch top-rated dishes across all users
-                        val topDishesResult = databaseRepository.getTopRatedDishes(limit = 10)
-                        val topDishes = topDishesResult.getOrElse {
+                        // Fetch top-rated dishes for restaurants in user's location
+                        val locationRestaurantIds = restaurants.map { it.id }
+                        val topDishesResult = databaseRepository.getTopRatedDishesForRestaurants(
+                            restaurantIds = locationRestaurantIds,
+                            limit = 10
+                        )
+                        var topDishes = topDishesResult.getOrElse {
                             println("LocationHomeViewModel: Failed to load top dishes: ${it.message}")
                             emptyList()
+                        }
+                        // If still empty (DB has no dishes for this city), fall back to global dishes
+                        if (topDishes.isEmpty()) {
+                            println("LocationHomeViewModel: Location dishes empty, falling back to global top dishes")
+                            topDishes = databaseRepository.getTopRatedDishes(limit = 10).getOrElse { emptyList() }
                         }
 
                         // Check if we found any restaurants at all

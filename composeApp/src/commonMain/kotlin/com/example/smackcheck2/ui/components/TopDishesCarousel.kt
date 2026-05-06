@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChatBubbleOutline
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
@@ -38,6 +39,8 @@ import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.formatLikeCountCompact
+import com.example.smackcheck2.util.formatOneDecimal
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
@@ -180,7 +183,7 @@ private fun TopDishCard(
                             tint = Color(0xFF642223)
                         )
                         Text(
-                            text = String.format("%.1f", dish.rating),
+                            text = formatOneDecimal(dish.rating.toDouble()),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = jakartaSans,
@@ -205,14 +208,36 @@ private fun TopDishCard(
                     maxLines = 1
                 )
 
-                // Restaurant + cuisine
+                // Restaurant + city
                 Text(
                     text = dish.restaurantName,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     fontFamily = jakartaSans,
-                    color = Color.Black
+                    color = Color.Black,
+                    maxLines = 1
                 )
+                if (dish.restaurantCity.isNotBlank()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(11.dp),
+                            tint = Color(0xFF642223)
+                        )
+                        Text(
+                            text = dish.restaurantCity,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontFamily = jakartaSans,
+                            color = Color(0xFF5C5B5B),
+                            maxLines = 1
+                        )
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -264,8 +289,5 @@ private fun TopDishCard(
 }
 
 private fun formatLikeCount(count: Int): String {
-    return when {
-        count >= 1000 -> String.format("%.1fk likes", count / 1000.0)
-        else -> "$count likes"
-    }
+    return formatLikeCountCompact(count)
 }

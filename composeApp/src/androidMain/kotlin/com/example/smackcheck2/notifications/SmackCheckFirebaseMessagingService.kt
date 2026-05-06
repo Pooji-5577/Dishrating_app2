@@ -1,8 +1,11 @@
 package com.example.smackcheck2.notifications
 
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import androidx.core.app.NotificationCompat
+import com.example.smackcheck2.MainActivity
 import com.example.smackcheck2.R
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -40,7 +43,7 @@ class SmackCheckFirebaseMessagingService : FirebaseMessagingService() {
         val channelId = remoteMessage.data["channelId"]
             ?: eventChannelMap[eventType]
             ?: "default"
-        showSystemNotification(title, body, channelId)
+        showSystemNotification(title, body, channelId, remoteMessage.data)
     }
 
     override fun onNewToken(token: String) {
@@ -50,7 +53,12 @@ class SmackCheckFirebaseMessagingService : FirebaseMessagingService() {
         }
     }
 
-    private fun showSystemNotification(title: String, body: String, channelId: String) {
+    private fun showSystemNotification(
+        title: String,
+        body: String,
+        channelId: String,
+        data: Map<String, String>
+    ) {
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -61,8 +69,42 @@ class SmackCheckFirebaseMessagingService : FirebaseMessagingService() {
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(buildDeepLinkIntent(data))
             .build()
 
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+
+    /**
+     * Bundle the FCM data fields that describe a deep-link target into an
+     * Intent that re-launches [MainActivity]. MainActivity extracts them and
+     * forwards to [NotificationDeepLink] so the NavHost can route.
+     */
+    private fun buildDeepLinkIntent(data: Map<String, String>): PendingIntent {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra(EXTRA_FROM_NOTIFICATION, true)
+            data["screen"]?.let { putExtra(EXTRA_SCREEN, it) }
+            data["dishId"]?.let { putExtra(EXTRA_DISH_ID, it) }
+            data["reviewId"]?.let { putExtra(EXTRA_REVIEW_ID, it) }
+            data["ratingId"]?.let { putExtra(EXTRA_RATING_ID, it) }
+            data["userId"]?.let { putExtra(EXTRA_USER_ID, it) }
+        }
+
+        return PendingIntent.getActivity(
+            this,
+            System.currentTimeMillis().toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    companion object {
+        const val EXTRA_FROM_NOTIFICATION = "smackcheck.fromNotification"
+        const val EXTRA_SCREEN = "smackcheck.screen"
+        const val EXTRA_DISH_ID = "smackcheck.dishId"
+        const val EXTRA_REVIEW_ID = "smackcheck.reviewId"
+        const val EXTRA_RATING_ID = "smackcheck.ratingId"
+        const val EXTRA_USER_ID = "smackcheck.userId"
     }
 }

@@ -1,7 +1,7 @@
-package com.example.smackcheck2.ui.screens
+﻿package com.example.smackcheck2.ui.screens
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -13,13 +13,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.Image
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -32,9 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import org.jetbrains.compose.resources.painterResource
 import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
+import org.jetbrains.compose.resources.painterResource
 import smackcheck.composeapp.generated.resources.Res
 import smackcheck.composeapp.generated.resources.login_food_pattern
 
@@ -51,15 +47,18 @@ fun DarkLoginScreen(
         onNavigateToHome()
     }
 
-    val pageBackground = Color(0xFF3A0A0E)
-    val topBackground = Color(0xFF742228)
-    val buttonColor = Color(0xFF642223)
+    // Reference palette: maroon top w/ food pattern, dark-brown bottom, maroon button
+    val pageBackground = Color(0xFF2B1818)   // dark brown (bottom half)
+    val topBackground = Color(0xFF732529)    // maroon (top half)
+    val buttonColor = Color(0xFF7A2428)      // maroon Sign In button
+    val circleColor = Color(0xFFD4D4D4)      // neutral gray placeholder
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(pageBackground)
     ) {
+        // Top maroon section with food-pattern overlay + curved bottom edge
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -73,111 +72,73 @@ fun DarkLoginScreen(
 
             Image(
                 painter = painterResource(Res.drawable.login_food_pattern),
-                contentDescription = "Food pattern",
+                contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
-                alpha = 0.32f
+                alpha = 0.22f
             )
 
+            // Giant dark-brown circle creates the concave curve at the bottom of the top section
             Box(
                 modifier = Modifier
-                    .size(width = 1080.dp, height = 520.dp)
+                    .size(width = 1400.dp, height = 600.dp)
                     .align(Alignment.BottomCenter)
-                    .offset(y = 268.dp)
+                    .offset(y = 310.dp)
                     .background(pageBackground, CircleShape)
-            ) {
-            }
-
-            Box(
-                modifier = Modifier
-                    .size(180.dp)
-                    .background(Color(0xFFD9D9D9), CircleShape)
-                    .align(Alignment.BottomCenter)
-                    .offset(y = 88.dp)
             )
         }
 
+        // Gray placeholder circle — straddles the curve (top 60% in maroon, bottom 40% in brown)
+        Box(
+            modifier = Modifier
+                .size(180.dp)
+                .align(Alignment.TopCenter)
+                .offset(y = 240.dp)
+                .background(circleColor, CircleShape)
+        )
+
+        // Content — title, tagline, button — positioned in the lower (dark-brown) half
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(510.dp))
+            Spacer(modifier = Modifier.height(470.dp))
 
             Text(
                 text = "SmackCheck",
                 fontSize = 32.sp,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
                 color = Color.White,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                lineHeight = 36.sp
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = "Rate . Discover . Share",
-                fontSize = 19.sp,
-                fontWeight = FontWeight.ExtraLight,
-                color = Color.White.copy(alpha = 0.92f),
-                textAlign = TextAlign.Center
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = Color.White.copy(alpha = 0.75f),
+                textAlign = TextAlign.Center,
+                letterSpacing = 0.4.sp
             )
 
-            Spacer(modifier = Modifier.height(30.dp))
-
-            OutlinedTextField(
-                value = uiState.email,
-                onValueChange = { viewModel.onEmailChange(it) },
-                placeholder = { Text("Email", color = Color.White.copy(alpha = 0.65f)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF8C4D52),
-                    unfocusedBorderColor = Color(0xFF6D3A3E),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF4B171C),
-                    unfocusedContainerColor = Color(0xFF4B171C),
-                    cursorColor = Color.White
-                )
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedTextField(
-                value = uiState.password,
-                onValueChange = { viewModel.onPasswordChange(it) },
-                placeholder = { Text("Password", color = Color.White.copy(alpha = 0.65f)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Color(0xFF8C4D52),
-                    unfocusedBorderColor = Color(0xFF6D3A3E),
-                    focusedTextColor = Color.White,
-                    unfocusedTextColor = Color.White,
-                    focusedContainerColor = Color(0xFF4B171C),
-                    unfocusedContainerColor = Color(0xFF4B171C),
-                    cursorColor = Color.White
-                )
-            )
-
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(44.dp))
 
             Button(
-                onClick = {
-                    viewModel.login(onNavigateToHome)
-                },
+                onClick = { viewModel.loginWithGoogle(onNavigateToHome) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(54.dp),
-                shape = RoundedCornerShape(16.dp),
+                    .height(56.dp),
+                shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = buttonColor,
                     disabledContainerColor = buttonColor.copy(alpha = 0.55f)
                 ),
-                enabled = !uiState.isLoading && uiState.email.isNotBlank() && uiState.password.isNotBlank()
+                enabled = !uiState.isLoading
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(
@@ -190,65 +151,22 @@ fun DarkLoginScreen(
                         text = "Sign In",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFFAFAF8)
+                        color = Color.White
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedButton(
-                onClick = onNavigateToRegister,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color.White
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF8C4D52))
-            ) {
-                Text(
-                    text = "Create Account",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            if (uiState.emailError != null) {
-                Text(
-                    text = uiState.emailError ?: "",
-                    color = Color(0xFFFF9E9E),
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            if (uiState.passwordError != null) {
-                Text(
-                    text = uiState.passwordError ?: "",
-                    color = Color(0xFFFF9E9E),
-                    fontSize = 12.sp,
-                    textAlign = TextAlign.Start,
-                    modifier = Modifier.fillMaxWidth()
-                )
             }
 
             if (uiState.errorMessage != null) {
                 Text(
                     text = uiState.errorMessage ?: "",
                     color = Color(0xFFFF9E9E),
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp)
                 )
             }
-
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

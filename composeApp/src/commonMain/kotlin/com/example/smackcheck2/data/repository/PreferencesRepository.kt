@@ -50,6 +50,9 @@ class PreferencesRepository(private val preferencesManager: PreferencesManager) 
     suspend fun isDay1RetentionTracked(): Boolean = preferencesManager.isDay1RetentionTracked()
     suspend fun setDay1RetentionTracked() = preferencesManager.setDay1RetentionTracked()
 
+    suspend fun hasSeenPermissionsOnboarding(): Boolean = preferencesManager.hasSeenPermissionsOnboarding()
+    suspend fun setPermissionsOnboardingSeen() = preferencesManager.setPermissionsOnboardingSeen()
+
     suspend fun getBookmarks(): Set<String> {
         return try {
             preferencesManager.getBookmarks()
