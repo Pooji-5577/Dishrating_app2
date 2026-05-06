@@ -39,11 +39,16 @@ data class Dish(
     val name: String = "",
     val imageUrl: String? = null,
     val rating: Float = 0f,
+    val ratingCount: Int = 0,
     val comment: String = "",
     val restaurantId: String = "",
     val restaurantName: String = "",
+    val restaurantCity: String = "",
+    val uploaderName: String = "",
+    val uploaderProfileUrl: String? = null,
     val userId: String = "",
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    val price: Double? = null
 )
 
 /**
@@ -98,7 +103,9 @@ data class FeedItem(
     val roleBadge: String? = null,
     val dishImageUrl: String?,
     val dishName: String,
+    val dishId: String = "",
     val restaurantName: String,
+    val restaurantCity: String = "",
     val rating: Float,
     val likesCount: Int,
     val commentsCount: Int,
@@ -158,7 +165,10 @@ data class RestaurantVisit(
 data class UserSummary(
     val id: String = "",
     val name: String = "",
+    val username: String? = null,
     val profilePhotoUrl: String? = null,
+    val bio: String? = null,
+    val location: String? = null,
     val isFollowing: Boolean = false
 )
 

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.SocialRepository
+import com.example.smackcheck2.gamification.PointsConfig
 import com.example.smackcheck2.model.HomeFeedUiState
 import com.example.smackcheck2.model.ProfileUiState
 import com.example.smackcheck2.model.UserProgressUiState
@@ -210,10 +211,11 @@ class UserProgressViewModel : ViewModel() {
                 // Check for level up
                 val showLevelUp = newLevel > oldLevel && oldLevel > 0
 
+                val currentXp = user?.xp ?: 0
                 _uiState.update {
                     it.copy(
-                        currentXp = user?.xp ?: 0,
-                        maxXp = ((user?.level ?: 1) * 100),
+                        currentXp = currentXp,
+                        maxXp = PointsConfig.xpForNextLevel(currentXp),
                         level = newLevel,
                         streakCount = user?.streakCount ?: 0,
                         badges = badgesResult.getOrDefault(emptyList()),

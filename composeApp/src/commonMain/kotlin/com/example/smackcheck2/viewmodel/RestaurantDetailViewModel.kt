@@ -26,15 +26,6 @@ class RestaurantDetailViewModel(
     private val _uiState = MutableStateFlow(RestaurantDetailUiState(isLoading = true))
     val uiState: StateFlow<RestaurantDetailUiState> = _uiState.asStateFlow()
 
-    /**
-     * Determines if an ID is a Google Place ID or a UUID
-     * Google Place IDs start with "ChI" and are alphanumeric
-     * UUIDs follow pattern: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
-     */
-    private fun isGooglePlaceId(id: String): Boolean {
-        return id.startsWith("ChI") && !id.contains("-")
-    }
-
     private fun isUuid(id: String): Boolean {
         val uuidPattern = Regex("^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
         return uuidPattern.matches(id)
@@ -48,19 +39,19 @@ class RestaurantDetailViewModel(
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             try {
-                // Detect ID type and load accordingly
-                if (isGooglePlaceId(restaurantId)) {
-                    loadGooglePlaceRestaurant(restaurantId)
-                } else if (isUuid(restaurantId)) {
-                    loadDatabaseRestaurant(restaurantId)
-                } else {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            errorMessage = "Invalid restaurant ID format"
-                        )
-                    }
+                if (restaurantId.isBlank()) {
+                    _uiState.update { it.copy(isLoading = false, errorMessage = "Restaurant ID is missing") }
+                    return@launch
                 }
+
+                // 1) Try database by primary ID (works for UUID and any custom IDs)
+                if (loadDatabaseRestaurantById(restaurantId)) return@launch
+
+                // 2) Try database by Google Place ID column for mirrored/external places
+                if (!isUuid(restaurantId) && loadDatabaseRestaurantByGooglePlaceId(restaurantId)) return@launch
+
+                // 3) Fallback to Google Places detail lookup for external place IDs
+                loadGooglePlaceRestaurant(restaurantId)
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -127,7 +118,7 @@ class RestaurantDetailViewModel(
     /**
      * Load restaurant from Supabase database (existing logic)
      */
-    private suspend fun loadDatabaseRestaurant(restaurantId: String) {
+    private suspend fun loadDatabaseRestaurantById(restaurantId: String): Boolean {
         val restaurantResult = databaseRepository.getRestaurantById(restaurantId)
 
         restaurantResult.onSuccess { restaurant ->
@@ -139,33 +130,63 @@ class RestaurantDetailViewModel(
 
                 // Load reviews for this restaurant
                 loadReviews(restaurantId)
-            } else {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "Restaurant not found in database"
-                    )
-                }
-            }
-        }.onFailure { error ->
-            _uiState.update {
-                it.copy(
-                    isLoading = false,
-                    errorMessage = error.message ?: "Failed to load restaurant from database"
-                )
             }
         }
+
+        return restaurantResult.getOrNull() != null
+    }
+
+    private suspend fun loadDatabaseRestaurantByGooglePlaceId(placeId: String): Boolean {
+        val restaurantResult = databaseRepository.getRestaurantByGooglePlaceId(placeId)
+
+        restaurantResult.onSuccess { restaurant ->
+            if (restaurant != null) {
+                _uiState.update { it.copy(restaurant = restaurant) }
+                loadDishes(restaurant.id)
+                loadReviews(restaurant.id)
+            }
+        }
+
+        return restaurantResult.getOrNull() != null
     }
 
     /**
-     * Load dishes for the restaurant
+     * Load dishes for the restaurant, enriched with real avg rating + price from DB ratings
      */
     private suspend fun loadDishes(restaurantId: String) {
         val dishesResult = databaseRepository.getDishesForRestaurant(restaurantId)
 
         dishesResult.onSuccess { dishes ->
-            val topDishes = dishes.sortedByDescending { it.rating }.take(6)
-            _uiState.update { it.copy(dishes = dishes, topDishes = topDishes) }
+            if (dishes.isEmpty()) {
+                _uiState.update { it.copy(dishes = emptyList(), topDishes = emptyList()) }
+                return@onSuccess
+            }
+
+            // Batch-fetch all ratings for these dishes — real DB data, no mocks
+            val dishIds = dishes.map { it.id }
+            val ratings = databaseRepository.getRatingsByDishIds(dishIds)
+            val ratingsByDish = ratings.groupBy { it.dishId }
+
+            val enrichedDishes = dishes.map { dish ->
+                val dishRatings = ratingsByDish[dish.id] ?: emptyList()
+                val avgRating = if (dishRatings.isNotEmpty())
+                    dishRatings.map { it.rating }.average().toFloat()
+                else 0f
+                val avgPrice = dishRatings.mapNotNull { it.price }
+                    .let { prices -> if (prices.isNotEmpty()) prices.average() else null }
+                // Use image from first rating if the dish has no stored image
+                val imageUrl = dish.imageUrl
+                    ?: dishRatings.mapNotNull { it.imageUrl }.firstOrNull()
+                dish.copy(
+                    rating = avgRating,
+                    ratingCount = dishRatings.size,
+                    price = avgPrice,
+                    imageUrl = imageUrl
+                )
+            }
+
+            val topDishes = enrichedDishes.sortedByDescending { it.rating }.take(6)
+            _uiState.update { it.copy(dishes = enrichedDishes, topDishes = topDishes) }
         }.onFailure { error ->
             println("RestaurantDetailViewModel: Failed to load dishes: ${error.message}")
             // Don't update error state, just leave dishes empty

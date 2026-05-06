@@ -137,7 +137,7 @@ fun SearchScreen(
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                viewModel.availableCuisines.forEach { cuisine ->
+                uiState.availableCuisines.forEach { cuisine ->
                     FilterChip(
                         selected = cuisine in uiState.selectedCuisines,
                         onClick = { viewModel.onCuisineToggle(cuisine) },

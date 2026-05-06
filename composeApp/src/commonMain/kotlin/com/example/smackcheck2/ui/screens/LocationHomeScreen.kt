@@ -422,6 +422,7 @@ fun TopDishCard(
         Column {
             DishImage(
                 dishName = dish.name,
+                imageUrl = dish.imageUrl,
                 modifier = Modifier.fillMaxWidth().height(100.dp),
                 contentScale = ContentScale.Crop
             )

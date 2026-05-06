@@ -43,6 +43,7 @@ import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.formatOneDecimal
 import com.example.smackcheck2.util.formatRelativeTime
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
@@ -213,7 +214,7 @@ fun ReviewPostCard(
                                 tint = Color(0xFFFFD700)
                             )
                             Text(
-                                text = String.format("%.1f", feedItem.rating),
+                                text = formatOneDecimal(feedItem.rating.toDouble()),
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = jakartaSans,

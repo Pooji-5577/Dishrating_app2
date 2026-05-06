@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
-import com.example.smackcheck2.ui.components.DishImage
+import com.example.smackcheck2.ui.components.NetworkImage
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -187,19 +187,26 @@ fun FeedCard(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Profile image placeholder
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = item.userName.first().toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                if (!item.userProfileImageUrl.isNullOrBlank()) {
+                    NetworkImage(
+                        imageUrl = item.userProfileImageUrl,
+                        contentDescription = item.userName,
+                        modifier = Modifier.size(40.dp).clip(CircleShape)
                     )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = item.userName.firstOrNull()?.toString() ?: "?",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
                 }
                 
                 Spacer(modifier = Modifier.width(12.dp))
@@ -220,8 +227,9 @@ fun FeedCard(
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            DishImage(
-                dishName = item.dishName,
+            NetworkImage(
+                imageUrl = item.dishImageUrl ?: "",
+                contentDescription = item.dishName,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)

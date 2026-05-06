@@ -40,7 +40,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -123,15 +122,7 @@ private fun PointsCard(event: PointsEarnedEvent) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(
-                Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFFE53935),
-                        Color(0xFFFF6B35),
-                        Color(0xFFE53935)
-                    )
-                )
-            )
+            .background(Color(0xFF642223))
             .padding(16.dp)
     ) {
         Row(

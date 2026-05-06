@@ -27,7 +27,7 @@ class SocialRepository {
                 userId = targetUserId,
                 type = "follow",
                 title = "New Follower",
-                body = "Someone started following you!",
+                body = "Someone started following you.",
                 data = """{"follower_id": "$currentUserId"}"""
             )
 
@@ -171,6 +171,8 @@ class SocialRepository {
 
             val feedItems = mapRatingsToFeedItems(ratings, userId)
             Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -191,9 +193,151 @@ class SocialRepository {
 
             val feedItems = mapRatingsToFeedItems(ratings, currentUserId)
             Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    suspend fun getHighestRatedFeed(
+        limit: Int = 20,
+        offset: Int = 0,
+        currentUserId: String? = null,
+        userLat: Double? = null,
+        userLon: Double? = null,
+        radiusKm: Double = 25.0
+    ): Result<List<FeedItem>> {
+        return try {
+            // If location is available, scope to nearby restaurants first
+            val nearbyRestaurantIds: List<String>? = if (userLat != null && userLon != null) {
+                try {
+                    val restaurants = postgrest["restaurants"]
+                        .select()
+                        .decodeList<RestaurantDto>()
+                    restaurants
+                        .filter { r ->
+                            val lat = r.latitude ?: return@filter false
+                            val lon = r.longitude ?: return@filter false
+                            haversineDistanceKm(userLat, userLon, lat, lon) <= radiusKm
+                        }
+                        .mapNotNull { it.id }
+                        .takeIf { it.isNotEmpty() }
+                } catch (_: Exception) { null }
+            } else null
+
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter {
+                        gte("rating", 4.0)
+                        lte("rating", 5.0)
+                        if (nearbyRestaurantIds != null) {
+                            isIn("restaurant_id", nearbyRestaurantIds)
+                        }
+                    }
+                    order("rating", Order.DESCENDING)
+                    order("created_at", Order.DESCENDING)
+                    range(offset.toLong(), (offset + limit - 1).toLong())
+                }
+                .decodeList<RatingDto>()
+            val feedItems = mapRatingsToFeedItems(ratings, currentUserId)
+            Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getNearbyFeed(
+        userLat: Double,
+        userLon: Double,
+        radiusKm: Double = 25.0,
+        limit: Int = 20,
+        offset: Int = 0,
+        currentUserId: String? = null,
+        userCity: String? = null
+    ): Result<List<FeedItem>> {
+        return try {
+            // A rating is "nearby" if:
+            //   (a) its own lat/lon, OR the lat/lon of its restaurant, is
+            //       within radiusKm of the user (haversine), OR
+            //   (b) its restaurant is in the same city as the user
+            //       (fallback for rows lacking coords).
+            // Ratings with no usable coords AND no matching city are excluded.
+            val fetchSize = (limit * 5).coerceAtLeast(limit)
+            val candidateRatings = postgrest["ratings"]
+                .select {
+                    order("created_at", Order.DESCENDING)
+                    range(offset.toLong(), (offset + fetchSize - 1).toLong())
+                }
+                .decodeList<RatingDto>()
+
+            println("SocialRepository[Nearby]: user=($userLat,$userLon) city=$userCity radius=${radiusKm}km candidates=${candidateRatings.size}")
+            if (candidateRatings.isEmpty()) return Result.success(emptyList())
+
+            val restaurantIds = candidateRatings
+                .map { it.restaurantId }
+                .distinct()
+                .filter { it.isNotBlank() }
+
+            val restaurantsById: Map<String, RestaurantDto> = try {
+                if (restaurantIds.isNotEmpty()) {
+                    postgrest["restaurants"]
+                        .select { filter { isIn("id", restaurantIds) } }
+                        .decodeList<RestaurantDto>()
+                        .mapNotNull { r -> r.id?.let { it to r } }
+                        .toMap()
+                } else emptyMap()
+            } catch (_: Exception) { emptyMap() }
+
+            val normalizedUserCity = userCity?.trim()?.lowercase()?.takeIf { it.isNotBlank() }
+
+            var matchedByCoords = 0
+            var matchedByCity = 0
+            var skippedNoData = 0
+            val nearbyRatings = candidateRatings.filter { rating ->
+                val restaurant = restaurantsById[rating.restaurantId]
+                val lat = rating.latitude ?: restaurant?.latitude
+                val lon = rating.longitude ?: restaurant?.longitude
+                if (lat != null && lon != null) {
+                    val d = haversineDistanceKm(userLat, userLon, lat, lon)
+                    if (d <= radiusKm) {
+                        matchedByCoords++
+                        return@filter true
+                    }
+                }
+                // City fallback: match restaurant city to user city
+                val restaurantCity = restaurant?.city?.trim()?.lowercase()
+                if (normalizedUserCity != null && restaurantCity != null && restaurantCity == normalizedUserCity) {
+                    matchedByCity++
+                    return@filter true
+                }
+                skippedNoData++
+                false
+            }.take(limit)
+
+            println("SocialRepository[Nearby]: matchedCoords=$matchedByCoords matchedCity=$matchedByCity skipped=$skippedNoData returning=${nearbyRatings.size}")
+            if (nearbyRatings.isEmpty()) return Result.success(emptyList())
+
+            val feedItems = mapRatingsToFeedItems(nearbyRatings, currentUserId)
+            Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    private fun haversineDistanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val R = 6371.0
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        val a = kotlin.math.sin(dLat / 2).let { it * it } +
+                kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+                kotlin.math.sin(dLon / 2).let { it * it }
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return R * c
     }
 
     suspend fun getTrendingFeed(
@@ -211,6 +355,58 @@ class SocialRepository {
 
             val feedItems = mapRatingsToFeedItems(ratings, currentUserId)
             Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // ==================== DISCOVER USERS ====================
+
+    /**
+     * Fetch all profiles (minus the current user) annotated with isFollowing.
+     * Used by the "Find Friends" screen.
+     */
+    suspend fun getDiscoverableUsers(currentUserId: String?): Result<List<UserSummary>> {
+        return try {
+            val profiles = postgrest["profiles"]
+                .select {
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<ProfileDto>()
+
+            val followingIds: Set<String> = if (!currentUserId.isNullOrBlank()) {
+                try {
+                    postgrest["followers"]
+                        .select { filter { eq("follower_id", currentUserId) } }
+                        .decodeList<FollowerDto>()
+                        .map { it.followingId }
+                        .toSet()
+                } catch (_: Exception) {
+                    emptySet()
+                }
+            } else {
+                emptySet()
+            }
+
+            val users = profiles
+                .filter { it.id != currentUserId }
+                .distinctBy { it.id }
+                .map { profile ->
+                    UserSummary(
+                        id = profile.id,
+                        name = profile.name.ifBlank { profile.username ?: "User" },
+                        username = profile.username,
+                        profilePhotoUrl = profile.profilePhotoUrl,
+                        bio = profile.bio,
+                        location = profile.lastLocation,
+                        isFollowing = followingIds.contains(profile.id)
+                    )
+                }
+            Result.success(users)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -457,18 +653,24 @@ class SocialRepository {
         }
     }
 
-    suspend fun getUserRatings(userId: String, limit: Int = 20): Result<List<FeedItem>> {
+    suspend fun getUserRatings(
+        userId: String,
+        limit: Int = 20,
+        offset: Int = 0
+    ): Result<List<FeedItem>> {
         return try {
             val ratings = postgrest["ratings"]
                 .select {
                     filter { eq("user_id", userId) }
                     order("created_at", Order.DESCENDING)
-                    limit(limit.toLong())
+                    range(offset.toLong(), (offset + limit - 1).toLong())
                 }
                 .decodeList<RatingDto>()
 
-            val feedItems = mapRatingsToFeedItems(ratings, null)
+            val feedItems = mapRatingsToFeedItems(ratings, userId)
             Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -563,9 +765,10 @@ class SocialRepository {
         } catch (_: Exception) { emptyMap() }
 
         // Fallback: fetch restaurant names individually for any missing from batch
+        // Also include dish restaurant IDs that may differ from rating restaurant IDs
         val missingRestaurantIds = validRestaurantIds.filter { it !in restaurantsMap }
         val fallbackRestaurantNames = mutableMapOf<String, String>()
-        for (missingId in missingRestaurantIds) {
+        for (missingId in missingRestaurantIds.filter { it.isNotBlank() }) {
             try {
                 val dto = postgrest["restaurants"]
                     .select {
@@ -574,6 +777,7 @@ class SocialRepository {
                     .decodeSingleOrNull<RestaurantDto>()
                 if (dto != null) {
                     fallbackRestaurantNames[missingId] = dto.name
+                    if (dto.id != null) fallbackRestaurantNames[dto.id] = dto.name
                 }
             } catch (e: Exception) {
                 println("SocialRepository: Fallback restaurant fetch failed for $missingId: ${e.message}")
@@ -592,6 +796,7 @@ class SocialRepository {
                 ?: dishRestaurant?.name
                 ?: dish?.restaurantName  // Use restaurant_name stored directly on the dish
                 ?: fallbackRestaurantNames[rating.restaurantId]
+                ?: fallbackRestaurantNames[dish?.restaurantId ?: ""]
                 ?: "Unknown Restaurant"
             val additionalImages = additionalImagesMap[ratingId] ?: emptyList()
 
@@ -608,7 +813,9 @@ class SocialRepository {
                 userName = profile?.name ?: "Unknown",
                 dishImageUrl = allImages.firstOrNull(),
                 dishName = dish?.name ?: "Unknown Dish",
+                dishId = rating.dishId,
                 restaurantName = restaurantName,
+                restaurantCity = (restaurant ?: dishRestaurant)?.city ?: "",
                 rating = rating.rating,
                 likesCount = rating.likesCount,
                 commentsCount = commentsCountMap[ratingId] ?: 0,

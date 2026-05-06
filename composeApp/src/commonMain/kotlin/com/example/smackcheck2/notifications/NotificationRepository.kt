@@ -60,7 +60,7 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = reviewOwnerId,
-                title = "❤️ Review Liked!",
+                title = "Review Liked",
                 body = "$likerName liked your review of $dishName",
                 eventType = NotificationEventType.REVIEW_LIKED.value,
                 data = mapOf(
@@ -86,7 +86,7 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = reviewOwnerId,
-                title = "💬 New Comment",
+                title = "New Comment",
                 body = "$commenterName commented on $dishName",
                 eventType = NotificationEventType.DISH_COMMENT.value,
                 data = mapOf(
@@ -111,8 +111,8 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = userId,
-                title = "🏆 Points Earned!",
-                body = "You earned $points points for $reason!",
+                title = "Points Earned",
+                body = "You earned $points points for $reason.",
                 eventType = NotificationEventType.POINTS_EARNED.value,
                 data = mapOf(
                     "source_id" to "points_$actionId",
@@ -135,8 +135,8 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = userId,
-                title = "🎯 Challenge Complete!",
-                body = "You completed \"$challengeTitle\" and earned $xpReward XP!",
+                title = "Challenge Complete",
+                body = "You completed \"$challengeTitle\" and earned $xpReward XP.",
                 eventType = NotificationEventType.CHALLENGE_COMPLETED.value,
                 data = mapOf(
                     "source_id" to "challenge_$challengeId",
@@ -160,8 +160,8 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = userId,
-                title = "🔥 Trending Near You",
-                body = "$dishName at $restaurantName is trending!",
+                title = "Trending Near You",
+                body = "$dishName at $restaurantName is trending.",
                 eventType = NotificationEventType.TRENDING_DISH.value,
                 data = mapOf(
                     "source_id" to "trending_$dishId",
@@ -194,7 +194,7 @@ object NotificationRepository {
                 insertNotification(
                     NotificationInsert(
                         userId = follower.followerId,
-                        title = "🍽️ New Review!",
+                        title = "New Review",
                         body = "$posterName reviewed $dishName at $restaurantName",
                         eventType = NotificationEventType.NEW_POST.value,
                         data = mapOf(
@@ -223,7 +223,7 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = userId,
-                title = "✅ Rating Submitted!",
+                title = "Rating Submitted",
                 body = "Your review of $dishName was posted successfully.",
                 eventType = NotificationEventType.RATING_SUBMITTED.value,
                 data = mapOf(
@@ -260,7 +260,7 @@ object NotificationRepository {
             insertNotification(
                 NotificationInsert(
                     userId = rating.userId,
-                    title = "💬 New Comment",
+                    title = "New Comment",
                     body = "$name commented on your review",
                     eventType = NotificationEventType.DISH_COMMENT.value,
                     data = mapOf(
@@ -286,8 +286,8 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = userId,
-                title = "Welcome to SmackCheck!",
-                body = "Hey $userName! Start by rating your first dish and earn XP!",
+                title = "Welcome to SmackCheck",
+                body = "Hey $userName, start by rating your first dish and earn XP.",
                 eventType = NotificationEventType.WELCOME.value,
                 data = mapOf(
                     "source_id" to "welcome_$userId",
@@ -307,8 +307,8 @@ object NotificationRepository {
         return insertNotification(
             NotificationInsert(
                 userId = userId,
-                title = "First Review Posted!",
-                body = "Awesome! Your review of $dishName is live. Keep rating to level up!",
+                title = "First Review Posted",
+                body = "Nice — your review of $dishName is live. Keep rating to level up.",
                 eventType = NotificationEventType.FIRST_DISH.value,
                 data = mapOf(
                     "source_id" to "first_dish_$userId",

@@ -22,7 +22,8 @@
       "Bash(curl:*)",
       "Bash(git pull:*)",
       "Bash(find /Users/teja/smackcheck/Dishrating_app2/composeApp -type f \\\\\\(-name *.kt -o -name *.swift -o -name *.ts -o -name *.tsx \\\\\\))",
-      "Bash(supabase functions:*)"
+      "Bash(supabase functions:*)",
+      "Bash(adb devices *)"
     ]
   }
 }

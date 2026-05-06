@@ -56,7 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.components.NetworkImage
-import com.example.smackcheck2.ui.components.FoodImages
 import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.ui.components.EmptyState
 import com.example.smackcheck2.ui.theme.appColors
@@ -264,7 +263,9 @@ fun DarkSearchScreen(
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                listOf("Italian", "Japanese", "Indian", "Mexican", "Chinese", "Thai").forEach { cuisine ->
+                uiState.availableCuisines.ifEmpty {
+                    listOf("Italian", "Japanese", "Indian", "Mexican", "Chinese", "Thai")
+                }.forEach { cuisine ->
                     val isSelected = uiState.selectedCuisines.contains(cuisine)
                     FilterChip(
                         selected = isSelected,
@@ -448,9 +449,7 @@ private fun DarkRestaurantSearchCard(
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // Fallback: Supabase photo_urls → Unsplash
-                    val imageUrl = restaurant.imageUrls.firstOrNull()
-                        ?: FoodImages.getRestaurantImageByName(restaurant.name)
+                    val imageUrl = restaurant.imageUrls.firstOrNull() ?: ""
                     NetworkImage(
                         imageUrl = imageUrl,
                         contentDescription = restaurant.name,

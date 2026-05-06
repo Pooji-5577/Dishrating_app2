@@ -27,6 +27,7 @@ actual class PreferencesManager(private val context: Context) {
         val LANGUAGE = stringPreferencesKey("language")
         val FIRST_OPEN_TIMESTAMP = longPreferencesKey("first_open_timestamp")
         val DAY1_RETENTION_TRACKED = booleanPreferencesKey("day1_retention_tracked")
+        val PERMISSIONS_ONBOARDING_SEEN = booleanPreferencesKey("permissions_onboarding_seen")
         val BOOKMARKS = stringPreferencesKey("bookmarked_ratings")
     }
 
@@ -38,7 +39,7 @@ actual class PreferencesManager(private val context: Context) {
 
     actual suspend fun getThemePreference(): ThemePreference {
         val prefs = context.dataStore.data.first()
-        val themeString = prefs[THEME_PREF] ?: ThemePreference.SYSTEM.name
+        val themeString = prefs[THEME_PREF] ?: ThemePreference.LIGHT.name
         return ThemePreference.valueOf(themeString)
     }
 
@@ -104,6 +105,17 @@ actual class PreferencesManager(private val context: Context) {
     actual suspend fun setDay1RetentionTracked() {
         context.dataStore.edit { prefs ->
             prefs[DAY1_RETENTION_TRACKED] = true
+        }
+    }
+
+    actual suspend fun hasSeenPermissionsOnboarding(): Boolean {
+        val prefs = context.dataStore.data.first()
+        return prefs[PERMISSIONS_ONBOARDING_SEEN] ?: false
+    }
+
+    actual suspend fun setPermissionsOnboardingSeen() {
+        context.dataStore.edit { prefs ->
+            prefs[PERMISSIONS_ONBOARDING_SEEN] = true
         }
     }
 

@@ -21,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
@@ -33,6 +35,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -43,12 +46,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Review
+import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishDetailViewModel
 
@@ -122,31 +127,50 @@ fun DishDetailScreen(
                 ) {
                     // Hero Image with overlays
                     item {
+                        val heroImageUrl = uiState.featuredReview?.dishImageUrl
+                            ?: dish.imageUrl
+
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(280.dp)
+                                .height(300.dp)
                         ) {
-                            // Image placeholder with gradient
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            colors = listOf(
-                                                appColors().SurfaceVariant,
-                                                appColors().Background
+                            // Actual dish image
+                            if (!heroImageUrl.isNullOrBlank()) {
+                                NetworkImage(
+                                    imageUrl = heroImageUrl,
+                                    contentDescription = dish.name,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                                // Gradient overlay for readability
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(
+                                            Brush.verticalGradient(
+                                                colors = listOf(
+                                                    Color.Black.copy(alpha = 0.25f),
+                                                    Color.Transparent,
+                                                    Color.Black.copy(alpha = 0.55f)
+                                                )
                                             )
                                         )
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Restaurant,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(80.dp),
-                                    tint = appColors().TextTertiary
                                 )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(appColors().SurfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Restaurant,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(80.dp),
+                                        tint = appColors().TextTertiary
+                                    )
+                                }
                             }
 
                             // Top bar with back, favorite, share
@@ -161,14 +185,14 @@ fun DishDetailScreen(
                                     modifier = Modifier
                                         .size(40.dp)
                                         .background(
-                                            appColors().Surface.copy(alpha = 0.8f),
+                                            Color.Black.copy(alpha = 0.4f),
                                             CircleShape
                                         )
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.ArrowBack,
                                         contentDescription = "Back",
-                                        tint = appColors().TextPrimary
+                                        tint = Color.White
                                     )
                                 }
 
@@ -178,14 +202,14 @@ fun DishDetailScreen(
                                         modifier = Modifier
                                             .size(40.dp)
                                             .background(
-                                                appColors().Surface.copy(alpha = 0.8f),
+                                                Color.Black.copy(alpha = 0.4f),
                                                 CircleShape
                                             )
                                     ) {
                                         Icon(
                                             imageVector = if (uiState.isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                                             contentDescription = "Favorite",
-                                            tint = if (uiState.isFavorite) appColors().Primary else appColors().TextPrimary
+                                            tint = if (uiState.isFavorite) Color(0xFFFF6B6B) else Color.White
                                         )
                                     }
 
@@ -194,14 +218,63 @@ fun DishDetailScreen(
                                         modifier = Modifier
                                             .size(40.dp)
                                             .background(
-                                                appColors().Surface.copy(alpha = 0.8f),
+                                                Color.Black.copy(alpha = 0.4f),
                                                 CircleShape
                                             )
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.Share,
                                             contentDescription = "Share",
-                                            tint = appColors().TextPrimary
+                                            tint = Color.White
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Uploader info chip at the bottom of the image
+                            val featured = uiState.featuredReview
+                            if (featured != null) {
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomStart)
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Avatar
+                                    Box(
+                                        modifier = Modifier
+                                            .size(32.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF642223)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (!featured.userProfileUrl.isNullOrBlank()) {
+                                            NetworkImage(
+                                                imageUrl = featured.userProfileUrl,
+                                                contentDescription = featured.userName,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Filled.Person,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = Color.Black.copy(alpha = 0.55f)
+                                    ) {
+                                        Text(
+                                            text = "Posted by ${featured.userName}",
+                                            color = Color.White,
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                                         )
                                     }
                                 }
@@ -220,13 +293,13 @@ fun DishDetailScreen(
                             Text(
                                 text = dish.name,
                                 color = appColors().TextPrimary,
-                                fontSize = 22.sp,
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold
                             )
 
                             Spacer(modifier = Modifier.height(8.dp))
 
-                            // Rating row
+                            // Rating row with location-specific count
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -250,26 +323,42 @@ fun DishDetailScreen(
                                 if (uiState.reviews.isNotEmpty()) {
                                     Text(text = "·", color = appColors().TextSecondary)
                                     Text(
-                                        text = "${uiState.reviews.size} ${if (uiState.reviews.size == 1) "rating" else "ratings"}",
+                                        text = "${uiState.reviews.size} ${if (uiState.reviews.size == 1) "rating" else "ratings"} in this area",
                                         color = appColors().TextSecondary,
                                         fontSize = 14.sp
                                     )
                                 }
                             }
 
-                            // Restaurant name
-                            if (restaurant != null) {
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text(
-                                    text = restaurant.name,
-                                    color = appColors().TextSecondary,
-                                    fontSize = 15.sp
-                                )
-                                if (restaurant.city.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Location info row
+                            val locationLine = buildString {
+                                if (restaurant != null) {
+                                    append(restaurant.name)
+                                    if (restaurant.city.isNotBlank()) append(" · ${restaurant.city}")
+                                } else if (dish.restaurantName.isNotBlank()) {
+                                    append(dish.restaurantName)
+                                    if (dish.restaurantCity.isNotBlank()) append(" · ${dish.restaurantCity}")
+                                }
+                            }
+                            if (locationLine.isNotBlank()) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.LocationOn,
+                                        contentDescription = null,
+                                        tint = Color(0xFF642223),
+                                        modifier = Modifier.size(15.dp)
+                                    )
                                     Text(
-                                        text = restaurant.city,
-                                        color = appColors().TextTertiary,
-                                        fontSize = 13.sp
+                                        text = locationLine,
+                                        color = appColors().TextSecondary,
+                                        fontSize = 14.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                             }
@@ -439,12 +528,21 @@ private fun ReviewItem(review: Review) {
                 .background(appColors().SurfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = review.userName.firstOrNull()?.toString() ?: "?",
-                color = appColors().Primary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold
-            )
+            if (!review.userProfileUrl.isNullOrBlank()) {
+                NetworkImage(
+                    imageUrl = review.userProfileUrl,
+                    contentDescription = review.userName,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = review.userName.firstOrNull()?.toString() ?: "?",
+                    color = appColors().Primary,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
         }
 
         Column(modifier = Modifier.weight(1f)) {

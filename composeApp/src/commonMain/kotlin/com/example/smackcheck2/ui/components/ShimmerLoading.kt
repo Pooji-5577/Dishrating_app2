@@ -415,15 +415,19 @@ fun SocialFeedSkeleton(
     modifier: Modifier = Modifier
 ) {
     val colors = appColors()
-    LazyColumn(
+    // NOTE: This composable is often rendered inside an `item { }` of an outer
+    // LazyColumn (see SocialFeedScreen). A nested scrollable container with
+    // infinite max-height constraints throws IllegalStateException at measure
+    // time, which crashes the whole app. Use a plain Column so height is
+    // intrinsic to the children.
+    Column(
         modifier = modifier
-            .fillMaxSize()
-            .background(colors.Background),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        userScrollEnabled = false
+            .fillMaxWidth()
+            .background(colors.Background)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items(4) {
+        repeat(4) {
             SocialFeedCardSkeleton()
         }
     }

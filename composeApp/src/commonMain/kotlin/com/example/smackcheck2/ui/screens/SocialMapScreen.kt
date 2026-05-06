@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -83,6 +84,8 @@ import com.example.smackcheck2.model.MapUserMarker
 import com.example.smackcheck2.model.SocialMapUiState
 import com.example.smackcheck2.platform.MapMarker
 import com.example.smackcheck2.platform.PlatformMapView
+import com.example.smackcheck2.ui.components.BottomNavBar
+import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
@@ -103,6 +106,11 @@ fun SocialMapScreen(
     onUserProfileClick: (String) -> Unit,
     onDishDetailClick: (String) -> Unit,
     onRateDishClick: () -> Unit = {},
+    onHomeClick: () -> Unit = {},
+    onMapClick: () -> Unit = {},
+    onCameraClick: () -> Unit = {},
+    onExploreClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -135,12 +143,18 @@ fun SocialMapScreen(
         containerColor = themeColors.Background,
         snackbarHost = { SnackbarHost(snackbarHostState) },
         bottomBar = {
-            com.example.smackcheck2.ui.components.BottomNavBar(
-                selectedItem = com.example.smackcheck2.ui.components.NavItem.MAP
+            BottomNavBar(
+                selectedItem = NavItem.MAP,
+                onHomeClick = onHomeClick,
+                onMapClick = onMapClick,
+                onCameraClick = onCameraClick,
+                onExploreClick = onExploreClick,
+                onProfileClick = onProfileClick
             )
         },
         topBar = {
             TopAppBar(
+                modifier = Modifier.statusBarsPadding(),
                 title = {
                     Text(
                         "Discover Foodies",
@@ -337,6 +351,7 @@ fun SocialMapScreen(
                                 }
                                 viewModel.selectUser(user)
                             },
+                            showMyLocation = uiState.locationPermissionGranted,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -402,7 +417,7 @@ fun SocialMapScreen(
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "${uiState.nearbyUsers.size} dish posts",
+                                "${markers.size} dish posts",
                                 color = themeColors.TextPrimary,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
@@ -1079,7 +1094,7 @@ private fun MapListItem(
                     Icon(Icons.Filled.Star, null, tint = Color.White, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(3.dp))
                     Text(
-                        text = "%.1f".format(post.latestRating),
+                        text = formatOneDecimal(post.latestRating.toDouble()),
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold

@@ -109,7 +109,8 @@ object AppLocationManager {
                 SharedLocationState.onLocationDetected(
                     latitude = result.locationData.latitude,
                     longitude = result.locationData.longitude,
-                    city = result.locationData.city
+                    city = result.locationData.city,
+                    countryCode = result.locationData.countryCode
                 )
                 Log.d(TAG, "Location detected: ${result.locationData}")
                 

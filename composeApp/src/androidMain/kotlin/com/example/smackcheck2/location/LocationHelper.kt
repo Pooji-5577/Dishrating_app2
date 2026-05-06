@@ -33,7 +33,8 @@ import kotlin.coroutines.resume
 data class LocationData(
     val latitude: Double,
     val longitude: Double,
-    val city: String?
+    val city: String?,
+    val countryCode: String? = null
 )
 
 /**
@@ -152,10 +153,10 @@ class LocationHelper(private val context: Context) {
                 val lng = location.longitude
 
                 // Step 5: reverse geocode
-                val cityName = reverseGeocode(lat, lng)
+                val (cityName, countryCode) = reverseGeocode(lat, lng)
 
-                Log.d(TAG, "Location obtained: lat=$lat, lng=$lng, city=$cityName")
-                SmackLocationResult.Success(LocationData(lat, lng, cityName))
+                Log.d(TAG, "Location obtained: lat=$lat, lng=$lng, city=$cityName, country=$countryCode")
+                SmackLocationResult.Success(LocationData(lat, lng, cityName, countryCode))
             } else {
                 Log.e(TAG, "Unable to obtain location (null)")
                 SmackLocationResult.Error("Unable to detect location. Please ensure GPS is enabled and try again.")
@@ -238,11 +239,11 @@ class LocationHelper(private val context: Context) {
      * Converts latitude / longitude into a human-readable city or locality name.
      * Returns `null` when geocoding is unavailable or fails.
      */
-    private fun reverseGeocode(latitude: Double, longitude: Double): String? {
+    private fun reverseGeocode(latitude: Double, longitude: Double): Pair<String?, String?> {
         return try {
             if (!Geocoder.isPresent()) {
                 Log.w(TAG, "Geocoder not available on this device")
-                return null
+                return null to null
             }
 
             val geocoder = Geocoder(context, Locale.getDefault())
@@ -258,15 +259,15 @@ class LocationHelper(private val context: Context) {
                     ?: address.adminArea
                     ?: address.countryName
 
-                Log.d(TAG, "Reverse geocoded: $city (full: ${address.getAddressLine(0)})")
-                city
+                Log.d(TAG, "Reverse geocoded: $city, ${address.countryCode} (full: ${address.getAddressLine(0)})")
+                city to address.countryCode
             } else {
                 Log.w(TAG, "Geocoder returned no addresses for $latitude, $longitude")
-                null
+                null to null
             }
         } catch (e: Exception) {
             Log.e(TAG, "Reverse geocoding failed", e)
-            null
+            null to null
         }
     }
 
@@ -295,8 +296,8 @@ class LocationHelper(private val context: Context) {
         val callback = object : LocationCallback() {
             override fun onLocationResult(result: com.google.android.gms.location.LocationResult) {
                 result.lastLocation?.let { loc ->
-                    val city = reverseGeocode(loc.latitude, loc.longitude)
-                    trySend(LocationData(loc.latitude, loc.longitude, city))
+                    val (city, country) = reverseGeocode(loc.latitude, loc.longitude)
+                    trySend(LocationData(loc.latitude, loc.longitude, city, country))
                 }
             }
         }
