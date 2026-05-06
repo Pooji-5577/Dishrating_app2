@@ -1,6 +1,5 @@
 package com.example.smackcheck2.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,9 +46,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -67,7 +65,6 @@ import com.example.smackcheck2.ui.components.TopRatedDishCard
 import com.example.smackcheck2.ui.components.LoadingState
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.util.formatRelativeTime
-import com.example.smackcheck2.viewmodel.PhotoState
 import com.example.smackcheck2.viewmodel.RestaurantDetailViewModel
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import io.kamel.image.KamelImage
@@ -111,38 +108,34 @@ fun RestaurantDetailScreen(
     }
 
     when {
-        uiState.isLoading -> {
-            LoadingState(message = "Loading restaurant...")
-        }
+        uiState.isLoading -> LoadingState(message = "Loading restaurant...")
         uiState.errorMessage != null -> {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(DetailBackground),
                 contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Error,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = colors.Error
-                    )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = uiState.errorMessage ?: "An error occurred",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = colors.TextPrimary
+                        text = uiState.errorMessage ?: "Unable to load restaurant",
+                        color = DetailText,
+                        style = MaterialTheme.typography.bodyLarge
                     )
-                    Button(onClick = { viewModel.retry(restaurantId) }) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { viewModel.retry(restaurantId) },
+                        colors = ButtonDefaults.buttonColors(containerColor = DetailPrimary)
+                    ) {
                         Text("Retry")
                     }
                 }
             }
         }
+
         uiState.restaurant != null -> {
             val restaurant = uiState.restaurant!!
-            val listState = rememberLazyListState()
+            val heroImage = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
 
             LaunchedEffect(restaurant.id) {
                 photoViewModel?.loadFullPhotos(
@@ -154,6 +147,7 @@ fun RestaurantDetailScreen(
             }
 
             // Toolbar background fades in as user scrolls past the hero image
+            val listState = rememberLazyListState()
             val headerAlpha by remember {
                 derivedStateOf {
                     val firstItem = listState.firstVisibleItemIndex
@@ -187,254 +181,249 @@ fun RestaurantDetailScreen(
                     )
                 }
             ) { paddingValues ->
-                Box(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         // Only apply bottom padding — hero must fill edge-to-edge under status bar
                         .padding(bottom = paddingValues.calculateBottomPadding())
                 ) {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        // Hero goes full edge-to-edge from top of screen (behind status bar)
-                        // The floating overlay bar handles its own statusBarsPadding
-                        item(key = "hero") {
-                            RestaurantHeroSection(restaurant = restaurant.copy(photoUrl = heroPhotoUrl))
-                        }
-
-                        // Status pills: cuisine · open-now · location city
-                        item(key = "status_tags") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 24.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                if (restaurant.cuisine.isNotBlank()) {
-                                    StatusPill(text = restaurant.cuisine, background = FigmaMaroon)
-                                }
-                                if (restaurant.isOpenNow == true) {
-                                    StatusPill(
-                                        text = "Open Now",
-                                        background = FigmaMaroonDot,
-                                        dot = true
-                                    )
-                                }
-                                if (restaurant.city.isNotBlank()) {
-                                    LocationPill(city = restaurant.city)
-                                }
-                            }
-                        }
-
-                        // ── Top Rated Dishes ── always shown (with empty state when no data)
-                        item(key = "top_dishes_header") {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(start = 24.dp, end = 24.dp, top = 32.dp, bottom = 0.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.Bottom
-                            ) {
-                                Text(
-                                    text = "Top Rated Dishes",
-                                    fontSize = 24.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = colors.TextPrimary,
-                                    letterSpacing = (-0.6).sp
-                                )
-                                Text(
-                                    text = "VIEW ALL",
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = FigmaMaroon,
-                                    letterSpacing = 1.4.sp
-                                )
-                            }
-                        }
-
-                        item(key = "top_dishes_content") {
-                            if (uiState.topDishes.isEmpty()) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 24.dp, vertical = 32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "No dishes yet. Be the first to rate one!",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colors.TextSecondary,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            } else {
-                                LazyRow(
-                                    contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    items(uiState.topDishes, key = { it.id }) { dish ->
-                                        TopRatedDishCard(
-                                            dish = dish,
-                                            isBookmarked = bookmarkedDishIds.contains(dish.id),
-                                            onBookmarkClick = {
-                                                coroutineScope.launch {
-                                                    preferencesRepository?.let { repo ->
-                                                        val newState = repo.toggleBookmark(dish.id)
-                                                        bookmarkedDishIds = if (newState)
-                                                            bookmarkedDishIds + dish.id
-                                                        else
-                                                            bookmarkedDishIds - dish.id
-                                                    }
-                                                }
-                                            },
-                                            onClick = {},
-                                            currencySymbol = currencySymbol
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // ── Recent Reviews ── always shown
-                        item(key = "reviews_header") {
-                            Text(
-                                text = "Recent Reviews",
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = colors.TextPrimary,
-                                letterSpacing = (-0.6).sp,
-                                modifier = Modifier.padding(
-                                    start = 24.dp, end = 24.dp,
-                                    top = 32.dp, bottom = 0.dp
-                                )
-                            )
-                        }
-
-                        if (uiState.reviews.isEmpty()) {
-                            item(key = "no_reviews") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 24.dp, vertical = 32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "No reviews yet. Be the first!",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = colors.TextSecondary,
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        } else {
-                            itemsIndexed(uiState.reviews.take(5), key = { _, review -> "review_${review.id}" }) { index, review ->
-                                if (index > 0) {
-                                    Spacer(modifier = Modifier.height(40.dp))
-                                }
-                                FigmaReviewItem(
-                                    review = review,
-                                    modifier = Modifier.padding(horizontal = 24.dp)
-                                )
-                            }
-                        }
-
-                        item(key = "bottom_spacer") {
-                            Spacer(modifier = Modifier.height(32.dp))
-                        }
+                    // Hero goes full edge-to-edge from top of screen (behind status bar)
+                    // The floating overlay bar handles its own statusBarsPadding
+                    item(key = "hero") {
+                        RestaurantHeroSection(restaurant = restaurant.copy(photoUrl = heroPhotoUrl))
                     }
 
-                    // ── Figma top bar overlay ──
-                    // Outer Box: fills (statusBarHeight + 56dp) by using a Spacer as a
-                    // height anchor. Background and Row each apply statusBarsPadding()
-                    // independently so both have 56dp of usable space below the status bar.
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        // Height anchor: statusBarHeight + 56dp
-                        Spacer(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .statusBarsPadding()
-                                .height(56.dp)
-                        )
-
-                        // Fading background covers the full anchor area
-                        Box(
-                            modifier = Modifier
-                                .matchParentSize()
-                                .graphicsLayer { alpha = animatedAlpha }
-                                .background(colors.Background)
-                        )
-
-                        // Icons row — sits below status bar with full 56dp height
+                    // Status pills: cuisine · open-now · location city
+                    item(key = "status_tags") {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .statusBarsPadding()
-                                .height(56.dp)
-                                .padding(horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                                .horizontalScroll(rememberScrollState())
+                                .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 24.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            // Back button
-                            IconButton(onClick = onNavigateBack) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = "Back",
-                                    tint = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White
+                            if (restaurant.cuisine.isNotBlank()) {
+                                StatusPill(text = restaurant.cuisine, background = FigmaMaroon)
+                            }
+                            if (restaurant.isOpenNow == true) {
+                                StatusPill(
+                                    text = "Open Now",
+                                    background = FigmaMaroonDot,
+                                    dot = true
                                 )
                             }
+                            if (restaurant.city.isNotBlank()) {
+                                LocationPill(city = restaurant.city)
+                            }
+                        }
+                    }
 
-                            // "SmackCheck" title — centred in available space
+                    // ── Top Rated Dishes ── always shown (with empty state when no data)
+                    item(key = "top_dishes_header") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 24.dp, end = 24.dp, top = 32.dp, bottom = 0.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
                             Text(
-                                text = "SmackCheck",
-                                fontSize = 18.sp,
+                                text = "Top Rated Dishes",
+                                fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White,
-                                modifier = Modifier.weight(1f),
-                                textAlign = TextAlign.Center
+                                color = colors.TextPrimary,
+                                letterSpacing = (-0.6).sp
                             )
+                            Text(
+                                text = "VIEW ALL",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = FigmaMaroon,
+                                letterSpacing = 1.4.sp
+                            )
+                        }
+                    }
 
-                            // Notification bell
-                            IconButton(onClick = onNotificationClick) {
-                                Icon(
-                                    imageVector = Icons.Filled.Notifications,
-                                    contentDescription = "Notifications",
-                                    tint = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White
-                                )
-                            }
-
-                            // User avatar (36dp circle)
+                    item(key = "top_dishes_content") {
+                        if (uiState.topDishes.isEmpty()) {
                             Box(
                                 modifier = Modifier
-                                    .padding(end = 8.dp)
-                                    .size(36.dp)
-                                    .clip(CircleShape)
-                                    .background(FigmaMaroon),
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 32.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                if (!userAvatarUrl.isNullOrBlank()) {
-                                    KamelImage(
-                                        resource = asyncPainterResource(userAvatarUrl),
-                                        contentDescription = "Profile",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop,
-                                        onFailure = {
-                                            Icon(
-                                                imageVector = Icons.Filled.Restaurant,
-                                                contentDescription = null,
-                                                tint = Color.White,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Filled.Restaurant,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(18.dp)
+                                Text(
+                                    text = "No dishes yet. Be the first to rate one!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.TextSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        } else {
+                            LazyRow(
+                                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                items(uiState.topDishes, key = { it.id }) { dish ->
+                                    TopRatedDishCard(
+                                        dish = dish,
+                                        isBookmarked = bookmarkedDishIds.contains(dish.id),
+                                        onBookmarkClick = {
+                                            coroutineScope.launch {
+                                                preferencesRepository?.let { repo ->
+                                                    val newState = repo.toggleBookmark(dish.id)
+                                                    bookmarkedDishIds = if (newState)
+                                                        bookmarkedDishIds + dish.id
+                                                    else
+                                                        bookmarkedDishIds - dish.id
+                                                }
+                                            }
+                                        },
+                                        onClick = {},
+                                        currencySymbol = currencySymbol
                                     )
                                 }
+                            }
+                        }
+                    }
+
+                    // ── Recent Reviews ── always shown
+                    item(key = "reviews_header") {
+                        Text(
+                            text = "Recent Reviews",
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.TextPrimary,
+                            letterSpacing = (-0.6).sp,
+                            modifier = Modifier.padding(
+                                start = 24.dp, end = 24.dp,
+                                top = 32.dp, bottom = 0.dp
+                            )
+                        )
+                    }
+
+                    if (uiState.reviews.isEmpty()) {
+                        item(key = "no_reviews") {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 24.dp, vertical = 32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No reviews yet. Be the first!",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = colors.TextSecondary,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    } else {
+                        itemsIndexed(uiState.reviews.take(5), key = { _, review -> "review_${review.id}" }) { index, review ->
+                            if (index > 0) {
+                                Spacer(modifier = Modifier.height(40.dp))
+                            }
+                            FigmaReviewItem(
+                                review = review,
+                                modifier = Modifier.padding(horizontal = 24.dp)
+                            )
+                        }
+                    }
+
+                    item(key = "bottom_spacer") {
+                        Spacer(modifier = Modifier.height(32.dp))
+                    }
+                }
+
+                // ── Figma top bar overlay ──
+                // Outer Box: fills (statusBarHeight + 56dp) by using a Spacer as a
+                // height anchor. Background and Row each apply statusBarsPadding()
+                // independently so both have 56dp of usable space below the status bar.
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    // Height anchor: statusBarHeight + 56dp
+                    Spacer(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .height(56.dp)
+                    )
+
+                    // Fading background covers the full anchor area
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .graphicsLayer { alpha = animatedAlpha }
+                            .background(colors.Background)
+                    )
+
+                    // Icons row — sits below status bar with full 56dp height
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .height(56.dp)
+                            .padding(horizontal = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Back button
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = "Back",
+                                tint = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White
+                            )
+                        }
+
+                        // "SmackCheck" title — centred in available space
+                        Text(
+                            text = "SmackCheck",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center
+                        )
+
+                        // Notification bell
+                        IconButton(onClick = onNotificationClick) {
+                            Icon(
+                                imageVector = Icons.Filled.Notifications,
+                                contentDescription = "Notifications",
+                                tint = if (animatedAlpha > 0.5f) colors.TextPrimary else Color.White
+                            )
+                        }
+
+                        // User avatar (36dp circle)
+                        Box(
+                            modifier = Modifier
+                                .padding(end = 8.dp)
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(FigmaMaroon),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (!userAvatarUrl.isNullOrBlank()) {
+                                KamelImage(
+                                    resource = asyncPainterResource(userAvatarUrl),
+                                    contentDescription = "Profile",
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop,
+                                    onFailure = {
+                                        Icon(
+                                            imageVector = Icons.Filled.Restaurant,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.Restaurant,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
                     }

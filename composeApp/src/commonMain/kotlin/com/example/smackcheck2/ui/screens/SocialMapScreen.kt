@@ -1094,7 +1094,7 @@ private fun MapListItem(
                     Icon(Icons.Filled.Star, null, tint = Color.White, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(3.dp))
                     Text(
-                        text = "%.1f".format(post.latestRating),
+                        text = formatOneDecimal(post.latestRating.toDouble()),
                         color = Color.White,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold

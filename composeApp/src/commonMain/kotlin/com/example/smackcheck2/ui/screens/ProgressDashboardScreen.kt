@@ -1,6 +1,7 @@
 package com.example.smackcheck2.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Notifications
@@ -74,7 +77,7 @@ import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
 // ── Palette ───────────────────────────────────────────────────────────────────
-private val PBg         = Color(0xFFF5EDE3)
+private val PBg         = Color(0xFFF6F6F6)
 private val PCardWhite  = Color(0xFFFFFFFF)
 private val PDeepMaroon = Color(0xFF3B1011)
 private val PWarmMaroon = Color(0xFF642223)
@@ -197,7 +200,7 @@ fun ProgressDashboardScreen(
 
     val (rankTitle, rankBody) = rankPerk(level)
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().background(PBg)) {
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(PBg),
         contentPadding = PaddingValues(bottom = 80.dp)
@@ -250,115 +253,96 @@ fun ProgressDashboardScreen(
             return@LazyColumn
         }
 
-        // ── Level circle ─────────────────────────────────────────────────────
-        item {
-            Column(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = PCardWhite)
-                ) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Circle with level
-                        Box(
-                            modifier = Modifier
-                                .size(170.dp)
-                                .drawBehind {
-                                    val strokeWidth = 8.dp.toPx()
-                                    drawCircle(
-                                        color = PCrimsonRed,
-                                        radius = size.minDimension / 2f - strokeWidth / 2f,
-                                        center = size.center,
-                                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                                    )
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("LEVEL", color = PMutedGrey, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                                Text("$level", color = PDeepMaroon, fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 68.sp)
-                            }
-                            // Membership badge at bottom of circle
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = 10.dp)
-                                    .background(PDeepMaroon, RoundedCornerShape(20.dp))
-                                    .padding(horizontal = 14.dp, vertical = 5.dp)
-                            ) {
-                                Text(membershipTier(level), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-                            }
-                        }
-                    }
-                }
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-        }
-
-        // ── Name + next level ─────────────────────────────────────────────────
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(userName.ifBlank { "SmackChecker" }, color = PDeepMaroon, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-                Text(
-                    buildAnnotatedString {
-                        withStyle(SpanStyle(color = PMutedGrey, fontSize = 12.sp)) { append("Next: ") }
-                        withStyle(SpanStyle(color = PCrimsonRed, fontSize = 12.sp, fontWeight = FontWeight.Bold)) { append(progLevelTitle(level + 1)) }
-                    }
-                )
-            }
-            Spacer(modifier = Modifier.height(10.dp))
-        }
-
-        // ── XP progress bar ───────────────────────────────────────────────────
-        item {
-            Column(modifier = Modifier.padding(horizontal = 24.dp)) {
-                LinearProgressIndicator(
-                    progress = { xpProgress },
-                    modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
-                    color = PCrimsonRed,
-                    trackColor = PDivider,
-                    strokeCap = StrokeCap.Round
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("$xp XP", color = PMutedGrey, fontSize = 12.sp)
-                    Text("$xpCap XP", color = PMutedGrey, fontSize = 12.sp)
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-        }
-
-        // ── Stats row ─────────────────────────────────────────────────────────
+        // ── Summary card (level + name/next + XP + stats) ─────────────────────
         item {
             Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = PCardWhite)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFFFF))
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp, horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    PStatItem("$dishesCount", "DISHES")
-                    PStatDivider()
-                    PStatItem("$followers", "FOLLOWERS")
-                    PStatDivider()
-                    PStatItem(
-                        value = if (streak > 0) "${streak}-Day" else "0-Day",
-                        label = "STREAK",
-                        valueColor = if (streak > 0) PCrimsonRed else PMutedGrey
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(170.dp)
+                            .drawBehind {
+                                val strokeWidth = 8.dp.toPx()
+                                drawCircle(
+                                    brush = Brush.sweepGradient(
+                                        listOf(PWarmMaroon, Color(0xFFDB7065), PWarmMaroon)
+                                    ),
+                                    radius = size.minDimension / 2f - strokeWidth / 2f,
+                                    center = size.center,
+                                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("LEVEL", color = PWarmMaroon, fontSize = 13.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                            Text("$level", color = Color.Black, fontSize = 64.sp, fontWeight = FontWeight.ExtraBold, lineHeight = 68.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(userName.ifBlank { "SmackChecker" }, color = Color.Black, fontSize = 26.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(SpanStyle(color = Color.Black, fontSize = 20.sp / 1.6f, fontWeight = FontWeight.Bold)) { append("Next: ") }
+                                withStyle(SpanStyle(color = PWarmMaroon, fontSize = 20.sp / 1.6f, fontWeight = FontWeight.Bold)) { append(progLevelTitle(level + 1)) }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp / 1.8f)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(PDivider)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(xpProgress)
+                                .fillMaxHeight()
+                                .background(Brush.horizontalGradient(listOf(PWarmMaroon, Color(0xFFDB7065))))
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("$xp XP", color = Color.Black, fontSize = 34.sp / 2.2f, fontWeight = FontWeight.Bold)
+                        Text("$xpCap XP", color = Color.Black, fontSize = 34.sp / 2.2f, fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        PStatItem("$dishesCount", "DISHES", valueColor = Color.Black)
+                        PStatDivider()
+                        PStatItem("$followers", "FOLLOWERS", valueColor = Color.Black)
+                        PStatDivider()
+                        PStatItem(
+                            value = if (streak > 0) "${streak}-Day" else "0-Day",
+                            label = "STREAK",
+                            valueColor = PWarmMaroon
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(16.dp))
@@ -368,32 +352,32 @@ fun ProgressDashboardScreen(
         item {
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = PCardWhite)
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F1F1))
             ) {
-                Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top) {
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 18.dp), verticalAlignment = Alignment.Top) {
                     Box(
-                        modifier = Modifier.size(48.dp).background(PLightBlush, CircleShape),
+                        modifier = Modifier.size(84.dp).background(Color.White, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(Icons.Filled.Restaurant, null, tint = PCrimsonRed, modifier = Modifier.size(26.dp))
+                        Icon(Icons.Filled.Restaurant, null, tint = PCrimsonRed, modifier = Modifier.size(34.dp))
                     }
                     Spacer(modifier = Modifier.width(14.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(rankTitle, color = PDeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(rankTitle, color = Color(0xFF3E3E3E), fontSize = 48.sp / 2, fontWeight = FontWeight.Medium)
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = buildAnnotatedString {
                                 val parts = rankBody.split("**")
                                 parts.forEachIndexed { i, part ->
                                     if (i % 2 == 0) {
-                                        withStyle(SpanStyle(color = PMutedGrey, fontSize = 13.sp)) { append(part) }
+                                        withStyle(SpanStyle(color = Color(0xFF575757), fontSize = 17.sp, fontWeight = FontWeight.Normal)) { append(part) }
                                     } else {
-                                        withStyle(SpanStyle(color = PDeepMaroon, fontSize = 13.sp, fontWeight = FontWeight.Bold)) { append(part) }
+                                        withStyle(SpanStyle(color = PCrimsonRed, fontSize = 17.sp, fontWeight = FontWeight.Bold)) { append(part) }
                                     }
                                 }
                             },
-                            lineHeight = 19.sp
+                            lineHeight = 26.sp
                         )
                     }
                 }
@@ -462,9 +446,9 @@ fun ProgressDashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("MILESTONES", color = PDeepMaroon, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp)
+                Text("Milestones", color = PDeepMaroon, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 if (milestonesRemaining > 0) {
-                    Text("$milestonesRemaining REMAINING", color = PMutedGrey, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text("$milestonesRemaining remaining", color = PMutedGrey, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             Spacer(modifier = Modifier.height(14.dp))
@@ -520,18 +504,18 @@ fun ProgressDashboardScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("DAILY CHALLENGES", color = PDeepMaroon, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp)
+                Text("Daily challenges", color = PDeepMaroon, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(PLightBlush)
+                        .background(Color(0xFFEAECEC))
                         .clickable { gamificationViewModel.loadAll() }
                         .padding(horizontal = 14.dp, vertical = 6.dp)
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Refresh, null, tint = PCrimsonRed, modifier = Modifier.size(14.dp))
+                        Icon(Icons.Default.Refresh, null, tint = PMutedGrey, modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("REFRESH", color = PCrimsonRed, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
+                        Text("Refresh", color = PMutedGrey, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -592,31 +576,37 @@ private fun PStatDivider() {
 
 @Composable
 private fun MilestoneRow(icon: ImageVector, title: String, progress: Pair<Int, Int>?) {
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(40.dp).background(PLightBlush, CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, null, tint = PWarmMaroon, modifier = Modifier.size(22.dp))
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = PCardWhite)
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(40.dp).background(Color(0xFFF4EEEE), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, null, tint = PWarmMaroon, modifier = Modifier.size(22.dp))
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(title, color = PDeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                if (progress != null) {
+                    val (cur, max) = progress
+                    val label = if (max >= 100) "$cur/$max XP" else "$cur/$max Reviews"
+                    Text(label, color = PMutedGrey, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(title, color = PDeepMaroon, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-            if (progress != null) {
-                val (cur, max) = progress
-                val label = if (max >= 100) "$cur/$max XP" else "$cur/$max Reviews"
-                Text(label, color = PMutedGrey, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            }
+            Spacer(modifier = Modifier.height(10.dp))
+            val frac = if (progress != null) (progress.first.toFloat() / progress.second.toFloat()).coerceIn(0f, 1f) else 0f
+            LinearProgressIndicator(
+                progress = { frac },
+                modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
+                color = PCrimsonRed,
+                trackColor = PDivider,
+                strokeCap = StrokeCap.Round
+            )
         }
-        Spacer(modifier = Modifier.height(8.dp))
-        val frac = if (progress != null) (progress.first.toFloat() / progress.second.toFloat()).coerceIn(0f, 1f) else 0f
-        LinearProgressIndicator(
-            progress = { frac },
-            modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
-            color = PCrimsonRed,
-            trackColor = PLightBlush,
-            strokeCap = StrokeCap.Round
-        )
     }
 }
 
@@ -647,35 +637,32 @@ private fun ChallengeRow(challenge: Challenge) {
             // Status indicator
             when {
                 challenge.isCompleted -> {
-                    // Filled circle with inner dot
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
+                            .size(30.dp)
                             .background(PCrimsonRed, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Box(modifier = Modifier.size(10.dp).background(Color.White, CircleShape))
+                        Icon(Icons.Default.Check, null, tint = Color.White, modifier = Modifier.size(16.dp))
                     }
                 }
                 challenge.progress > 0f -> {
-                    // Dot progress indicator
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val filledDots = (challenge.progress * 3).toInt().coerceIn(1, 2)
+                        val filledDots = (challenge.progress * 3).toInt().coerceIn(1, 3)
                         repeat(3) { i ->
                             Box(
                                 modifier = Modifier
-                                    .size(if (i < filledDots) 8.dp else 6.dp)
+                                    .size(7.dp)
                                     .background(if (i < filledDots) PCrimsonRed else PDivider, CircleShape)
                             )
                         }
                     }
                 }
                 else -> {
-                    // Empty circle
                     Box(
                         modifier = Modifier
-                            .size(28.dp)
-                            .background(PDivider, CircleShape)
+                            .size(30.dp)
+                            .border(1.5.dp, PCrimsonRed, CircleShape)
                     )
                 }
             }

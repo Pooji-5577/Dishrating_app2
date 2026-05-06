@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.formatOneDecimal
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
