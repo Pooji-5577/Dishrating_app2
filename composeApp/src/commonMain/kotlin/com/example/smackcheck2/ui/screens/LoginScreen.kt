@@ -64,6 +64,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.DarkMaroon
 import com.example.smackcheck2.ui.theme.DeepMaroon
@@ -134,11 +136,9 @@ fun LoginScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             // SmackCheck wordmark
-            Text(
-                text = "SmackCheck",
+            SmackCheckWordmark(
+                fontFamily = PlusJakartaSans(),
                 fontSize = 36.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = OffWhite,
                 letterSpacing = 0.5.sp
             )
 

@@ -21,9 +21,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.People
 import androidx.compose.material.icons.outlined.RssFeed
@@ -61,6 +58,7 @@ import com.example.smackcheck2.ui.components.FollowingStoriesRow
 import com.example.smackcheck2.ui.components.NearbyMapBanner
 import com.example.smackcheck2.ui.components.ReviewPostCard
 import com.example.smackcheck2.ui.components.SocialFeedSkeleton
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.components.TopDishesCarousel
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
@@ -88,6 +86,7 @@ fun SocialFeedScreen(
     currentUserAvatarUrl: String? = null,
     onStoryClick: (String) -> Unit = {},
     onAddStoryClick: () -> Unit = {},
+    onCurrentUserStoryClick: () -> Unit = {},
     onTopDishClick: (String) -> Unit = {},
     onSeeAllTopDishes: () -> Unit = {},
     onHomeClick: () -> Unit = {},
@@ -121,7 +120,17 @@ fun SocialFeedScreen(
     }
 
     Scaffold(
-        containerColor = colors.Background
+        containerColor = colors.Background,
+        bottomBar = {
+            BottomNavBar(
+                selectedItem = NavItem.EXPLORE,
+                onHomeClick = onHomeClick,
+                onMapClick = onMapClick,
+                onCameraClick = onCameraClick,
+                onExploreClick = onNavExploreClick,
+                onProfileClick = onProfileClick
+            )
+        }
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -143,25 +152,10 @@ fun SocialFeedScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    BasicText(
-                        text = buildAnnotatedString {
-                            pushStyle(SpanStyle(
-                                fontFamily = jakartaSans,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp,
-                                color = colors.Primary
-                            ))
-                            append("Smack")
-                            pop()
-                            pushStyle(SpanStyle(
-                                fontFamily = jakartaSans,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp,
-                                color = colors.TextPrimary
-                            ))
-                            append("Check")
-                            pop()
-                        }
+                    SmackCheckWordmark(
+                        fontFamily = jakartaSans,
+                        fontSize = 22.sp,
+                        letterSpacing = 0.sp
                     )
 
                     Row(
@@ -225,7 +219,9 @@ fun SocialFeedScreen(
                 FollowingStoriesRow(
                     storyUsers = uiState.storyUsers,
                     currentUserAvatarUrl = currentUserAvatarUrl,
+                    currentUserHasStory = uiState.stories.any { it.userId == uiState.currentUserId },
                     onAddStoryClick = onAddStoryClick,
+                    onCurrentUserStoryClick = onCurrentUserStoryClick,
                     onStoryClick = onStoryClick
                 )
                 Spacer(modifier = Modifier.height(40.dp))
@@ -423,16 +419,6 @@ fun SocialFeedScreen(
             }
         }
 
-            // Floating Bottom Nav Bar
-            BottomNavBar(
-                selectedItem = NavItem.EXPLORE,
-                onHomeClick = onHomeClick,
-                onMapClick = onMapClick,
-                onCameraClick = onCameraClick,
-                onExploreClick = onNavExploreClick,
-                onProfileClick = onProfileClick,
-                modifier = Modifier.align(Alignment.BottomCenter)
-            )
         }
     }
 }

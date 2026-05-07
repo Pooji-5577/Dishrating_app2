@@ -636,6 +636,28 @@ class SocialRepository(
                 .decodeSingleOrNull<ProfileDto>()
                 ?: return Result.failure(Exception("User not found"))
 
+            val followersCount = try {
+                postgrest["followers"]
+                    .select {
+                        filter { eq("following_id", userId) }
+                    }
+                    .decodeList<FollowerDto>()
+                    .size
+            } catch (_: Exception) {
+                profile.followersCount
+            }
+
+            val followingCount = try {
+                postgrest["followers"]
+                    .select {
+                        filter { eq("follower_id", userId) }
+                    }
+                    .decodeList<FollowerDto>()
+                    .size
+            } catch (_: Exception) {
+                profile.followingCount
+            }
+
             Result.success(
                 User(
                     id = profile.id,
@@ -646,8 +668,8 @@ class SocialRepository(
                     xp = profile.xp,
                     streakCount = profile.streakCount,
                     bio = profile.bio,
-                    followersCount = profile.followersCount,
-                    followingCount = profile.followingCount
+                    followersCount = followersCount,
+                    followingCount = followingCount
                 )
             )
         } catch (e: Exception) {
@@ -670,6 +692,27 @@ class SocialRepository(
                 .decodeList<RatingDto>()
 
             val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, userId)
+            Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getRatingsByIds(
+        ids: List<String>,
+        currentUserId: String? = null
+    ): Result<List<FeedItem>> {
+        if (ids.isEmpty()) return Result.success(emptyList())
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter { isIn("id", ids) }
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<RatingDto>()
+            val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, currentUserId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -716,11 +759,24 @@ class SocialRepository(
                 .decodeList<StoryDto>()
 
             val stories = dtos.map { dto ->
+                val profile = try {
+                    postgrest["profiles"]
+                        .select {
+                            filter { eq("id", dto.userId) }
+                        }
+                        .decodeSingleOrNull<ProfileDto>()
+                } catch (e: Exception) {
+                    null
+                }
+
                 Story(
                     id = dto.id ?: "",
                     userId = dto.userId,
+                    userName = profile?.name ?: "SmackCheck user",
+                    userProfileUrl = profile?.profilePhotoUrl,
                     imageUrl = dto.imageUrl,
-                    createdAt = parseTimestamp(dto.createdAt)
+                    createdAt = parseTimestamp(dto.createdAt),
+                    expiresAt = parseTimestamp(dto.expiresAt)
                 )
             }
             Result.success(stories)

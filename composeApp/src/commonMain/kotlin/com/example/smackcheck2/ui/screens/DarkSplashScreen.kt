@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import kotlinx.coroutines.delay
 
@@ -104,12 +106,11 @@ fun DarkSplashScreen(
             
             Spacer(modifier = Modifier.height(32.dp))
             
-            Text(
-                text = "SmackCheck",
+            SmackCheckWordmark(
+                modifier = Modifier.alpha(alpha.value),
+                fontFamily = PlusJakartaSans(),
                 fontSize = 36.sp,
-                fontWeight = FontWeight.Bold,
-                color = appColors().TextPrimary,
-                modifier = Modifier.alpha(alpha.value)
+                letterSpacing = 0.sp
             )
             
             Spacer(modifier = Modifier.height(8.dp))

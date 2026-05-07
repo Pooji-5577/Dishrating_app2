@@ -66,10 +66,12 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Review
 import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.ui.components.BottomNavBar
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.RestaurantHeroSection
 import com.example.smackcheck2.ui.components.TopRatedDishCard
 import com.example.smackcheck2.ui.components.LoadingState
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.util.formatRelativeTime
 import com.example.smackcheck2.viewmodel.PhotoState
@@ -389,14 +391,16 @@ fun RestaurantDetailScreen(
                         }
 
                         // "SmackCheck" title — centred in available space
-                        Text(
-                            text = "SmackCheck",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = if (animatedAlpha.compareTo(0.5f) > 0) colors.TextPrimary else Color.White,
+                        Box(
                             modifier = Modifier.weight(1f),
-                            textAlign = TextAlign.Center
-                        )
+                            contentAlignment = Alignment.Center
+                        ) {
+                            SmackCheckWordmark(
+                                fontFamily = PlusJakartaSans(),
+                                fontSize = 18.sp,
+                                letterSpacing = 0.sp
+                            )
+                        }
 
                         // Notification bell
                         IconButton(onClick = onNotificationClick) {

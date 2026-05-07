@@ -50,9 +50,12 @@ import com.example.smackcheck2.ui.components.TopDishesCarousel
 import com.example.smackcheck2.ui.components.BottomNavBar
 import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -125,6 +128,7 @@ fun DarkHomeScreen(
     allDishes: List<Dish> = emptyList(),
     topDishFeedItems: List<FeedItem> = emptyList(),
     followingUsers: List<UserSummary> = emptyList(),
+    currentUserHasStory: Boolean = false,
     noRestaurantsFound: Boolean = false,
     photoViewModel: RestaurantPhotoViewModel? = null,
     currentLatitude: Double? = null,
@@ -139,6 +143,9 @@ fun DarkHomeScreen(
     onProfileClick: () -> Unit = {},
     onGameClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
+    onAddStoryClick: () -> Unit = {},
+    onCurrentUserStoryClick: () -> Unit = {},
+    onStoryClick: (String) -> Unit = {},
     onTopDishesClick: () -> Unit = {},
     onTopRestaurantsClick: () -> Unit = {},
     onNearbyRestaurantsClick: () -> Unit = {},
@@ -346,15 +353,34 @@ fun DarkHomeScreen(
                                         .padding(6.dp)
                                         .clip(CircleShape)
                                         .background(MaroonLight)
-                                        .clickable { onCameraClick() },
+                                        .clickable {
+                                            if (currentUserHasStory) onCurrentUserStoryClick() else onAddStoryClick()
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Add,
-                                        contentDescription = "Add story",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                                    if (currentUserHasStory && userProfilePhotoUrl != null) {
+                                        KamelImage(
+                                            resource = asyncPainterResource(userProfilePhotoUrl),
+                                            contentDescription = "Your Story",
+                                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else if (currentUserHasStory) {
+                                        Text(
+                                            text = userName.take(1).ifBlank { "?" }.uppercase(),
+                                            fontFamily = jakartaSans,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp,
+                                            color = Color.White
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Filled.Add,
+                                            contentDescription = "Add story",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
                                 Text(
                                     text = "Your Story",
@@ -377,6 +403,7 @@ fun DarkHomeScreen(
                                         .border(2.dp, Maroon, CircleShape)
                                         .padding(6.dp)
                                         .clip(CircleShape)
+                                        .clickable { onStoryClick(user.id) }
                                 ) {
                                     if (!user.profilePhotoUrl.isNullOrBlank()) {
                                         NetworkImage(
@@ -1189,28 +1216,10 @@ private fun TopNavBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // "SmackCheck" logo
-        BasicText(
-            text = buildAnnotatedString {
-                pushStyle(SpanStyle(
-                    fontFamily = jakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    letterSpacing = (-1.2).sp,
-                    color = Maroon
-                ))
-                append("Smack")
-                pop()
-                pushStyle(SpanStyle(
-                    fontFamily = jakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    letterSpacing = (-1.2).sp,
-                    color = TextBlack
-                ))
-                append("Check")
-                pop()
-            }
+        SmackCheckWordmark(
+            fontFamily = jakartaSans,
+            fontSize = 24.sp,
+            letterSpacing = (-1.2).sp
         )
 
         Row(

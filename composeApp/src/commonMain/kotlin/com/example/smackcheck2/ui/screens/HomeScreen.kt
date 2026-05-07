@@ -46,10 +46,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.ui.components.EmptyState
 import com.example.smackcheck2.ui.components.HomeScreenSkeleton
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.components.StarRatingDisplay
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.viewmodel.HomeViewModel
 
@@ -83,9 +86,10 @@ fun HomeScreen(
                             modifier = Modifier.size(28.dp)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "SmackCheck",
-                            fontWeight = FontWeight.Bold
+                        SmackCheckWordmark(
+                            fontFamily = PlusJakartaSans(),
+                            fontSize = 20.sp,
+                            letterSpacing = 0.sp
                         )
                     }
                 },

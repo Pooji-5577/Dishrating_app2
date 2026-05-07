@@ -273,6 +273,8 @@ data class SocialFeedUiState(
     val scrollToRatingId: String? = null,
     val scrollToIndex: Int? = null,
     val storyUsers: List<UserSummary> = emptyList(),
+    val stories: List<Story> = emptyList(),
+    val currentUserId: String? = null,
     val topDishes: List<FeedItem> = emptyList(),
     val nearbyRestaurantCount: Int = 0
 )

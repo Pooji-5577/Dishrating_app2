@@ -13,6 +13,7 @@ import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
+import com.example.smackcheck2.model.UserSummary
 import com.example.smackcheck2.data.repository.NotificationService
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
@@ -80,9 +81,25 @@ class SocialFeedViewModel(
         viewModelScope.launch(crashGuard) {
             try {
                 val userId = authRepository.getCurrentUserId() ?: return@launch
-                val result = socialRepository.getFollowing(userId)
-                result.onSuccess { users ->
-                    _uiState.update { it.copy(storyUsers = users) }
+                socialRepository.getStories().onSuccess { stories ->
+                    val storyUsers = stories
+                        .filter { it.userId != userId }
+                        .distinctBy { it.userId }
+                        .map { story ->
+                            UserSummary(
+                                id = story.userId,
+                                name = story.userName,
+                                profilePhotoUrl = story.userProfileUrl,
+                                isFollowing = true
+                            )
+                        }
+                    _uiState.update {
+                        it.copy(
+                            currentUserId = userId,
+                            stories = stories,
+                            storyUsers = storyUsers
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 println("SocialFeedViewModel: Failed to load story users: ${e.message}")
