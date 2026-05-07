@@ -38,6 +38,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.platform.RequestCameraPermission
 import com.example.smackcheck2.platform.RequestLocationPermission
 import com.example.smackcheck2.platform.RequestNotificationPermission
@@ -80,11 +82,10 @@ fun PermissionsOnboardingScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            Text(
-                text = "SmackCheck",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = accent
+            SmackCheckWordmark(
+                fontFamily = PlusJakartaSans(),
+                fontSize = MaterialTheme.typography.headlineLarge.fontSize,
+                letterSpacing = 0.sp
             )
 
             Spacer(modifier = Modifier.height(8.dp))

@@ -1,21 +1,16 @@
 package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.RegisterUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 /**
  * ViewModel for Register screen
  */
 class RegisterViewModel : ViewModel() {
-
-    private val authRepository = AuthRepository()
 
     private val _uiState = MutableStateFlow(RegisterUiState())
     val uiState: StateFlow<RegisterUiState> = _uiState.asStateFlow()
@@ -36,7 +31,7 @@ class RegisterViewModel : ViewModel() {
         _uiState.update { it.copy(confirmPassword = confirmPassword, confirmPasswordError = null) }
     }
 
-    fun register(onSuccess: () -> Unit) {
+    fun register(onValidRegistration: (name: String, email: String, password: String) -> Unit) {
         val currentState = _uiState.value
 
         var hasError = false
@@ -95,45 +90,8 @@ class RegisterViewModel : ViewModel() {
             return
         }
 
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-
-            try {
-                val result = authRepository.signUp(
-                    name = currentState.name,
-                    username = "",
-                    email = currentState.email,
-                    password = currentState.password
-                )
-
-                result.fold(
-                    onSuccess = {
-                        _uiState.update { it.copy(isLoading = false, isSuccess = true) }
-                        onSuccess()
-                    },
-                    onFailure = { error ->
-                        if (error.message == "CHECK_EMAIL") {
-                            _uiState.update { it.copy(isLoading = false, isSuccess = true) }
-                            onSuccess()
-                        } else {
-                            _uiState.update {
-                                it.copy(
-                                    isLoading = false,
-                                    errorMessage = error.message ?: "Registration failed"
-                                )
-                            }
-                        }
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Registration failed"
-                    )
-                }
-            }
-        }
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        onValidRegistration(currentState.name, currentState.email, currentState.password)
     }
 
     fun setLoading(isLoading: Boolean) {
@@ -141,7 +99,11 @@ class RegisterViewModel : ViewModel() {
     }
 
     fun setSuccess(isSuccess: Boolean) {
-        _uiState.update { it.copy(isSuccess = isSuccess) }
+        _uiState.update { it.copy(isLoading = false, isSuccess = isSuccess, errorMessage = null) }
+    }
+
+    fun setError(message: String) {
+        _uiState.update { it.copy(isLoading = false, errorMessage = message) }
     }
 
     fun clearError() {

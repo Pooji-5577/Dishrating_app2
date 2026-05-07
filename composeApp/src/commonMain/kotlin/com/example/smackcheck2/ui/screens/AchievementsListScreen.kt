@@ -66,6 +66,8 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.gamification.GamificationViewModel
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
 
 // ── Brand palette (same as DarkProfileScreen) ────────────────────────────────
@@ -180,7 +182,11 @@ fun AchievementsListScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = ADeepMaroon)
                 }
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("SmackCheck", color = ADeepMaroon, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                SmackCheckWordmark(
+                    fontFamily = PlusJakartaSans(),
+                    fontSize = 18.sp,
+                    letterSpacing = 0.sp
+                )
                 Spacer(modifier = Modifier.weight(1f))
                 Box(
                     modifier = Modifier

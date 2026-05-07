@@ -139,7 +139,7 @@ fun TopRatedDishCard(
                         )
                         Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = String.format("%.1f", dish.rating),
+                            text = format1f(dish.rating),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = maroon
@@ -164,11 +164,16 @@ fun TopRatedDishCard(
         if (dish.price != null) {
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "$currencySymbol${String.format("%.0f", dish.price)}",
+                text = "$currencySymbol${dish.price?.toInt() ?: 0}",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
         }
     }
+}
+
+private fun format1f(value: Float): String {
+    val v = (value * 10).toInt()
+    return "${v / 10}.${kotlin.math.abs(v % 10)}"
 }

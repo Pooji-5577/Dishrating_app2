@@ -29,20 +29,24 @@ class ThemeState(
     }
 
     private fun loadThemePreference() {
-        if (preferencesRepository == null || coroutineScope == null) return
+        // Force light mode globally until internal dark mode is fully implemented.
+        // This prevents OS-level dark mode from affecting the app appearance.
+        isDarkMode = false
 
-        coroutineScope.launch {
-            try {
-                val pref = preferencesRepository.getThemePreference()
-                isDarkMode = when (pref) {
-                    ThemePreference.LIGHT -> false
-                    ThemePreference.DARK -> true
-                    ThemePreference.SYSTEM -> isSystemInDarkMode()
-                }
-            } catch (e: Exception) {
-                println("ThemeState: Failed to load theme preference: ${e.message}")
-            }
-        }
+        // TODO: Restore dynamic theme loading once dark mode is ready
+        // if (preferencesRepository == null || coroutineScope == null) return
+        // coroutineScope.launch {
+        //     try {
+        //         val pref = preferencesRepository.getThemePreference()
+        //         isDarkMode = when (pref) {
+        //             ThemePreference.LIGHT -> false
+        //             ThemePreference.DARK -> true
+        //             ThemePreference.SYSTEM -> isSystemInDarkMode()
+        //         }
+        //     } catch (e: Exception) {
+        //         println("ThemeState: Failed to load theme preference: ${e.message}")
+        //     }
+        // }
     }
 
     fun toggleTheme() {

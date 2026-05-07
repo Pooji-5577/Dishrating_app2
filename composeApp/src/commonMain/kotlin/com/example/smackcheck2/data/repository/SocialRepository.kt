@@ -334,10 +334,10 @@ class SocialRepository(
 
     private fun haversineDistanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val R = 6371.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
+        val dLat = (lat2 - lat1) * kotlin.math.PI / 180.0
+        val dLon = (lon2 - lon1) * kotlin.math.PI / 180.0
         val a = kotlin.math.sin(dLat / 2).let { it * it } +
-                kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+                kotlin.math.cos(lat1 * kotlin.math.PI / 180.0) * kotlin.math.cos(lat2 * kotlin.math.PI / 180.0) *
                 kotlin.math.sin(dLon / 2).let { it * it }
         val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
         return R * c
@@ -729,6 +729,28 @@ class SocialRepository(
                 .decodeSingleOrNull<ProfileDto>()
                 ?: return Result.failure(Exception("User not found"))
 
+            val followersCount = try {
+                postgrest["followers"]
+                    .select {
+                        filter { eq("following_id", userId) }
+                    }
+                    .decodeList<FollowerDto>()
+                    .size
+            } catch (_: Exception) {
+                profile.followersCount
+            }
+
+            val followingCount = try {
+                postgrest["followers"]
+                    .select {
+                        filter { eq("follower_id", userId) }
+                    }
+                    .decodeList<FollowerDto>()
+                    .size
+            } catch (_: Exception) {
+                profile.followingCount
+            }
+
             Result.success(
                 User(
                     id = profile.id,
@@ -739,8 +761,8 @@ class SocialRepository(
                     xp = profile.xp,
                     streakCount = profile.streakCount,
                     bio = profile.bio,
-                    followersCount = profile.followersCount,
-                    followingCount = profile.followingCount
+                    followersCount = followersCount,
+                    followingCount = followingCount
                 )
             )
         } catch (e: Exception) {
@@ -763,6 +785,27 @@ class SocialRepository(
                 .decodeList<RatingDto>()
 
             val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, userId)
+            Result.success(feedItems)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getRatingsByIds(
+        ids: List<String>,
+        currentUserId: String? = null
+    ): Result<List<FeedItem>> {
+        if (ids.isEmpty()) return Result.success(emptyList())
+        return try {
+            val ratings = postgrest["ratings"]
+                .select {
+                    filter { isIn("id", ids) }
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<RatingDto>()
+            val feedItems = feedAssembler.mapRatingsToFeedItems(ratings, currentUserId)
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e

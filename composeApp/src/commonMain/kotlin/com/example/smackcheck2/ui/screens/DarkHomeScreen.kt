@@ -50,9 +50,12 @@ import com.example.smackcheck2.ui.components.TopDishesCarousel
 import com.example.smackcheck2.ui.components.BottomNavBar
 import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
+import io.kamel.image.KamelImage
+import io.kamel.image.asyncPainterResource
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -72,15 +75,24 @@ private val MapDark     = Color(0xFF0C0F0F)
 // ─── Haversine distance (km) ─────────────────────────────────────────────────
 private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
     val r = 6371.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
+    val dLat = (lat2 - lat1) * kotlin.math.PI / 180.0
+    val dLon = (lon2 - lon1) * kotlin.math.PI / 180.0
     val a = sin(dLat / 2).pow(2) +
-            cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
+            cos(lat1 * kotlin.math.PI / 180.0) * cos(lat2 * kotlin.math.PI / 180.0) * sin(dLon / 2).pow(2)
     return r * 2 * atan2(sqrt(a), sqrt(1 - a))
 }
 
-private fun formatDist(km: Double): String =
-    if (km < 1.0) "${(km * 1000).toInt()} m" else "${"%.1f".format(km)} km"
+private fun formatDist(km: Double): String {
+    return if (km < 1.0) "${(km * 1000).toInt()} m" else {
+        val v = (km * 10).toInt()
+        "${v / 10}.${kotlin.math.abs(v % 10)} km"
+    }
+}
+
+private fun fmt1f(value: Float): String {
+    val v = (value * 10).toInt()
+    return "${v / 10}.${kotlin.math.abs(v % 10)}"
+}
 
 // ─── Greeting helper ─────────────────────────────────────────────────────────
 private fun greeting(): String {
@@ -125,6 +137,7 @@ fun DarkHomeScreen(
     allDishes: List<Dish> = emptyList(),
     topDishFeedItems: List<FeedItem> = emptyList(),
     followingUsers: List<UserSummary> = emptyList(),
+    currentUserHasStory: Boolean = false,
     noRestaurantsFound: Boolean = false,
     photoViewModel: RestaurantPhotoViewModel? = null,
     currentLatitude: Double? = null,
@@ -139,6 +152,9 @@ fun DarkHomeScreen(
     onProfileClick: () -> Unit = {},
     onGameClick: () -> Unit = {},
     onCameraClick: () -> Unit = {},
+    onAddStoryClick: () -> Unit = {},
+    onCurrentUserStoryClick: () -> Unit = {},
+    onStoryClick: (String) -> Unit = {},
     onTopDishesClick: () -> Unit = {},
     onTopRestaurantsClick: () -> Unit = {},
     onNearbyRestaurantsClick: () -> Unit = {},
@@ -346,15 +362,34 @@ fun DarkHomeScreen(
                                         .padding(6.dp)
                                         .clip(CircleShape)
                                         .background(MaroonLight)
-                                        .clickable { onCameraClick() },
+                                        .clickable {
+                                            if (currentUserHasStory) onCurrentUserStoryClick() else onAddStoryClick()
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Add,
-                                        contentDescription = "Add story",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(14.dp)
-                                    )
+                                    if (currentUserHasStory && userProfilePhotoUrl != null) {
+                                        KamelImage(
+                                            resource = asyncPainterResource(userProfilePhotoUrl),
+                                            contentDescription = "Your Story",
+                                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else if (currentUserHasStory) {
+                                        Text(
+                                            text = userName.take(1).ifBlank { "?" }.uppercase(),
+                                            fontFamily = jakartaSans,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp,
+                                            color = Color.White
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = Icons.Filled.Add,
+                                            contentDescription = "Add story",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
                                 }
                                 Text(
                                     text = "Your Story",
@@ -377,6 +412,7 @@ fun DarkHomeScreen(
                                         .border(2.dp, Maroon, CircleShape)
                                         .padding(6.dp)
                                         .clip(CircleShape)
+                                        .clickable { onStoryClick(user.id) }
                                 ) {
                                     if (!user.profilePhotoUrl.isNullOrBlank()) {
                                         NetworkImage(
@@ -672,7 +708,7 @@ private fun TopDishCard(
                                     modifier = Modifier.size(12.dp)
                                 )
                                 Text(
-                                    text = "%.1f".format(dish.rating),
+                                    text = fmt1f(dish.rating),
                                     fontFamily = jakartaSans,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp,
@@ -915,7 +951,7 @@ private fun NearbyRestaurantCard(
                                     modifier = Modifier.size(14.dp)
                                 )
                                 Text(
-                                    text = "%.1f".format(restaurant.averageRating),
+text = fmt1f(restaurant.averageRating),
                                     fontFamily = jakartaSans,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 16.sp,
@@ -1144,7 +1180,7 @@ private fun RankingRow(
                         modifier = Modifier.size(11.dp)
                     )
                     Text(
-                        text = "%.1f".format(restaurant.averageRating),
+                        text = fmt1f(restaurant.averageRating),
                         fontFamily = jakartaSans,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
@@ -1189,28 +1225,10 @@ private fun TopNavBar(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // "SmackCheck" logo
-        BasicText(
-            text = buildAnnotatedString {
-                pushStyle(SpanStyle(
-                    fontFamily = jakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    letterSpacing = (-1.2).sp,
-                    color = Maroon
-                ))
-                append("Smack")
-                pop()
-                pushStyle(SpanStyle(
-                    fontFamily = jakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp,
-                    letterSpacing = (-1.2).sp,
-                    color = TextBlack
-                ))
-                append("Check")
-                pop()
-            }
+        SmackCheckWordmark(
+            fontFamily = jakartaSans,
+            fontSize = 24.sp,
+            letterSpacing = (-1.2).sp
         )
 
         Row(

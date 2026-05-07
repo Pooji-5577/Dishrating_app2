@@ -23,6 +23,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import kotlinx.coroutines.delay
 
 /**
@@ -85,12 +88,11 @@ fun SplashScreen(
             
             Spacer(modifier = Modifier.height(24.dp))
             
-            Text(
-                text = "SmackCheck",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.alpha(alpha.value)
+            SmackCheckWordmark(
+                modifier = Modifier.alpha(alpha.value),
+                fontFamily = PlusJakartaSans(),
+                fontSize = 32.sp,
+                letterSpacing = 0.sp
             )
             
             Spacer(modifier = Modifier.height(8.dp))

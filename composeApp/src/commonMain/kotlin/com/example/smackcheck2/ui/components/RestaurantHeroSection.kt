@@ -131,9 +131,9 @@ fun RestaurantHeroSection(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = if (restaurant.averageRating >= 4.5f)
-                                "${String.format("%.1f", restaurant.averageRating)} Premium Choice"
+                                "${format1f(restaurant.averageRating)} Premium Choice"
                             else
-                                String.format("%.1f", restaurant.averageRating),
+                                format1f(restaurant.averageRating),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White
@@ -165,4 +165,9 @@ fun RestaurantHeroSection(
             }
         }
     }
+}
+
+private fun format1f(value: Float): String {
+    val v = (value * 10).toInt()
+    return "${v / 10}.${kotlin.math.abs(v % 10)}"
 }

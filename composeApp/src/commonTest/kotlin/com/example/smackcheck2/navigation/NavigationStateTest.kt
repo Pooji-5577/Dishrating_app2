@@ -1,20 +1,31 @@
 package com.example.smackcheck2.navigation
 
 import kotlin.test.Test
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
-/**
- * Tests for [NavigationState] class existence.
- *
- * NavigationState uses Compose mutableStateOf which requires the
- * Compose runtime, unavailable in JVM unit tests.
- * Navigation behavior is verified through UI testing.
- */
 class NavigationStateTest {
 
     @Test
-    fun navigation_state_class_exists() {
-        // Verify the class is loadable; actual instantiation requires Compose runtime
-        assertTrue(NavigationState::class.isInstance(null) || true)
+    fun navigate_back_returns_to_previous_screen() {
+        val navigationState = NavigationState()
+
+        navigationState.navigateTo(Screen.Login)
+        navigationState.navigateTo(Screen.Register)
+
+        assertEquals(true, navigationState.navigateBack())
+        assertEquals(Screen.Login, navigationState.currentScreen)
+    }
+
+    @Test
+    fun replace_with_clears_back_stack() {
+        val navigationState = NavigationState()
+
+        navigationState.navigateTo(Screen.Login)
+        navigationState.navigateTo(Screen.Register)
+        navigationState.replaceWith(Screen.DarkHome)
+
+        assertEquals(Screen.DarkHome, navigationState.currentScreen)
+        assertFalse(navigationState.canGoBack)
     }
 }

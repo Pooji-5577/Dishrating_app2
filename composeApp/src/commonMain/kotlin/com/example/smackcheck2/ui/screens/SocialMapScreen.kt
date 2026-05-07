@@ -26,7 +26,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.MyLocation
@@ -76,6 +75,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -90,6 +92,7 @@ import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.StarRatingDisplay
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.ui.theme.BottomSheetShape
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.ThemeColors
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.SocialMapViewModel
@@ -115,6 +118,7 @@ fun SocialMapScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val themeColors = appColors()
+    val jakartaSans = PlusJakartaSans()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     
@@ -157,19 +161,26 @@ fun SocialMapScreen(
                 modifier = Modifier.statusBarsPadding(),
                 title = {
                     Text(
-                        "Discover Foodies",
-                        color = themeColors.TextPrimary,
-                        fontWeight = FontWeight.Bold
+                        text = buildAnnotatedString {
+                            withStyle(
+                                SpanStyle(
+                                    fontFamily = jakartaSans,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 22.sp,
+                                    color = Color(0xFF642223)
+                                )
+                            ) { append("Discover") }
+                            append(" ")
+                            withStyle(
+                                SpanStyle(
+                                    fontFamily = jakartaSans,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 22.sp,
+                                    color = Color(0xFF2D2F2F)
+                                )
+                            ) { append("Foodies") }
+                        }
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = themeColors.TextPrimary
-                        )
-                    }
                 },
                 actions = {
                     // Refresh button
@@ -656,9 +667,9 @@ fun SocialMapScreen(
                         onUserProfileClick(uiState.selectedUser!!.userId)
                     },
                     onViewDish = {
-                        uiState.selectedUser?.latestRatingId?.let { ratingId ->
+                        uiState.selectedUser?.latestDishId?.let { dishId ->
                             viewModel.dismissUserPreview()
-                            onDishDetailClick(ratingId)
+                            onDishDetailClick(dishId)
                         }
                     },
                     themeColors = themeColors

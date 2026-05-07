@@ -121,7 +121,9 @@ fun StoryViewerScreen(
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(end = 44.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {

@@ -84,6 +84,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.components.ByteArrayImage
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 
 private val DeepMaroon = Color(0xFF3B1011)
@@ -217,7 +219,11 @@ fun DarkDishRatingScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("SmackCheck", color = CrimsonRed, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        SmackCheckWordmark(
+                            fontFamily = PlusJakartaSans(),
+                            fontSize = 18.sp,
+                            letterSpacing = 0.sp
+                        )
                     }
                 },
                 navigationIcon = {
