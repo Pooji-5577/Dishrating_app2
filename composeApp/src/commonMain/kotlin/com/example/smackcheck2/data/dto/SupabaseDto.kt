@@ -341,3 +341,24 @@ data class RatingImageDto(
     @SerialName("created_at")
     val createdAt: String? = null
 )
+
+/**
+ * Story DTO for Supabase
+ * Maps to 'stories' table
+ */
+@Serializable
+data class StoryDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val id: String? = null,
+    @SerialName("user_id")
+    val userId: String,
+    @SerialName("image_url")
+    val imageUrl: String,
+    @SerialName("expires_at")
+    val expiresAt: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
