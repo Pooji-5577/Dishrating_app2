@@ -10,36 +10,30 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DinnerDining
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.LocalPizza
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.RiceBowl
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,12 +43,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -62,13 +55,13 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.theme.BrandRed
-import com.example.smackcheck2.ui.theme.DarkMaroon
-import com.example.smackcheck2.ui.theme.DeepMaroon
 import com.example.smackcheck2.ui.theme.OffWhite
 import com.example.smackcheck2.ui.theme.SurfaceGray400
+import com.example.smackcheck2.ui.theme.SurfaceGray600
 import com.example.smackcheck2.viewmodel.LoginViewModel
 
 @Composable
@@ -89,22 +82,11 @@ fun LoginScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // ── Background: dark maroon gradient ──────────────────────────
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(DeepMaroon, DarkMaroon, Color(0xFF4A0E1C))
-                    )
-                )
-        )
-
-        // ── Embossed food icon pattern overlay ────────────────────────
-        FoodIconPatternOverlay()
-
-        // ── Content ───────────────────────────────────────────────────
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.White)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -114,62 +96,48 @@ fun LoginScreen(
         ) {
             Spacer(modifier = Modifier.height(72.dp))
 
-            // Circular avatar placeholder
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF5A0F1E))
-                    .border(2.dp, BrandRed.copy(alpha = 0.6f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Person,
-                    contentDescription = null,
-                    tint = BrandRed.copy(alpha = 0.8f),
-                    modifier = Modifier.size(54.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // SmackCheck wordmark
+            // "Welcome to SmackCheck!" heading
             Text(
-                text = "SmackCheck",
-                fontSize = 36.sp,
-                fontWeight = FontWeight.ExtraBold,
-                color = OffWhite,
-                letterSpacing = 0.5.sp
-            )
-
-            Spacer(modifier = Modifier.height(6.dp))
-
-            // Tagline
-            Text(
-                text = "Rate  \u00B7  Discover  \u00B7  Share",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = SurfaceGray400,
-                letterSpacing = 2.sp,
+                text = buildAnnotatedString {
+                    append("Welcome to ")
+                    withStyle(SpanStyle(color = BrandRed, fontStyle = FontStyle.Italic)) {
+                        append("SmackCheck")
+                    }
+                    append("!")
+                },
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1A1A1A),
                 textAlign = TextAlign.Center
             )
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                text = "Hello there, Sign in to Continue",
+                fontSize = 14.sp,
+                color = SurfaceGray600,
+                textAlign = TextAlign.Center
+            )
+
+            Spacer(modifier = Modifier.height(40.dp))
 
             // Email field
-            OutlinedTextField(
+            Text(
+                text = "Email Address",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF1A1A1A),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            )
+            TextField(
                 value = uiState.email,
                 onValueChange = viewModel::onEmailChange,
-                label = { Text("Email", color = SurfaceGray400) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Email,
-                        contentDescription = null,
-                        tint = SurfaceGray400
-                    )
-                },
+                placeholder = { Text("Enter your email", color = SurfaceGray400) },
                 isError = uiState.emailError != null,
-                supportingText = uiState.emailError?.let { { Text(it, color = Color(0xFFFF8A80)) } },
+                supportingText = uiState.emailError?.let { { Text(it, color = Color(0xFFBA1A1A)) } },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Email,
                     imeAction = ImeAction.Next
@@ -178,25 +146,27 @@ fun LoginScreen(
                     onNext = { focusManager.moveFocus(FocusDirection.Down) }
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = outlinedTextFieldColors(),
+                shape = RoundedCornerShape(14.dp),
+                colors = lightTextFieldColors(),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Password field
-            OutlinedTextField(
+            Text(
+                text = "Password",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF1A1A1A),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 6.dp)
+            )
+            TextField(
                 value = uiState.password,
                 onValueChange = viewModel::onPasswordChange,
-                label = { Text("Password", color = SurfaceGray400) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Filled.Lock,
-                        contentDescription = null,
-                        tint = SurfaceGray400
-                    )
-                },
+                placeholder = { Text("Password", color = SurfaceGray400) },
                 trailingIcon = {
                     IconButton(onClick = { passwordVisible = !passwordVisible }) {
                         Icon(
@@ -208,7 +178,7 @@ fun LoginScreen(
                 },
                 visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                 isError = uiState.passwordError != null,
-                supportingText = uiState.passwordError?.let { { Text(it, color = Color(0xFFFF8A80)) } },
+                supportingText = uiState.passwordError?.let { { Text(it, color = Color(0xFFBA1A1A)) } },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Password,
                     imeAction = ImeAction.Done
@@ -220,29 +190,29 @@ fun LoginScreen(
                     }
                 ),
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = outlinedTextFieldColors(),
+                shape = RoundedCornerShape(14.dp),
+                colors = lightTextFieldColors(),
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(6.dp))
-
+            // Forgot password — right-aligned
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = { /* Handle forgot password */ }) {
+                TextButton(onClick = { /* TODO: forgot password */ }) {
                     Text(
                         text = "Forgot Password?",
-                        color = SurfaceGray400,
-                        fontSize = 13.sp
+                        color = BrandRed,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Sign In button — full-width, brand red, rounded
+            // Log In button
             Button(
                 onClick = { viewModel.login(onNavigateToHome) },
                 modifier = Modifier
@@ -252,20 +222,20 @@ fun LoginScreen(
                 enabled = !uiState.isLoading,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = BrandRed,
-                    contentColor = OffWhite,
+                    contentColor = Color.White,
                     disabledContainerColor = BrandRed.copy(alpha = 0.5f),
-                    disabledContentColor = OffWhite.copy(alpha = 0.6f)
+                    disabledContentColor = Color.White.copy(alpha = 0.6f)
                 )
             ) {
                 if (uiState.isLoading) {
                     CircularProgressIndicator(
                         modifier = Modifier.size(22.dp),
-                        color = OffWhite,
+                        color = Color.White,
                         strokeWidth = 2.dp
                     )
                 } else {
                     Text(
-                        text = "Sign In",
+                        text = "Log In",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.SemiBold,
                         letterSpacing = 0.5.sp
@@ -273,32 +243,79 @@ fun LoginScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(28.dp))
 
-            // Register link
+            // "Or" divider
             Row(
-                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFFE0E0E0)
+                )
                 Text(
-                    text = "Don't have an account?",
+                    text = "  Or  ",
                     color = SurfaceGray400,
+                    fontSize = 13.sp
+                )
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = Color(0xFFE0E0E0)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Google Sign-In button
+            OutlinedButton(
+                onClick = { viewModel.loginWithGoogle(onNavigateToHome) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFF1A1A1A)
+                )
+            ) {
+                // Google "G" logo using coloured text segments
+                GoogleLogoText()
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Continue with Google",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF1A1A1A)
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // "Don't have an account? Sign Up"
+            Row(
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 32.dp)
+            ) {
+                Text(
+                    text = "Don't have an Account?",
+                    color = SurfaceGray600,
                     fontSize = 14.sp
                 )
                 TextButton(onClick = onNavigateToRegister) {
                     Text(
-                        text = "Sign Up",
+                        text = "Sign up",
                         color = BrandRed,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     )
                 }
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
 
-        // Snackbar at bottom
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier.align(Alignment.BottomCenter)
@@ -307,54 +324,25 @@ fun LoginScreen(
 }
 
 @Composable
-private fun FoodIconPatternOverlay() {
-    val iconTint = OffWhite.copy(alpha = 0.04f)
-    val icons = listOf(
-        Icons.Filled.Restaurant,
-        Icons.Filled.DinnerDining,
-        Icons.Filled.RiceBowl,
-        Icons.Filled.LocalPizza,
+private fun GoogleLogoText() {
+    Text(
+        text = buildAnnotatedString {
+            withStyle(SpanStyle(color = Color(0xFF4285F4))) { append("G") }
+        },
+        fontSize = 20.sp,
+        fontWeight = FontWeight.Bold
     )
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Manually lay out a grid of icons at fixed offsets to create the embossed feel
-        val positions = listOf(
-            Pair((-16).dp, 40.dp), Pair(80.dp, 0.dp), Pair(180.dp, 50.dp),
-            Pair((-8).dp, 150.dp), Pair(100.dp, 120.dp), Pair(220.dp, 140.dp),
-            Pair(40.dp, 260.dp), Pair(160.dp, 230.dp), Pair(280.dp, 260.dp),
-            Pair((-20).dp, 370.dp), Pair(90.dp, 350.dp), Pair(210.dp, 380.dp),
-            Pair(10.dp, 480.dp), Pair(140.dp, 460.dp), Pair(270.dp, 490.dp),
-            Pair((-10).dp, 590.dp), Pair(110.dp, 570.dp), Pair(230.dp, 600.dp),
-            Pair(50.dp, 700.dp), Pair(170.dp, 680.dp), Pair(300.dp, 710.dp),
-        )
-
-        positions.forEachIndexed { index, (x, y) ->
-            Icon(
-                imageVector = icons[index % icons.size],
-                contentDescription = null,
-                tint = iconTint,
-                modifier = Modifier
-                    .size(48.dp)
-                    .offset(x = x, y = y)
-            )
-        }
-    }
 }
 
 @Composable
-private fun outlinedTextFieldColors() = OutlinedTextFieldDefaults.colors(
-    focusedTextColor = OffWhite,
-    unfocusedTextColor = OffWhite,
-    focusedBorderColor = BrandRed,
-    unfocusedBorderColor = Color(0xFF6B3040),
-    cursorColor = BrandRed,
-    focusedLabelColor = BrandRed,
-    unfocusedLabelColor = SurfaceGray400,
-    focusedLeadingIconColor = BrandRed,
-    unfocusedLeadingIconColor = SurfaceGray400,
-    focusedTrailingIconColor = BrandRed,
-    unfocusedTrailingIconColor = SurfaceGray400,
-    errorBorderColor = Color(0xFFFF8A80),
-    errorLabelColor = Color(0xFFFF8A80),
-    errorLeadingIconColor = Color(0xFFFF8A80)
+private fun lightTextFieldColors() = TextFieldDefaults.colors(
+    focusedTextColor = Color(0xFF1A1A1A),
+    unfocusedTextColor = Color(0xFF1A1A1A),
+    focusedContainerColor = Color(0xFFF2F2F2),
+    unfocusedContainerColor = Color(0xFFF2F2F2),
+    errorContainerColor = Color(0xFFF2F2F2),
+    focusedIndicatorColor = Color.Transparent,
+    unfocusedIndicatorColor = Color.Transparent,
+    errorIndicatorColor = Color.Transparent,
+    cursorColor = BrandRed
 )
