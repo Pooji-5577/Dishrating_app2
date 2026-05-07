@@ -64,6 +64,14 @@ class StorageRepository {
         return uploadImage(BUCKET_RESTAURANT_IMAGES, restaurantId, imageBytes, fileName)
     }
 
+    suspend fun uploadStoryImage(
+        userId: String,
+        imageBytes: ByteArray,
+        fileName: String
+    ): Result<String> {
+        return uploadImage(BUCKET_STORY_IMAGES, userId, imageBytes, fileName)
+    }
+
     /**
      * Upload a story image
      * @param userId User ID for organizing files
