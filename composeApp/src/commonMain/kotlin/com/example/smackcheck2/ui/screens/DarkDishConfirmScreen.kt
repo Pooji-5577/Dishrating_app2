@@ -22,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.components.ByteArrayImage
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 
 private val ConfirmDeepMaroon  = Color(0xFF3B1011)
 private val ConfirmWarmMaroon  = Color(0xFF642223)
@@ -62,11 +64,10 @@ fun DarkDishConfirmScreen(
                     .clickable { onNavigateBack() }
             )
             Spacer(Modifier.width(12.dp))
-            Text(
-                text = "SmackCheck",
-                fontWeight = FontWeight.Bold,
+            SmackCheckWordmark(
+                fontFamily = PlusJakartaSans(),
                 fontSize = 20.sp,
-                color = ConfirmCrimsonRed
+                letterSpacing = 0.sp
             )
         }
 

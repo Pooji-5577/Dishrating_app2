@@ -74,7 +74,9 @@ import com.example.smackcheck2.gamification.PointsConfig
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.User
 import com.example.smackcheck2.ui.components.ReviewPostCard
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.LocalThemeState
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.util.formatOneDecimal
 import com.example.smackcheck2.viewmodel.ProfileViewModel
@@ -139,6 +141,7 @@ fun DarkProfileScreen(
 
     // Load user ratings
     var userRatings by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
+    var savedItems by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
     val user = uiState.user
 
     // Wire selected cuisines to user profile preference tags
@@ -148,6 +151,19 @@ fun DarkProfileScreen(
             val repo = SocialRepository()
             repo.getUserRatings(uid).onSuccess { items -> userRatings = items }
         } catch (_: Exception) {}
+    }
+
+    // Load saved/bookmarked posts
+    LaunchedEffect(preferencesRepository, selectedTab) {
+        if (selectedTab == 1 && preferencesRepository != null) {
+            try {
+                val bookmarkIds = preferencesRepository.getBookmarks().toList()
+                val repo = SocialRepository()
+                repo.getRatingsByIds(bookmarkIds, user?.id).onSuccess { items ->
+                    savedItems = items.map { it.copy(isBookmarked = true) }
+                }
+            } catch (_: Exception) {}
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -170,7 +186,11 @@ fun DarkProfileScreen(
                 IconButton(onClick = {}) {
                     Icon(Icons.Default.Search, contentDescription = "Search", tint = DeepMaroon, modifier = Modifier.size(22.dp))
                 }
-                Text("SmackCheck", color = DeepMaroon, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                SmackCheckWordmark(
+                    fontFamily = PlusJakartaSans(),
+                    fontSize = 18.sp,
+                    letterSpacing = 0.sp
+                )
                 IconButton(onClick = onNavigateToSettings) {
                     Icon(Icons.Default.Settings, contentDescription = "Settings", tint = DeepMaroon, modifier = Modifier.size(22.dp))
                 }
@@ -570,7 +590,74 @@ fun DarkProfileScreen(
                     Spacer(modifier = Modifier.height(12.dp))
                 }
             }
+        } else if (selectedTab == 1) {
+            // ── Saved tab ─────────────────────────────────────────────────────
+            if (savedItems.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.Restaurant, contentDescription = null, tint = MutedGrey, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Nothing here yet", color = MutedGrey, fontSize = 14.sp)
+                    }
+                }
+            } else {
+                val chunked = savedItems.chunked(2)
+                items(chunked) { pair ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        pair.forEach { item ->
+                            Card(
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(containerColor = CardWhite)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(1f)
+                                        .background(Color(0xFFEEE5DC))
+                                ) {
+                                    if (item.dishImageUrl != null) {
+                                        KamelImage(
+                                            resource = asyncPainterResource(item.dishImageUrl),
+                                            contentDescription = item.dishName,
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    } else {
+                                        Icon(Icons.Default.Restaurant, contentDescription = null, tint = MutedGrey, modifier = Modifier.size(32.dp).align(Alignment.Center))
+                                    }
+                                    Row(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .padding(8.dp)
+                                            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 6.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(11.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(formatOneDecimal(item.rating.toDouble()), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
+                                    Text(item.dishName, color = DeepMaroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(item.restaurantName, color = MutedGrey, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                        if (pair.size == 1) Spacer(modifier = Modifier.weight(1f))
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
         } else {
+            // ── Reviews tab ───────────────────────────────────────────────────
             item {
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(32.dp),

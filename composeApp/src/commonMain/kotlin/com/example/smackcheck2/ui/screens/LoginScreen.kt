@@ -59,14 +59,15 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.theme.BrandRed
-import com.example.smackcheck2.ui.theme.OffWhite
 import com.example.smackcheck2.ui.theme.SurfaceGray400
 import com.example.smackcheck2.ui.theme.SurfaceGray600
+import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
 
 @Composable
 fun LoginScreen(
     viewModel: LoginViewModel,
+    authViewModel: AuthViewModel,
     onNavigateToRegister: () -> Unit,
     onNavigateToHome: () -> Unit
 ) {
@@ -186,7 +187,17 @@ fun LoginScreen(
                 keyboardActions = KeyboardActions(
                     onDone = {
                         focusManager.clearFocus()
-                        viewModel.login(onNavigateToHome)
+                        viewModel.login { email, password ->
+                            authViewModel.signIn(
+                                email = email,
+                                password = password,
+                                onSuccess = {
+                                    viewModel.setSuccess()
+                                    onNavigateToHome()
+                                },
+                                onError = viewModel::setError
+                            )
+                        }
                     }
                 ),
                 singleLine = true,
@@ -214,7 +225,19 @@ fun LoginScreen(
 
             // Log In button
             Button(
-                onClick = { viewModel.login(onNavigateToHome) },
+                onClick = {
+                    viewModel.login { email, password ->
+                        authViewModel.signIn(
+                            email = email,
+                            password = password,
+                            onSuccess = {
+                                viewModel.setSuccess()
+                                onNavigateToHome()
+                            },
+                            onError = viewModel::setError
+                        )
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -269,7 +292,17 @@ fun LoginScreen(
 
             // Google Sign-In button
             OutlinedButton(
-                onClick = { viewModel.loginWithGoogle(onNavigateToHome) },
+                onClick = {
+                    viewModel.loginWithGoogle {
+                        authViewModel.signInWithGoogle(
+                            onSuccess = {
+                                viewModel.setSuccess()
+                                onNavigateToHome()
+                            },
+                            onError = viewModel::setError
+                        )
+                    }
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),

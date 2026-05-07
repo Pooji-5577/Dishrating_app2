@@ -1,5 +1,6 @@
 package com.example.smackcheck2.notifications
 
+import com.example.smackcheck2.data.repository.NotificationService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
@@ -104,7 +105,7 @@ object IosPushTokenHolder {
         // Auto-save to Supabase when token is set
         scope.launch {
             try {
-                val result = NotificationRepository.savePushTokenToSupabase(token)
+                val result = NotificationService().savePushToken(token)
                 result.fold(
                     onSuccess = { println("APNs token saved to Supabase successfully") },
                     onFailure = { println("Failed to save APNs token to Supabase: ${it.message}") }

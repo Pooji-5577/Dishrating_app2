@@ -21,7 +21,6 @@ import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.PlacesService
 import com.example.smackcheck2.platform.PreferencesManager
 import com.example.smackcheck2.platform.ShareService
-import com.example.smackcheck2.ui.theme.DarkThemeColors
 import com.example.smackcheck2.ui.theme.LightThemeColors
 import com.example.smackcheck2.ui.theme.LocalThemeState
 import com.example.smackcheck2.ui.theme.SmackCheckTheme
@@ -53,7 +52,7 @@ fun App(
     val scope = rememberCoroutineScope()
     val themeState = remember {
         ThemeState(
-            initialDarkMode = true,
+            initialDarkMode = false,
             preferencesRepository = preferencesRepository,
             coroutineScope = scope
         )
@@ -86,9 +85,8 @@ fun App(
         LocalShareService provides shareService,
         LocalGeofencingService provides geofencingService
     ) {
-        SmackCheckTheme(darkTheme = themeState.isDarkMode) {
-            val backgroundColor = if (themeState.isDarkMode)
-                DarkThemeColors.Background else LightThemeColors.Background
+        SmackCheckTheme(darkTheme = false) {
+            val backgroundColor = LightThemeColors.Background
 
             Box(
                 modifier = Modifier

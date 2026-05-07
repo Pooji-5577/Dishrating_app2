@@ -23,7 +23,10 @@
       "Bash(git pull:*)",
       "Bash(find /Users/teja/smackcheck/Dishrating_app2/composeApp -type f \\\\\\(-name *.kt -o -name *.swift -o -name *.ts -o -name *.tsx \\\\\\))",
       "Bash(supabase functions:*)",
-      "Bash(adb devices *)"
+      "Bash(adb devices *)",
+      "Skill(gsd:debug)",
+      "Skill(gsd-debug)",
+      "Bash(ls .planning/debug/*.md)"
     ]
   }
 }

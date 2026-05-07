@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +46,9 @@ import io.kamel.image.asyncPainterResource
 fun FollowingStoriesRow(
     storyUsers: List<UserSummary>,
     currentUserAvatarUrl: String?,
+    currentUserHasStory: Boolean,
     onAddStoryClick: () -> Unit,
+    onCurrentUserStoryClick: () -> Unit,
     onStoryClick: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -73,7 +76,9 @@ fun FollowingStoriesRow(
             item(key = "your_story") {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.clickable { onAddStoryClick() }
+                    modifier = Modifier.clickable {
+                        if (currentUserHasStory) onCurrentUserStoryClick() else onAddStoryClick()
+                    }
                 ) {
                     // Dashed circle border with plus icon
                     Box(
@@ -101,12 +106,28 @@ fun FollowingStoriesRow(
                                 .clip(CircleShape)
                                 .background(Color(0xFFBB5B5C))
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = "Add Story",
-                                tint = Color.White,
-                                modifier = Modifier.size(14.dp)
-                            )
+                            if (currentUserHasStory && currentUserAvatarUrl != null) {
+                                KamelImage(
+                                    resource = asyncPainterResource(currentUserAvatarUrl),
+                                    contentDescription = "Your Story",
+                                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else if (currentUserHasStory) {
+                                Icon(
+                                    imageVector = Icons.Filled.Person,
+                                    contentDescription = "Your Story",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Filled.Add,
+                                    contentDescription = "Add Story",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
                         }
                     }
 

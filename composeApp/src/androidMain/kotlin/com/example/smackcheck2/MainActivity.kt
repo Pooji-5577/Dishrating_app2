@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
@@ -86,7 +87,18 @@ class MainActivity : ComponentActivity() {
         val appPreferencesManager = PreferencesManager(applicationContext)
         scheduleDayOneRetentionCheck(appPreferencesManager)
 
-        enableEdgeToEdge()
+        // Force light system bars (dark icons) so the app stays visually light
+        // even when the OS is in dark mode.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.BLACK
+            ),
+            navigationBarStyle = SystemBarStyle.light(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.BLACK
+            )
+        )
         super.onCreate(savedInstanceState)
 
         setContent {

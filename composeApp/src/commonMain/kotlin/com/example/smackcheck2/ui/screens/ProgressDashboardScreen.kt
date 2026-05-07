@@ -72,6 +72,8 @@ import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.gamification.GamificationViewModel
 import com.example.smackcheck2.model.Badge
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
@@ -218,7 +220,11 @@ fun ProgressDashboardScreen(
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = PDeepMaroon)
                 }
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("SmackCheck", color = PDeepMaroon, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                SmackCheckWordmark(
+                    fontFamily = PlusJakartaSans(),
+                    fontSize = 18.sp,
+                    letterSpacing = 0.sp
+                )
                 Spacer(modifier = Modifier.weight(1f))
                 // Avatar
                 Box(

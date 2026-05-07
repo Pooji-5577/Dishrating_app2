@@ -1,21 +1,16 @@
 package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.LoginUiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 
 /**
  * ViewModel for Login screen
  */
 class LoginViewModel : ViewModel() {
-
-    private val authRepository = AuthRepository()
 
     private val _uiState = MutableStateFlow(LoginUiState())
     val uiState: StateFlow<LoginUiState> = _uiState.asStateFlow()
@@ -28,7 +23,7 @@ class LoginViewModel : ViewModel() {
         _uiState.update { it.copy(password = password, passwordError = null) }
     }
 
-    fun login(onSuccess: () -> Unit) {
+    fun login(onValidCredentials: (email: String, password: String) -> Unit) {
         val currentState = _uiState.value
 
         // Validate inputs
@@ -62,70 +57,25 @@ class LoginViewModel : ViewModel() {
             return
         }
 
-        // Perform login with Supabase
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-
-            try {
-                val result = authRepository.signIn(currentState.email, currentState.password)
-                result.fold(
-                    onSuccess = {
-                        _uiState.update { it.copy(isLoading = false, isSuccess = true) }
-                        onSuccess()
-                    },
-                    onFailure = { error ->
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                errorMessage = error.message ?: "Login failed"
-                            )
-                        }
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Login failed"
-                    )
-                }
-            }
-        }
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        onValidCredentials(currentState.email, currentState.password)
     }
 
-    fun loginWithGoogle(onSuccess: () -> Unit) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+    fun loginWithGoogle(onStart: () -> Unit) {
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        onStart()
+    }
 
-            try {
-                val result = authRepository.signInWithGoogle()
-                result.fold(
-                    onSuccess = {
-                        _uiState.update { it.copy(isLoading = false, isSuccess = true) }
-                        onSuccess()
-                    },
-                    onFailure = { error ->
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                errorMessage = error.message ?: "Google Sign-In failed"
-                            )
-                        }
-                    }
-                )
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = e.message ?: "Google Sign-In failed"
-                    )
-                }
-            }
-        }
+    fun setSuccess() {
+        _uiState.update { it.copy(isLoading = false, isSuccess = true, errorMessage = null) }
     }
 
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun resetSuccess() {
+        _uiState.update { it.copy(isSuccess = false) }
     }
 
     fun setError(message: String) {

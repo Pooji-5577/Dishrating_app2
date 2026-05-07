@@ -25,6 +25,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.AuthRepository
+import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.model.CapturedImage
 import com.example.smackcheck2.model.Restaurant
@@ -61,6 +63,7 @@ import com.example.smackcheck2.ui.screens.SearchScreen
 import com.example.smackcheck2.ui.screens.PermissionsOnboardingScreen
 import com.example.smackcheck2.ui.screens.SocialFeedScreen
 import com.example.smackcheck2.ui.screens.SplashScreen
+import com.example.smackcheck2.ui.screens.StoryViewerScreen
 import com.example.smackcheck2.ui.screens.TopDishesScreen
 import com.example.smackcheck2.ui.screens.TopRestaurantsScreen
 import com.example.smackcheck2.ui.screens.UserProgressScreen
@@ -189,6 +192,11 @@ class NavigationState {
         backStack.add(currentScreen)
         currentScreen = screen
     }
+
+    fun replaceWith(screen: Screen) {
+        backStack.clear()
+        currentScreen = screen
+    }
     
     fun navigateToWithArgs(screen: Screen, vararg args: Pair<String, String>) {
         backStack.add(currentScreen)
@@ -207,7 +215,7 @@ class NavigationState {
     
     fun navigateBack(): Boolean {
         return if (backStack.isNotEmpty()) {
-            currentScreen = backStack.removeLast()
+            currentScreen = backStack.removeAt(backStack.lastIndex)
             true
         } else {
             false
@@ -334,13 +342,13 @@ private fun NavHostContent(
     when (navigationState.currentScreen) {
         is Screen.Splash -> {
             DarkSplashScreen(
-                onNavigateToLogin = { navigationState.navigateTo(Screen.Login) },
+                onNavigateToLogin = { navigationState.replaceWith(Screen.Login) },
                 onNavigateToHome = {
                     val user = authViewModel.getCurrentUser()
                     if (user != null && user.username.isBlank()) {
-                        navigationState.navigateTo(Screen.ProfileSetup)
+                        navigationState.replaceWith(Screen.ProfileSetup)
                     } else {
-                        navigationState.navigateTo(Screen.DarkHome)
+                        navigationState.replaceWith(Screen.DarkHome)
                     }
                 },
                 isAuthenticated = isAuthenticated
@@ -356,9 +364,9 @@ private fun NavHostContent(
                 onNavigateToHome = {
                     val user = authViewModel.getCurrentUser()
                     if (user != null && user.username.isBlank()) {
-                        navigationState.navigateTo(Screen.ProfileSetup)
+                        navigationState.replaceWith(Screen.ProfileSetup)
                     } else {
-                        navigationState.navigateTo(Screen.DarkHome)
+                        navigationState.replaceWith(Screen.DarkHome)
                     }
                 }
             )
@@ -369,8 +377,12 @@ private fun NavHostContent(
             RegisterScreen(
                 viewModel = registerViewModel,
                 authViewModel = authViewModel,
-                onNavigateBack = { navigationState.navigateBack() },
-                onNavigateToHome = { navigationState.navigateTo(Screen.ProfileSetup) }
+                onNavigateBack = {
+                    if (!navigationState.navigateBack()) {
+                        navigationState.replaceWith(Screen.Login)
+                    }
+                },
+                onNavigateToHome = { navigationState.replaceWith(Screen.ProfileSetup) }
             )
         }
         
@@ -379,7 +391,7 @@ private fun NavHostContent(
             ProfileSetupScreen(
                 viewModel = profileSetupViewModel,
                 currentUser = authViewModel.getCurrentUser(),
-                onComplete = { navigationState.navigateTo(Screen.DarkHome) }
+                onComplete = { navigationState.replaceWith(Screen.DarkHome) }
             )
         }
 
@@ -418,8 +430,9 @@ private fun NavHostContent(
                 onNavigateBack = { navigationState.navigateBack() },
                 onEditProfile = { navigationState.navigateTo(Screen.EditProfile) },
                 onSignOut = {
-                    authViewModel.signOut()
-                    navigationState.navigateTo(Screen.Login)
+                    authViewModel.signOut(
+                        onComplete = { navigationState.replaceWith(Screen.Login) }
+                    )
                 },
                 onNavigateToGames = { navigationState.navigateTo(Screen.Game) },
                 onNavigateToNotifications = { navigationState.navigateTo(Screen.NotificationSettings) },
@@ -480,7 +493,9 @@ private fun NavHostContent(
                 viewModel = accountSettingsViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onAccountDeleted = {
-                    navigationState.navigateTo(Screen.Login)
+                    authViewModel.signOut(
+                        onComplete = { navigationState.replaceWith(Screen.Login) }
+                    )
                 }
             )
         }
@@ -694,11 +709,19 @@ private fun NavHostContent(
                 onAvatarClick = { navigationState.navigateToMainTab(Screen.Profile) },
                 onStoryClick = { userId ->
                     navigationState.navigateToWithArgs(
-                        Screen.UserProfile,
+                        Screen.StoryViewer,
                         "userId" to userId
                     )
                 },
-                onAddStoryClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onAddStoryClick = { navigationState.navigateTo(Screen.DarkStoryCapture) },
+                onCurrentUserStoryClick = {
+                    socialFeedState.currentUserId?.let { userId ->
+                        navigationState.navigateToWithArgs(
+                            Screen.StoryViewer,
+                            "userId" to userId
+                        )
+                    }
+                },
                 onTopDishClick = { dishId ->
                     navigationState.navigateToWithArgs(
                         Screen.DishDetail,
@@ -1060,6 +1083,7 @@ private fun NavHostContent(
                     allDishes = uiState.topDishes,
                     topDishFeedItems = followingUsersState.topDishes,
                     followingUsers = followingUsersState.storyUsers,
+                    currentUserHasStory = followingUsersState.stories.any { it.userId == followingUsersState.currentUserId },
                     noRestaurantsFound = uiState.noRestaurantsFound,
                     photoViewModel = restaurantPhotoViewModel,
                     currentLatitude = uiState.userLatitude,
@@ -1092,6 +1116,21 @@ private fun NavHostContent(
                     onProfileClick = { navigationState.navigateToMainTab(Screen.Profile) },
                     onGameClick = { navigationState.navigateTo(Screen.Game) },
                     onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                    onAddStoryClick = { navigationState.navigateTo(Screen.DarkStoryCapture) },
+                    onCurrentUserStoryClick = {
+                        followingUsersState.currentUserId?.let { userId ->
+                            navigationState.navigateToWithArgs(
+                                Screen.StoryViewer,
+                                "userId" to userId
+                            )
+                        }
+                    },
+                    onStoryClick = { userId ->
+                        navigationState.navigateToWithArgs(
+                            Screen.StoryViewer,
+                            "userId" to userId
+                        )
+                    },
                     onTopDishesClick = { navigationState.navigateTo(Screen.TopDishes) },
                     onTopRestaurantsClick = { navigationState.navigateTo(Screen.TopRestaurants) },
                     onNearbyRestaurantsClick = { navigationState.navigateTo(Screen.NearbyRestaurants) },
@@ -1147,6 +1186,43 @@ private fun NavHostContent(
                         "imageUri" to imageUri
                     )
                 }
+            )
+        }
+
+        is Screen.DarkStoryCapture -> {
+            val imagePicker = LocalImagePicker.current
+            val dishCaptureViewModel: DishCaptureViewModel = viewModel { DishCaptureViewModel() }
+            val authRepository = remember { AuthRepository() }
+            val storageRepository = remember { StorageRepository() }
+            val socialRepository = remember { SocialRepository() }
+
+            LaunchedEffect(Unit) {
+                dishCaptureViewModel.retake()
+            }
+
+            DarkDishCaptureScreen(
+                viewModel = dishCaptureViewModel,
+                imagePicker = imagePicker,
+                onNavigateBack = { navigationState.navigateBack() },
+                onImageCaptured = { _, _, imageBytes, allImages, _, _, _, _ ->
+                    MainScope().launch {
+                        val currentUserId = authRepository.getCurrentUserId() ?: return@launch
+                        val storyBytes = imageBytes ?: allImages.firstOrNull()?.bytes ?: return@launch
+                        val imageUrl = storageRepository.uploadStoryImage(
+                            userId = currentUserId,
+                            imageBytes = storyBytes,
+                            fileName = "story_${kotlinx.datetime.Clock.System.now().toEpochMilliseconds()}.jpg"
+                        ).getOrNull() ?: return@launch
+
+                        socialRepository.uploadStory(currentUserId, imageUrl)
+                            .onSuccess {
+                                socialFeedViewModel.refreshHomeData()
+                                navigationState.navigateToMainTab(Screen.DarkHome)
+                            }
+                    }
+                },
+                isStoryMode = true,
+                onAddManually = { }
             )
         }
 
@@ -1494,9 +1570,12 @@ private fun NavHostContent(
                             } else {
                                 socialRepository.followUser(me, targetUserId).getOrThrow()
                             }
+                            // Re-fetch profile so followersCount reflects the DB trigger update
+                            val updatedProfile = socialRepository.getUserProfile(targetUserId).getOrNull()
                             userProfileState.value = userProfileState.value.copy(
                                 isFollowing = !userProfileState.value.isFollowing,
-                                isFollowLoading = false
+                                isFollowLoading = false,
+                                user = updatedProfile ?: userProfileState.value.user
                             )
                         } catch (_: Exception) {
                             userProfileState.value = userProfileState.value.copy(isFollowLoading = false)
@@ -1666,6 +1745,25 @@ private fun NavHostContent(
                 onReplyClick = { comment -> commentsViewModel.setReplyingTo(comment) },
                 onCancelReply = { commentsViewModel.setReplyingTo(null) }
             )
+        }
+
+        is Screen.StoryViewer -> {
+            val storyState by socialFeedViewModel.uiState.collectAsState()
+            val userStories = storyState.stories.filter { it.userId == navigationState.userId }
+
+            if (userStories.isEmpty()) {
+                LaunchedEffect(navigationState.userId) {
+                    socialFeedViewModel.refreshHomeData()
+                    navigationState.navigateBack()
+                }
+            } else {
+                StoryViewerScreen(
+                    stories = userStories,
+                    currentUserId = storyState.currentUserId,
+                    onNavigateBack = { navigationState.navigateBack() },
+                    onStoryDeleted = { socialFeedViewModel.refreshHomeData() }
+                )
+            }
         }
 
         is Screen.NotificationsList -> {

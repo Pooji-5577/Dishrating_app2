@@ -76,6 +76,8 @@ import com.example.smackcheck2.model.CapturedImage
 import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.platform.RequestCameraPermission
 import com.example.smackcheck2.ui.components.ByteArrayImage
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishCaptureViewModel
 import kotlinx.coroutines.launch
@@ -94,6 +96,7 @@ fun DarkDishCaptureScreen(
     imagePicker: ImagePicker?,
     onNavigateBack: () -> Unit,
     onImageCaptured: (imageUri: String, dishName: String, imageBytes: ByteArray?, allImages: List<CapturedImage>, cuisine: String?, confidence: Float, restaurantChain: String?, restaurantType: String?) -> Unit,
+    isStoryMode: Boolean = false,
     onAddManually: ((String) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -213,6 +216,7 @@ fun DarkDishCaptureScreen(
                             uiState.detectedRestaurantType
                         )
                     },
+                    isStoryMode = isStoryMode,
                     imagePicker = imagePicker
                 )
             }
@@ -230,7 +234,7 @@ fun DarkDishCaptureScreen(
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Text(
-                            text = "Add a dish photo",
+                            text = if (isStoryMode) "Add a story photo" else "Add a dish photo",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = WarmMaroon,
@@ -492,6 +496,7 @@ private fun ImagePreviewWithAI(
     onRetake: () -> Unit,
     onNavigateBack: () -> Unit,
     onConfirm: () -> Unit,
+    isStoryMode: Boolean = false,
     imagePicker: ImagePicker?
 ) {
     val displayedImage = allImages.getOrNull(selectedImageIndex)
@@ -516,11 +521,10 @@ private fun ImagePreviewWithAI(
                     tint = DeepMaroon
                 )
             }
-            Text(
-                text = "SmackCheck",
-                color = DeepMaroon,
+            SmackCheckWordmark(
+                fontFamily = PlusJakartaSans(),
                 fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
+                letterSpacing = 0.sp
             )
             Spacer(modifier = Modifier.weight(1f))
             Icon(
@@ -746,10 +750,14 @@ private fun ImagePreviewWithAI(
             Spacer(modifier = Modifier.height(4.dp))
         }
 
-        // Post to Feed button
+        // Confirm button
         Button(
             onClick = onConfirm,
-            enabled = !isAnalyzing && ((!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown") || (isEditingName && editedName.isNotBlank())),
+            enabled = !isAnalyzing && (
+                isStoryMode ||
+                    ((!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown") ||
+                        (isEditingName && editedName.isNotBlank()))
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
@@ -762,7 +770,11 @@ private fun ImagePreviewWithAI(
                 disabledContentColor = Color.White.copy(alpha = 0.6f)
             )
         ) {
-            Text("Post to Feed", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                if (isStoryMode) "Post as Story" else "Post to Feed",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }

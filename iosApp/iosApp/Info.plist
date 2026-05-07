@@ -27,6 +27,10 @@
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
 
+	<!-- Force light mode until internal dark mode is introduced -->
+	<key>UIUserInterfaceStyle</key>
+	<string>Light</string>
+
 	<!-- OAuth redirect URL scheme for Supabase (Google, Facebook, Apple sign-in) -->
 	<key>CFBundleURLTypes</key>
 	<array>
