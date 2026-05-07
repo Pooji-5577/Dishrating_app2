@@ -16,6 +16,7 @@ class StorageRepository {
         const val BUCKET_DISH_IMAGES = "dish-images"
         const val BUCKET_PROFILE_IMAGES = "profile-images"
         const val BUCKET_RESTAURANT_IMAGES = "restaurant-images"
+        const val BUCKET_STORY_IMAGES = "story-images"
     }
 
     /**
@@ -61,6 +62,14 @@ class StorageRepository {
         fileName: String
     ): Result<String> {
         return uploadImage(BUCKET_RESTAURANT_IMAGES, restaurantId, imageBytes, fileName)
+    }
+
+    suspend fun uploadStoryImage(
+        userId: String,
+        imageBytes: ByteArray,
+        fileName: String
+    ): Result<String> {
+        return uploadImage(BUCKET_STORY_IMAGES, userId, imageBytes, fileName)
     }
 
     /**

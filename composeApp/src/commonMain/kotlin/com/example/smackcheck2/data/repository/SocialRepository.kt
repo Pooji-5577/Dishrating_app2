@@ -5,6 +5,7 @@ import com.example.smackcheck2.data.dto.*
 import com.example.smackcheck2.model.*
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
 class SocialRepository(
@@ -624,6 +625,98 @@ class SocialRepository(
             dtos.size
         } catch (e: Exception) {
             0
+        }
+    }
+
+    // ==================== STORIES ====================
+
+    suspend fun uploadStory(userId: String, imageUrl: String): Result<Story> {
+        return try {
+            val profile = postgrest["profiles"]
+                .select { filter { eq("id", userId) } }
+                .decodeSingleOrNull<ProfileDto>()
+
+            val now = Clock.System.now()
+            val expiresAt = kotlinx.datetime.Instant.fromEpochMilliseconds(now.toEpochMilliseconds() + 24 * 60 * 60 * 1000)
+
+            val storyDto = StoryDto(
+                userId = userId,
+                imageUrl = imageUrl,
+                expiresAt = expiresAt.toString()
+            )
+
+            val created = postgrest["stories"]
+                .insert(storyDto) { select() }
+                .decodeSingleOrNull<StoryDto>()
+                ?: throw Exception("Failed to create story")
+
+            Result.success(
+                Story(
+                    id = created.id ?: "",
+                    userId = created.userId,
+                    userName = profile?.name ?: "Unknown",
+                    userProfileUrl = profile?.profilePhotoUrl,
+                    imageUrl = created.imageUrl,
+                    createdAt = parseTimestamp(created.createdAt),
+                    expiresAt = parseTimestamp(created.expiresAt)
+                )
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getStories(): Result<List<Story>> {
+        return try {
+            val now = Clock.System.now().toString()
+            val storyDtos = postgrest["stories"]
+                .select {
+                    filter {
+                        gt("expires_at", now)
+                    }
+                    order("created_at", Order.DESCENDING)
+                }
+                .decodeList<StoryDto>()
+
+            val userIds = storyDtos.map { it.userId }.distinct()
+            val profiles = mutableMapOf<String, ProfileDto>()
+            for (uid in userIds) {
+                try {
+                    val profile = postgrest["profiles"]
+                        .select { filter { eq("id", uid) } }
+                        .decodeSingleOrNull<ProfileDto>()
+                    if (profile != null) profiles[uid] = profile
+                } catch (_: Exception) {}
+            }
+
+            val stories = storyDtos.map { dto ->
+                Story(
+                    id = dto.id ?: "",
+                    userId = dto.userId,
+                    userName = profiles[dto.userId]?.name ?: "Unknown",
+                    userProfileUrl = profiles[dto.userId]?.profilePhotoUrl,
+                    imageUrl = dto.imageUrl,
+                    createdAt = parseTimestamp(dto.createdAt),
+                    expiresAt = parseTimestamp(dto.expiresAt)
+                )
+            }
+            Result.success(stories)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteStory(storyId: String, userId: String): Result<Unit> {
+        return try {
+            postgrest["stories"].delete {
+                filter {
+                    eq("id", storyId)
+                    eq("user_id", userId)
+                }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
