@@ -334,10 +334,10 @@ class SocialRepository(
 
     private fun haversineDistanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val R = 6371.0
-        val dLat = Math.toRadians(lat2 - lat1)
-        val dLon = Math.toRadians(lon2 - lon1)
+        val dLat = (lat2 - lat1) * kotlin.math.PI / 180.0
+        val dLon = (lon2 - lon1) * kotlin.math.PI / 180.0
         val a = kotlin.math.sin(dLat / 2).let { it * it } +
-                kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+                kotlin.math.cos(lat1 * kotlin.math.PI / 180.0) * kotlin.math.cos(lat2 * kotlin.math.PI / 180.0) *
                 kotlin.math.sin(dLon / 2).let { it * it }
         val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
         return R * c
@@ -809,70 +809,6 @@ class SocialRepository(
             Result.success(feedItems)
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    // ==================== STORIES ====================
-
-    suspend fun uploadStory(userId: String, imageUrl: String): Result<Unit> {
-        return try {
-            val dto = StoryDto(
-                userId = userId,
-                imageUrl = imageUrl
-            )
-            postgrest["stories"].insert(dto)
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun deleteStory(storyId: String, userId: String): Result<Unit> {
-        return try {
-            postgrest["stories"].delete {
-                filter {
-                    eq("id", storyId)
-                    eq("user_id", userId)
-                }
-            }
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun getStories(): Result<List<Story>> {
-        return try {
-            val dtos = postgrest["stories"]
-                .select {
-                    order("created_at", Order.DESCENDING)
-                }
-                .decodeList<StoryDto>()
-
-            val stories = dtos.map { dto ->
-                val profile = try {
-                    postgrest["profiles"]
-                        .select {
-                            filter { eq("id", dto.userId) }
-                        }
-                        .decodeSingleOrNull<ProfileDto>()
-                } catch (e: Exception) {
-                    null
-                }
-
-                Story(
-                    id = dto.id ?: "",
-                    userId = dto.userId,
-                    userName = profile?.name ?: "SmackCheck user",
-                    userProfileUrl = profile?.profilePhotoUrl,
-                    imageUrl = dto.imageUrl,
-                    createdAt = parseTimestamp(dto.createdAt),
-                    expiresAt = parseTimestamp(dto.expiresAt)
-                )
-            }
-            Result.success(stories)
         } catch (e: Exception) {
             Result.failure(e)
         }

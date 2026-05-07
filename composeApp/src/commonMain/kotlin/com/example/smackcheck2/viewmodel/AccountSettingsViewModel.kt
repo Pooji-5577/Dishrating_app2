@@ -105,7 +105,7 @@ class AccountSettingsViewModel(
             val result = authRepository.deleteAccount()
             result.fold(
                 onSuccess = {
-                    authRepository.signOut()
+                    _uiState.update { it.copy(isDeletingAccount = false, showDeleteConfirmation = false) }
                     onSuccess()
                 },
                 onFailure = { error ->

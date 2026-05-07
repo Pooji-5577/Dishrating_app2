@@ -159,7 +159,12 @@ class AuthViewModel : ViewModel() {
                         onSuccess()
                     },
                     onFailure = { error ->
-                        onError(error.message ?: "Registration failed")
+                        val message = if (error.message == "CHECK_EMAIL") {
+                            "Check your email to verify your account before signing in."
+                        } else {
+                            error.message ?: "Registration failed"
+                        }
+                        onError(message)
                     }
                 )
             } catch (e: Exception) {
@@ -168,10 +173,22 @@ class AuthViewModel : ViewModel() {
         }
     }
 
-    fun signOut() {
+    fun signOut(onComplete: () -> Unit = {}, onError: (String) -> Unit = {}) {
         viewModelScope.launch {
-            authRepository.signOut()
+            val result = try {
+                authRepository.signOut()
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+            Analytics.reset()
             _authState.value = AuthState.Unauthenticated
+            result.fold(
+                onSuccess = { onComplete() },
+                onFailure = { error ->
+                    onError(error.message ?: "Signed out locally, but remote sign out failed.")
+                    onComplete()
+                }
+            )
         }
     }
 

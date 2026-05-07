@@ -248,15 +248,4 @@ data class SocialMapUiState(
     val recenterTrigger: Int = 0
 )
 
-/**
- * Story data model for 24-hour ephemeral stories
- */
-data class Story(
-    val id: String = "",
-    val userId: String = "",
-    val userName: String = "",
-    val userProfileUrl: String? = null,
-    val imageUrl: String = "",
-    val createdAt: Long = 0L,
-    val expiresAt: Long = 0L
-)
+

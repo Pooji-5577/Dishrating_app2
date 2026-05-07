@@ -25,7 +25,8 @@
       "Bash(supabase functions:*)",
       "Bash(adb devices *)",
       "Skill(gsd:debug)",
-      "Skill(gsd-debug)"
+      "Skill(gsd-debug)",
+      "Bash(ls .planning/debug/*.md)"
     ]
   }
 }

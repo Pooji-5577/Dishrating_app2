@@ -192,6 +192,11 @@ class NavigationState {
         backStack.add(currentScreen)
         currentScreen = screen
     }
+
+    fun replaceWith(screen: Screen) {
+        backStack.clear()
+        currentScreen = screen
+    }
     
     fun navigateToWithArgs(screen: Screen, vararg args: Pair<String, String>) {
         backStack.add(currentScreen)
@@ -210,7 +215,7 @@ class NavigationState {
     
     fun navigateBack(): Boolean {
         return if (backStack.isNotEmpty()) {
-            currentScreen = backStack.removeLast()
+            currentScreen = backStack.removeAt(backStack.lastIndex)
             true
         } else {
             false
@@ -337,13 +342,13 @@ private fun NavHostContent(
     when (navigationState.currentScreen) {
         is Screen.Splash -> {
             DarkSplashScreen(
-                onNavigateToLogin = { navigationState.navigateTo(Screen.Login) },
+                onNavigateToLogin = { navigationState.replaceWith(Screen.Login) },
                 onNavigateToHome = {
                     val user = authViewModel.getCurrentUser()
                     if (user != null && user.username.isBlank()) {
-                        navigationState.navigateTo(Screen.ProfileSetup)
+                        navigationState.replaceWith(Screen.ProfileSetup)
                     } else {
-                        navigationState.navigateTo(Screen.DarkHome)
+                        navigationState.replaceWith(Screen.DarkHome)
                     }
                 },
                 isAuthenticated = isAuthenticated
@@ -359,9 +364,9 @@ private fun NavHostContent(
                 onNavigateToHome = {
                     val user = authViewModel.getCurrentUser()
                     if (user != null && user.username.isBlank()) {
-                        navigationState.navigateTo(Screen.ProfileSetup)
+                        navigationState.replaceWith(Screen.ProfileSetup)
                     } else {
-                        navigationState.navigateTo(Screen.DarkHome)
+                        navigationState.replaceWith(Screen.DarkHome)
                     }
                 }
             )
@@ -372,8 +377,12 @@ private fun NavHostContent(
             RegisterScreen(
                 viewModel = registerViewModel,
                 authViewModel = authViewModel,
-                onNavigateBack = { navigationState.navigateBack() },
-                onNavigateToHome = { navigationState.navigateTo(Screen.ProfileSetup) }
+                onNavigateBack = {
+                    if (!navigationState.navigateBack()) {
+                        navigationState.replaceWith(Screen.Login)
+                    }
+                },
+                onNavigateToHome = { navigationState.replaceWith(Screen.ProfileSetup) }
             )
         }
         
@@ -382,7 +391,7 @@ private fun NavHostContent(
             ProfileSetupScreen(
                 viewModel = profileSetupViewModel,
                 currentUser = authViewModel.getCurrentUser(),
-                onComplete = { navigationState.navigateTo(Screen.DarkHome) }
+                onComplete = { navigationState.replaceWith(Screen.DarkHome) }
             )
         }
 
@@ -421,8 +430,9 @@ private fun NavHostContent(
                 onNavigateBack = { navigationState.navigateBack() },
                 onEditProfile = { navigationState.navigateTo(Screen.EditProfile) },
                 onSignOut = {
-                    authViewModel.signOut()
-                    navigationState.navigateTo(Screen.Login)
+                    authViewModel.signOut(
+                        onComplete = { navigationState.replaceWith(Screen.Login) }
+                    )
                 },
                 onNavigateToGames = { navigationState.navigateTo(Screen.Game) },
                 onNavigateToNotifications = { navigationState.navigateTo(Screen.NotificationSettings) },
@@ -483,7 +493,9 @@ private fun NavHostContent(
                 viewModel = accountSettingsViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onAccountDeleted = {
-                    navigationState.navigateTo(Screen.Login)
+                    authViewModel.signOut(
+                        onComplete = { navigationState.replaceWith(Screen.Login) }
+                    )
                 }
             )
         }

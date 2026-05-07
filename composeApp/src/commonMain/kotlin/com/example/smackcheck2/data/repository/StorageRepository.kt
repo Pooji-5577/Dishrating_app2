@@ -73,21 +73,6 @@ class StorageRepository {
     }
 
     /**
-     * Upload a story image
-     * @param userId User ID for organizing files
-     * @param imageBytes Image data as ByteArray
-     * @param fileName Original file name (for extension)
-     * @return Public URL of the uploaded image
-     */
-    suspend fun uploadStoryImage(
-        userId: String,
-        imageBytes: ByteArray,
-        fileName: String
-    ): Result<String> {
-        return uploadImage(BUCKET_STORY_IMAGES, userId, imageBytes, fileName)
-    }
-
-    /**
      * Delete an image from storage
      * @param bucketName Bucket name
      * @param path Full path to the file

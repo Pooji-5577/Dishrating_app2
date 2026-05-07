@@ -33,14 +33,18 @@ import kotlin.math.*
 
 private fun distanceKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
     val r = 6371.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
-    val a = sin(dLat / 2).pow(2) + cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2)
+    val dLat = (lat2 - lat1) * kotlin.math.PI / 180.0
+    val dLon = (lon2 - lon1) * kotlin.math.PI / 180.0
+    val a = sin(dLat / 2).pow(2) + cos(lat1 * kotlin.math.PI / 180.0) * cos(lat2 * kotlin.math.PI / 180.0) * sin(dLon / 2).pow(2)
     return r * 2 * atan2(sqrt(a), sqrt(1 - a))
 }
 
-private fun formatDist(km: Double): String =
-    if (km < 1.0) "${(km * 1000).toInt()} m" else "${"%.1f".format(km)} km"
+private fun formatDist(km: Double): String {
+    return if (km < 1.0) "${(km * 1000).toInt()} m" else {
+        val v = (km * 10).toInt()
+        "${v / 10}.${kotlin.math.abs(v % 10)} km"
+    }
+}
 
 /**
  * Nearby Restaurants Screen

@@ -48,6 +48,7 @@ import io.github.jan.supabase.auth.auth
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -152,7 +153,7 @@ fun StoryUploadScreen(
                                 val uploadResult = storageRepository.uploadStoryImage(
                                     userId = user.id,
                                     imageBytes = selectedImageBytes!!,
-                                    fileName = "story_${System.currentTimeMillis()}.jpg"
+                                    fileName = "story_${Clock.System.now().toEpochMilliseconds()}.jpg"
                                 )
 
                                 val imageUrl = uploadResult.getOrThrow()
