@@ -53,15 +53,31 @@ class SocialFeedViewModel(
     val uiState: StateFlow<SocialFeedUiState> = _uiState.asStateFlow()
 
     private var loadFeedJob: Job? = null
+    private var realtimeSubscriptionJob: Job? = null
 
     // Track if we're subscribed to real-time updates
     private var isSubscribedToRealtime = false
+    private var hasPreloadedHomeSurface = false
+    private var hasPreloadedExploreFeed = false
 
-    init {
-        loadFeed()
+    fun preloadHomeSurfaceFromSplash() {
+        if (hasPreloadedHomeSurface) return
+        hasPreloadedHomeSurface = true
         loadStoryUsers()
         loadTopDishes()
         loadNearbyRestaurantCount()
+    }
+
+    fun preloadExploreFromHome() {
+        preloadHomeSurfaceFromSplash()
+        if (_uiState.value.feedItems.isNotEmpty() || _uiState.value.isLoading) return
+        if (hasPreloadedExploreFeed) return
+        hasPreloadedExploreFeed = true
+        loadFeed()
+    }
+
+    fun onSocialFeedScreenVisible() {
+        preloadExploreFromHome()
         subscribeToRealtimeUpdates()
     }
 
@@ -126,6 +142,7 @@ class SocialFeedViewModel(
      */
     fun refreshHomeData() {
         loadStoryUsers()
+        loadTopDishes()
         loadNearbyRestaurantCount()
     }
     
@@ -133,17 +150,17 @@ class SocialFeedViewModel(
      * Subscribe to real-time feed updates for live feed experience
      */
     private fun subscribeToRealtimeUpdates() {
-        viewModelScope.launch(crashGuard) {
+        if (isSubscribedToRealtime) return
+        realtimeSubscriptionJob?.cancel()
+        realtimeSubscriptionJob = viewModelScope.launch(crashGuard) {
             try {
                 val userId = authRepository.getCurrentUserId() ?: return@launch
 
-                if (!isSubscribedToRealtime) {
-                    realtimeFeedRepository.subscribeToFeed(userId)
-                    realtimeFeedRepository.subscribeToLikes(userId)
-                    realtimeFeedRepository.subscribeToComments(userId)
-                    isSubscribedToRealtime = true
-                    println("SocialFeedViewModel: Subscribed to real-time updates")
-                }
+                realtimeFeedRepository.subscribeToFeed(userId)
+                realtimeFeedRepository.subscribeToLikes(userId)
+                realtimeFeedRepository.subscribeToComments(userId)
+                isSubscribedToRealtime = true
+                println("SocialFeedViewModel: Subscribed to real-time updates")
 
                 realtimeFeedRepository.feedUpdates.collect { update ->
                     try {
@@ -157,6 +174,7 @@ class SocialFeedViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                isSubscribedToRealtime = false
                 println("SocialFeedViewModel: realtime subscription failed: ${e.message}")
             }
         }
@@ -238,6 +256,7 @@ class SocialFeedViewModel(
     }
 
     fun loadFeed() {
+        hasPreloadedExploreFeed = true
         loadFeedJob?.cancel()
         loadFeedJob = viewModelScope.launch(crashGuard) {
             try {
@@ -502,6 +521,7 @@ class SocialFeedViewModel(
      */
     override fun onCleared() {
         super.onCleared()
+        realtimeSubscriptionJob?.cancel()
         viewModelScope.launch {
             realtimeFeedRepository.unsubscribeAll()
             isSubscribedToRealtime = false

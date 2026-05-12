@@ -39,13 +39,14 @@ class SearchViewModel(
 
     private val _uiState = MutableStateFlow(SearchUiState())
     val uiState: StateFlow<SearchUiState> = _uiState.asStateFlow()
+    private var hasLoadedFilterOptions = false
 
     // Debounce channel for search queries
     private val searchQuery = MutableStateFlow("")
 
 
     init {
-        loadFilterOptions()
+        preloadFilterOptionsIfNeeded()
         // Debounced search — waits 400ms after user stops typing
         viewModelScope.launch {
             searchQuery
@@ -62,7 +63,9 @@ class SearchViewModel(
     }
 
 
-    private fun loadFilterOptions() {
+    fun preloadFilterOptionsIfNeeded() {
+        if (hasLoadedFilterOptions) return
+        hasLoadedFilterOptions = true
         viewModelScope.launch {
             try {
                 val cuisinesResult = databaseRepository.getDistinctCuisines()

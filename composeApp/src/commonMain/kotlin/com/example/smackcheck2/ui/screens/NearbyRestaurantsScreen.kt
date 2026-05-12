@@ -284,7 +284,7 @@ private fun RestaurantsList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(restaurants) { restaurant ->
+        items(restaurants, key = { it.id }) { restaurant ->
             val distanceText = if (currentLocation != null &&
                 restaurant.latitude != 0.0 && restaurant.longitude != 0.0)
                 formatDist(distanceKm(currentLocation.latitude, currentLocation.longitude, restaurant.latitude, restaurant.longitude))
@@ -313,11 +313,15 @@ private fun RestaurantCard(
     val photoState = photoStates[restaurant.id]
 
     LaunchedEffect(restaurant.id) {
-        photoViewModel.loadThumbnail(
-            restaurantId = restaurant.id,
-            placeId = restaurant.id,
-            name = restaurant.name
-        )
+        if (!restaurant.photoUrl.isNullOrBlank()) {
+            photoViewModel.setThumbnailUrl(restaurant.id, restaurant.photoUrl)
+        } else {
+            photoViewModel.loadThumbnail(
+                restaurantId = restaurant.id,
+                placeId = restaurant.id,
+                name = restaurant.name
+            )
+        }
     }
 
     Card(

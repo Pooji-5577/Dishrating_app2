@@ -129,8 +129,8 @@ fun SocialMapScreen(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     
     // Request location on first load
-    LaunchedEffect(Unit) {
-        if (uiState.currentLatitude == null) {
+    LaunchedEffect(uiState.currentLatitude, uiState.isLoading) {
+        if (uiState.currentLatitude == null && !uiState.isLoading) {
             viewModel.requestCurrentLocation()
         }
     }
@@ -337,16 +337,18 @@ fun SocialMapScreen(
                     // Derive marker list from current mode
                     val activeMarkerSource = if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
                         uiState.myRatingMarkers else uiState.nearbyUsers
-                    val markers = activeMarkerSource.map { user ->
-                        MapMarker(
-                            id = user.latestRatingId ?: user.userId,
-                            latitude = user.latitude,
-                            longitude = user.longitude,
-                            title = user.latestDishName ?: user.username,
-                            snippet = user.latestRestaurantName ?: user.username,
-                            rating = user.latestRating,
-                            imageUrl = user.latestDishImage ?: user.avatarUrl
-                        )
+                    val markers = remember(activeMarkerSource) {
+                        activeMarkerSource.map { user ->
+                            MapMarker(
+                                id = user.latestRatingId ?: user.userId,
+                                latitude = user.latitude,
+                                longitude = user.longitude,
+                                title = user.latestDishName ?: user.username,
+                                snippet = user.latestRestaurantName ?: user.username,
+                                rating = user.latestRating,
+                                imageUrl = user.latestDishImage ?: user.avatarUrl
+                            )
+                        }
                     }
 
                     // Use recenterTrigger as key to force map re-center when Locate Me is tapped

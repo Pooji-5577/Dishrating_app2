@@ -137,7 +137,10 @@ fun DarkTopDishesScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                itemsIndexed(dishes) { index, dish ->
+                itemsIndexed(
+                    items = dishes,
+                    key = { _, dish -> dish.id }
+                ) { index, dish ->
                     DarkTopDishCard(
                         rank = index + 1,
                         dish = dish,

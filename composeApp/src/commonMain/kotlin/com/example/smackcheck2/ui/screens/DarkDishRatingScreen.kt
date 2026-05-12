@@ -87,6 +87,12 @@ import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.roundToInt
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 private val DeepMaroon = Color(0xFF3B1011)
 private val WarmMaroon = Color(0xFF642223)
@@ -118,6 +124,8 @@ fun DarkDishRatingScreen(
     onDismissError: () -> Unit = {},
     onAddRestaurantManually: (() -> Unit)? = null,
     onSearchRestaurants: ((String) -> Unit)? = null,
+    currentLatitude: Double? = null,
+    currentLongitude: Double? = null,
     detectedChain: String? = null,
     detectedType: String? = null,
     currencySymbol: String = "\u20B9 "
@@ -772,7 +780,9 @@ fun DarkDishRatingScreen(
                         it.cuisine.contains(restaurantSearchQuery, ignoreCase = true) ||
                         it.city.contains(restaurantSearchQuery, ignoreCase = true)
                     }
-                    val allFilteredNearby = (filteredNearby + searchResults).distinctBy { it.id }
+                    val allFilteredNearby = (filteredNearby + searchResults)
+                        .distinctBy { it.id }
+                        .sortedBy { restaurantDistanceMeters(it, currentLatitude, currentLongitude) ?: Int.MAX_VALUE }
 
                     val nearbyIds = (nearbyRestaurants + searchResults).map { it.id }.toSet()
                     val filteredOthers = if (nearbyRestaurants.isEmpty() && searchResults.isEmpty()) {
@@ -847,6 +857,7 @@ fun DarkDishRatingScreen(
                                         restaurant = restaurant,
                                         isSelected = selectedRestaurant?.id == restaurant.id,
                                         isNearby = true,
+                                        distanceMeters = restaurantDistanceMeters(restaurant, currentLatitude, currentLongitude),
                                         onClick = { selectedRestaurant = restaurant; showRestaurantPicker = false }
                                     )
                                 }
@@ -868,6 +879,7 @@ fun DarkDishRatingScreen(
                                         restaurant = restaurant,
                                         isSelected = selectedRestaurant?.id == restaurant.id,
                                         isNearby = false,
+                                        distanceMeters = restaurantDistanceMeters(restaurant, currentLatitude, currentLongitude),
                                         onClick = { selectedRestaurant = restaurant; showRestaurantPicker = false }
                                     )
                                 }
@@ -953,6 +965,7 @@ private fun RestaurantPickerItem(
     restaurant: Restaurant,
     isSelected: Boolean,
     isNearby: Boolean = false,
+    distanceMeters: Int? = null,
     onClick: () -> Unit
 ) {
     Card(
@@ -1001,6 +1014,10 @@ private fun RestaurantPickerItem(
                         Text(" • ", color = WarmMaroon, fontSize = 12.sp)
                         Text(restaurant.city, color = WarmMaroon, fontSize = 12.sp)
                     }
+                    if (distanceMeters != null) {
+                        Text(" • ", color = WarmMaroon, fontSize = 12.sp)
+                        Text("~${distanceMeters}m", color = WarmMaroon, fontSize = 12.sp)
+                    }
                     if (restaurant.averageRating > 0) {
                         Text(" • ", color = WarmMaroon, fontSize = 12.sp)
                         Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(13.dp))
@@ -1013,6 +1030,28 @@ private fun RestaurantPickerItem(
             }
         }
     }
+}
+
+private fun restaurantDistanceMeters(
+    restaurant: Restaurant,
+    userLat: Double?,
+    userLon: Double?
+): Int? {
+    val lat = restaurant.latitude ?: return null
+    val lon = restaurant.longitude ?: return null
+    if (userLat == null || userLon == null) return null
+    val distanceKm = haversineKm(userLat, userLon, lat, lon)
+    return (distanceKm * 1000.0).roundToInt()
+}
+
+private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+    val r = 6371.0
+    val dLat = Math.toRadians(lat2 - lat1)
+    val dLon = Math.toRadians(lon2 - lon1)
+    val a = sin(dLat / 2).pow(2.0) +
+        cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2.0)
+    val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    return r * c
 }
 
 @Composable

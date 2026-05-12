@@ -124,7 +124,6 @@ fun AppCoordinator(
         if (isAuthenticated == true) {
             notificationViewModel.initializePushNotifications()
             notificationViewModel.refresh()
-            socialFeedViewModel.loadFeed()
 
             try {
                 val now = kotlinx.datetime.Clock.System.now().toEpochMilliseconds()

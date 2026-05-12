@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.model.DishDetailUiState
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
@@ -20,11 +22,15 @@ class DishDetailViewModel : ViewModel() {
 
     private val _uiState = MutableStateFlow(DishDetailUiState(isLoading = true))
     val uiState: StateFlow<DishDetailUiState> = _uiState.asStateFlow()
+    private var loadedDishId: String? = null
 
     /**
      * Load all data for a dish: dish info, restaurant, reviews, and related dishes
      */
     fun loadDish(dishId: String) {
+        if (loadedDishId == dishId && _uiState.value.dish?.id == dishId && _uiState.value.errorMessage == null) {
+            return
+        }
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
@@ -39,37 +45,44 @@ class DishDetailViewModel : ViewModel() {
                 }
 
                 _uiState.update { it.copy(dish = dish) }
+                loadedDishId = dishId
 
-                // 2. Load the restaurant
-                if (dish.restaurantId.isNotBlank()) {
-                    val restaurantResult = databaseRepository.getRestaurantById(dish.restaurantId)
-                    restaurantResult.onSuccess { restaurant ->
-                        _uiState.update { it.copy(restaurant = restaurant) }
+                coroutineScope {
+                    val restaurantDeferred = async {
+                        if (dish.restaurantId.isNotBlank()) {
+                            databaseRepository.getRestaurantById(dish.restaurantId).getOrNull()
+                        } else null
+                    }
+                    val relatedDeferred = async {
+                        if (dish.restaurantId.isNotBlank()) {
+                            databaseRepository.getDishesForRestaurant(dish.restaurantId)
+                                .getOrDefault(emptyList())
+                                .filter { it.id != dishId }
+                        } else emptyList()
+                    }
+                    val reviewsDeferred = async {
+                        databaseRepository.getRatingsForDish(
+                            dishId = dishId,
+                            restaurantId = dish.restaurantId.takeIf { it.isNotBlank() }
+                        ).getOrDefault(emptyList())
                     }
 
-                    // 3. Load related dishes from the same restaurant
-                    val relatedResult = databaseRepository.getDishesForRestaurant(dish.restaurantId)
-                    relatedResult.onSuccess { dishes ->
-                        // Exclude the current dish from related list
-                        val related = dishes.filter { it.id != dishId }
-                        _uiState.update { it.copy(relatedDishes = related) }
-                    }
-                }
-
-                // 4. Load reviews for this dish, filtered to the dish's own restaurant
-                //    so only location-specific reviews are shown.
-                val reviewsResult = databaseRepository.getRatingsForDish(
-                    dishId = dishId,
-                    restaurantId = dish.restaurantId.takeIf { it.isNotBlank() }
-                )
-                reviewsResult.onSuccess { reviews ->
-                    // Pick the featured review: highest-rated one that has a photo, else highest-rated
-                    val featured = reviews.filter { !it.dishImageUrl.isNullOrBlank() }
+                    val restaurant = restaurantDeferred.await()
+                    val related = relatedDeferred.await()
+                    val reviews = reviewsDeferred.await()
+                    val featured = reviews
+                        .filter { !it.dishImageUrl.isNullOrBlank() }
                         .maxByOrNull { it.rating }
                         ?: reviews.maxByOrNull { it.rating }
-                    _uiState.update { it.copy(reviews = reviews, featuredReview = featured) }
-                }.onFailure { error ->
-                    println("DishDetailViewModel: Failed to load reviews: ${error.message}")
+
+                    _uiState.update {
+                        it.copy(
+                            restaurant = restaurant,
+                            relatedDishes = related,
+                            reviews = reviews,
+                            featuredReview = featured
+                        )
+                    }
                 }
 
                 _uiState.update { it.copy(isLoading = false) }

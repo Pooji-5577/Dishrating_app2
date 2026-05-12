@@ -276,6 +276,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     val gamificationViewModel: GamificationViewModel = viewModel { GamificationViewModel() }
     val notificationViewModel: NotificationViewModel = viewModel { NotificationViewModel() }
     val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel(preferencesRepository) }
+    val socialMapViewModel: SocialMapViewModel = viewModel { SocialMapViewModel(locationService) }
+    val profileViewModel: ProfileViewModel = viewModel { ProfileViewModel(authViewModel) }
 
     val imagePicker = LocalImagePicker.current
     val shareService = LocalShareService.current
@@ -307,6 +309,8 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             gamificationViewModel = gamificationViewModel,
             notificationViewModel = notificationViewModel,
             socialFeedViewModel = socialFeedViewModel,
+            socialMapViewModel = socialMapViewModel,
+            profileViewModel = profileViewModel,
             preferencesRepository = preferencesRepository,
             imagePicker = imagePicker,
             shareService = shareService
@@ -327,6 +331,8 @@ private fun NavHostContent(
     gamificationViewModel: GamificationViewModel,
     notificationViewModel: NotificationViewModel,
     socialFeedViewModel: SocialFeedViewModel,
+    socialMapViewModel: SocialMapViewModel,
+    profileViewModel: ProfileViewModel,
     preferencesRepository: PreferencesRepository,
     imagePicker: com.example.smackcheck2.platform.ImagePicker?,
     shareService: com.example.smackcheck2.platform.ShareService?
@@ -341,6 +347,14 @@ private fun NavHostContent(
     Box(modifier = Modifier.fillMaxSize()) {
     when (navigationState.currentScreen) {
         is Screen.Splash -> {
+            LaunchedEffect(Unit) {
+                locationHomeViewModel.preloadHomeFromSplash()
+            }
+            LaunchedEffect(isAuthenticated) {
+                if (isAuthenticated == true) {
+                    socialFeedViewModel.preloadHomeSurfaceFromSplash()
+                }
+            }
             DarkSplashScreen(
                 onNavigateToLogin = { navigationState.replaceWith(Screen.Login) },
                 onNavigateToHome = {
@@ -417,11 +431,8 @@ private fun NavHostContent(
         }
         
         is Screen.Profile -> {
-            val profileViewModel: ProfileViewModel = viewModel { ProfileViewModel(authViewModel) }
-
-            // Refresh profile data every time screen is shown (to show updated XP)
             LaunchedEffect(Unit) {
-                profileViewModel.refresh()
+                profileViewModel.refreshIfStale()
             }
 
             DarkProfileScreen(
@@ -672,7 +683,7 @@ private fun NavHostContent(
                 if (scrollToId.isNotBlank()) {
                     socialFeedViewModel.setScrollToRatingId(scrollToId)
                 }
-                // loadFeed() already called on auth — no need to call again here
+                socialFeedViewModel.onSocialFeedScreenVisible()
             }
 
             SocialFeedScreen(
@@ -739,10 +750,6 @@ private fun NavHostContent(
         }
 
         is Screen.SocialMap -> {
-            val socialMapViewModel: SocialMapViewModel = viewModel {
-                SocialMapViewModel(locationService)
-            }
-            
             SocialMapScreen(
                 viewModel = socialMapViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
@@ -770,6 +777,9 @@ private fun NavHostContent(
         is Screen.Search -> {
             val searchViewModel: SearchViewModel = viewModel {
                 SearchViewModel(locationService, placesService)
+            }
+            LaunchedEffect(Unit) {
+                searchViewModel.preloadFilterOptionsIfNeeded()
             }
             // Pass current location to search for location-biased results
             LaunchedEffect(locationUiState.currentLatitude, locationUiState.currentLongitude) {
@@ -975,15 +985,12 @@ private fun NavHostContent(
         }
         
         is Screen.Game -> {
-            val gameViewModel: GamificationViewModel = viewModel { GamificationViewModel() }
-
-            // Refresh game data every time screen is shown (to show updated XP and leaderboard)
             LaunchedEffect(Unit) {
-                gameViewModel.loadAll()
+                gamificationViewModel.refreshIfStale()
             }
 
             DarkGameScreen(
-                viewModel = gameViewModel,
+                viewModel = gamificationViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
             )
         }
@@ -1010,6 +1017,9 @@ private fun NavHostContent(
 
         is Screen.DarkHome -> {
             val uiState by locationHomeViewModel.uiState.collectAsState()
+            val preloadSearchViewModel: SearchViewModel = viewModel {
+                SearchViewModel(locationService, placesService)
+            }
             
             // Track if we've already requested permission on this screen visit
             var hasRequestedPermission by remember { mutableStateOf(false) }
@@ -1035,11 +1045,20 @@ private fun NavHostContent(
             // Combine database and nearby restaurants
             val combinedRestaurants = (uiState.allRestaurants + nearbyAsRestaurants).distinctBy { it.id }
 
-            // Refresh from live data sources whenever Home screen is entered.
+            // Home stage preload:
+            // - Ensure home data is already prepared from splash.
+            // - Warm secondary screens in the background while user is on home.
             LaunchedEffect(Unit) {
-                locationHomeViewModel.refreshHomeData()
+                locationHomeViewModel.preloadHomeFromSplash()
+                locationHomeViewModel.ensureHomeDataLoaded()
                 locationHomeViewModel.refreshUserLocation()
+                socialFeedViewModel.preloadHomeSurfaceFromSplash()
                 socialFeedViewModel.refreshHomeData()
+                socialFeedViewModel.preloadExploreFromHome()
+                socialMapViewModel.preloadFromHome()
+                preloadSearchViewModel.preloadFilterOptionsIfNeeded()
+                profileViewModel.preloadFromHome()
+                gamificationViewModel.preloadFromHome()
             }
 
             RequestLocationPermission(
@@ -1271,7 +1290,7 @@ private fun NavHostContent(
             // State for restaurants
             var allRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
             var nearbyRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
-            var isLoadingRestaurants by remember { mutableStateOf(true) }
+            var isLoadingRestaurants by remember { mutableStateOf(false) }
             
             // State for text search
             var searchedRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
@@ -1295,25 +1314,56 @@ private fun NavHostContent(
                 )
             }
 
+            // Seed from already-loaded Home data so this screen can render immediately.
+            val cachedAllRestaurants = locationUiState.allRestaurants
+            val cachedNearbyRestaurants = remember(
+                locationUiState.selectedLocation,
+                locationUiState.allRestaurants,
+                placesNearbyAsRestaurants
+            ) {
+                val city = locationUiState.selectedLocation
+                val cityMatches = if (!city.isNullOrBlank()) {
+                    locationUiState.allRestaurants.filter { it.city.contains(city, ignoreCase = true) }
+                } else {
+                    emptyList()
+                }
+                (cityMatches + placesNearbyAsRestaurants).distinctBy { it.id }
+            }
+
+            LaunchedEffect(cachedAllRestaurants, cachedNearbyRestaurants) {
+                if (allRestaurants.isEmpty() && cachedAllRestaurants.isNotEmpty()) {
+                    allRestaurants = cachedAllRestaurants
+                }
+                if (nearbyRestaurants.isEmpty() && cachedNearbyRestaurants.isNotEmpty()) {
+                    nearbyRestaurants = cachedNearbyRestaurants
+                }
+            }
+
             // Load restaurants when screen opens - both all and nearby
             LaunchedEffect(Unit) {
+                val needAllFetch = allRestaurants.isEmpty()
+                val needNearbyFetch = nearbyRestaurants.isEmpty()
+                if (!needAllFetch && !needNearbyFetch) return@LaunchedEffect
+
                 isLoadingRestaurants = true
                 println("DarkDishRating: Loading restaurants...")
 
                 // Load all restaurants from database
-                val allResult = databaseRepository.getRestaurants()
-                allResult.onSuccess { restaurants ->
-                    allRestaurants = restaurants
-                    println("DarkDishRating: Loaded ${restaurants.size} total restaurants from database")
-                }.onFailure { error ->
-                    println("DarkDishRating: Failed to load restaurants: ${error.message}")
+                if (needAllFetch) {
+                    val allResult = databaseRepository.getRestaurants()
+                    allResult.onSuccess { restaurants ->
+                        allRestaurants = restaurants
+                        println("DarkDishRating: Loaded ${restaurants.size} total restaurants from database")
+                    }.onFailure { error ->
+                        println("DarkDishRating: Failed to load restaurants: ${error.message}")
+                    }
                 }
 
                 // Load nearby restaurants based on current selected city from database
                 val currentCity = locationUiState.selectedLocation
                 println("DarkDishRating: Current location = $currentCity")
 
-                if (!currentCity.isNullOrBlank()) {
+                if (needNearbyFetch && !currentCity.isNullOrBlank()) {
                     println("DarkDishRating: Loading nearby restaurants for: $currentCity")
                     val nearbyResult = databaseRepository.getRestaurantsByCity(currentCity)
                     nearbyResult.onSuccess { restaurants ->
@@ -1326,7 +1376,7 @@ private fun NavHostContent(
                         nearbyRestaurants = placesNearbyAsRestaurants
                         println("DarkDishRating: Database failed (${error.message}), using ${placesNearbyAsRestaurants.size} Places API restaurants")
                     }
-                } else {
+                } else if (needNearbyFetch) {
                     // No location selected - use Google Places restaurants if available
                     nearbyRestaurants = placesNearbyAsRestaurants
                     println("DarkDishRating: No location selected, using ${placesNearbyAsRestaurants.size} Places API restaurants")
@@ -1374,7 +1424,7 @@ private fun NavHostContent(
                 if (searchQuery.length >= 3 && placesService != null) {
                     isSearchingRestaurants = true
                     // Add small delay for debouncing
-                    kotlinx.coroutines.delay(300)
+                    kotlinx.coroutines.delay(180)
                     
                     val currentCity = locationUiState.selectedLocation
                     val fullQuery = if (!currentCity.isNullOrBlank()) {
@@ -1484,6 +1534,8 @@ private fun NavHostContent(
                 onDismissError = { dishRatingViewModel.clearError() },
                 onAddRestaurantManually = { navigationState.navigateTo(Screen.ManualRestaurantEntry) },
                 onSearchRestaurants = { query -> searchQuery = query },
+                currentLatitude = locationUiState.userLatitude ?: locationUiState.currentLatitude,
+                currentLongitude = locationUiState.userLongitude ?: locationUiState.currentLongitude,
                 detectedChain = navigationState.detectedChain,
                 detectedType = navigationState.detectedType,
                 currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol

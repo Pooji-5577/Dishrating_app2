@@ -26,6 +26,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
 
+private const val MAX_CUSTOM_MARKER_ICONS = 48
+
 @Composable
 actual fun PlatformMapView(
     latitude: Double,
@@ -50,9 +52,17 @@ actual fun PlatformMapView(
 
     val markerIcons = remember { mutableStateMapOf<String, BitmapDescriptor>() }
 
-    // Load circular marker images
-    LaunchedEffect(markers) {
-        markers.forEach { marker ->
+    val iconCandidates = remember(markers) {
+        markers
+            .asSequence()
+            .filter { !it.imageUrl.isNullOrBlank() }
+            .take(MAX_CUSTOM_MARKER_ICONS)
+            .toList()
+    }
+
+    // Load a limited set of circular marker images to keep first render fast
+    LaunchedEffect(iconCandidates) {
+        iconCandidates.forEach { marker ->
             val url = marker.imageUrl
             if (url != null && !markerIcons.containsKey(marker.id)) {
                 withContext(Dispatchers.IO) {

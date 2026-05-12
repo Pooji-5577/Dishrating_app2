@@ -8,8 +8,24 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
-    alias(libs.plugins.googleServices)
-    alias(libs.plugins.firebaseCrashlytics)
+    alias(libs.plugins.googleServices) apply false
+    alias(libs.plugins.firebaseCrashlytics) apply false
+}
+
+val hasGoogleServicesJson = listOf(
+    "google-services.json",
+    "src/debug/google-services.json",
+    "src/release/google-services.json"
+).map(::file).any { it.exists() }
+
+if (hasGoogleServicesJson) {
+    apply(plugin = "com.google.gms.google-services")
+    apply(plugin = "com.google.firebase.crashlytics")
+} else {
+    logger.lifecycle(
+        "composeApp: google-services.json not found. " +
+            "Building without Google Services/Crashlytics plugin."
+    )
 }
 
 // Load local.properties
@@ -167,4 +183,3 @@ android {
 dependencies {
     debugImplementation(compose.uiTooling)
 }
-

@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 /**
  * UI State for Nearby Restaurants Screen
@@ -37,6 +38,13 @@ class NearbyRestaurantsViewModel(
     private val placesService: PlacesService?,
     geofencingService: GeofencingService? = null
 ) : ViewModel() {
+    companion object {
+        private const val CACHE_TTL_MS = 90_000L
+        private var cachedRestaurants: List<NearbyRestaurant> = emptyList()
+        private var cachedLocation: LocationResult? = null
+        private var cachedRadiusMeters: Int = 2000
+        private var cachedAtMs: Long = 0L
+    }
 
     private val _uiState = MutableStateFlow<NearbyRestaurantsUiState>(NearbyRestaurantsUiState.Initial)
     val uiState: StateFlow<NearbyRestaurantsUiState> = _uiState.asStateFlow()
@@ -73,20 +81,41 @@ class NearbyRestaurantsViewModel(
             return
         }
 
+        val nowMs = Clock.System.now().toEpochMilliseconds()
+        val cacheValid = cachedRestaurants.isNotEmpty() &&
+            cachedLocation != null &&
+            cachedRadiusMeters == radiusInMeters &&
+            (nowMs - cachedAtMs) <= CACHE_TTL_MS
+
+        if (cacheValid && _uiState.value !is NearbyRestaurantsUiState.Success) {
+            _uiState.value = NearbyRestaurantsUiState.Success(
+                restaurants = cachedRestaurants,
+                currentLocation = cachedLocation,
+                geofencingEnabled = _geofenceEnabled.value,
+                monitoredCount = if (_geofenceEnabled.value) geofenceRepository.monitoredCount() else 0
+            )
+        }
+
         viewModelScope.launch {
-            _uiState.value = NearbyRestaurantsUiState.Loading
+            if (!cacheValid) {
+                _uiState.value = NearbyRestaurantsUiState.Loading
+            }
 
             try {
                 // Check location permission
                 if (!locationService.hasLocationPermission()) {
-                    _uiState.value = NearbyRestaurantsUiState.Error("Location permission not granted")
+                    if (!cacheValid) {
+                        _uiState.value = NearbyRestaurantsUiState.Error("Location permission not granted")
+                    }
                     return@launch
                 }
 
                 // Get current location
                 val location = locationService.getCurrentLocation()
                 if (location == null) {
-                    _uiState.value = NearbyRestaurantsUiState.Error("Unable to get current location")
+                    if (!cacheValid) {
+                        _uiState.value = NearbyRestaurantsUiState.Error("Unable to get current location")
+                    }
                     return@launch
                 }
 
@@ -98,6 +127,11 @@ class NearbyRestaurantsViewModel(
                     longitude = location.longitude,
                     radiusInMeters = radiusInMeters
                 )
+
+                cachedRestaurants = restaurants
+                cachedLocation = location
+                cachedRadiusMeters = radiusInMeters
+                cachedAtMs = Clock.System.now().toEpochMilliseconds()
 
                 // Update geofences if enabled
                 if (_geofenceEnabled.value && restaurants.isNotEmpty()) {
@@ -112,9 +146,11 @@ class NearbyRestaurantsViewModel(
                 )
 
             } catch (e: Exception) {
-                _uiState.value = NearbyRestaurantsUiState.Error(
-                    "Error loading restaurants: ${e.message}"
-                )
+                if (!cacheValid) {
+                    _uiState.value = NearbyRestaurantsUiState.Error(
+                        "Error loading restaurants: ${e.message}"
+                    )
+                }
             }
         }
     }

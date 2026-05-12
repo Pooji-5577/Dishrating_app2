@@ -54,7 +54,7 @@ fun DarkSplashScreen(
     
     LaunchedEffect(isAuthenticated) {
         if (isAuthenticated != null) {
-            delay(2000)
+            delay(900)
             if (isAuthenticated) {
                 onNavigateToHome()
             } else {

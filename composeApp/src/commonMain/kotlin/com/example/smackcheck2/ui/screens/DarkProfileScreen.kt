@@ -139,19 +139,10 @@ fun DarkProfileScreen(
     // Profile tab state
     var selectedTab by remember { mutableStateOf(0) } // 0=My Ratings, 1=Saved, 2=Reviews
 
-    // Load user ratings
-    var userRatings by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
+    // Use ViewModel-backed ratings to avoid duplicate fetch on every screen entry.
+    val userRatings = uiState.userRatings
     var savedItems by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
     val user = uiState.user
-
-    // Wire selected cuisines to user profile preference tags
-    LaunchedEffect(user?.id) {
-        val uid = user?.id ?: return@LaunchedEffect
-        try {
-            val repo = SocialRepository()
-            repo.getUserRatings(uid).onSuccess { items -> userRatings = items }
-        } catch (_: Exception) {}
-    }
 
     // Load saved/bookmarked posts
     LaunchedEffect(preferencesRepository, selectedTab) {

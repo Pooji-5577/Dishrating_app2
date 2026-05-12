@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 // ═══════════════════════════════════════════════════════════════════
 // UI State
@@ -76,6 +77,7 @@ class GamificationViewModel : ViewModel() {
     /** One-shot events for the points-earned popup. */
     private val _pointsEarned = MutableSharedFlow<PointsEarnedEvent>(extraBufferCapacity = 5)
     val pointsEarned: SharedFlow<PointsEarnedEvent> = _pointsEarned.asSharedFlow()
+    private var lastLoadedAtMs: Long = 0L
 
     init {
         loadAll()
@@ -84,7 +86,7 @@ class GamificationViewModel : ViewModel() {
     // ── Load everything from Supabase ──────────────────────────────
 
     fun loadAll() {
-        _uiState.update { it.copy(isLoading = true) }
+        _uiState.update { it.copy(isLoading = it.totalXp == 0 && it.leaderboard.isEmpty()) }
         viewModelScope.launch {
             try {
                 val userId = PointsRepository.currentUserId()
@@ -160,10 +162,22 @@ class GamificationViewModel : ViewModel() {
                         error = null
                     )
                 }
+                lastLoadedAtMs = Clock.System.now().toEpochMilliseconds()
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
+    }
+
+    fun preloadFromHome() {
+        if (_uiState.value.totalXp > 0 || _uiState.value.leaderboard.isNotEmpty()) return
+        loadAll()
+    }
+
+    fun refreshIfStale(maxAgeMs: Long = 30_000L) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (now - lastLoadedAtMs <= maxAgeMs && _uiState.value.leaderboard.isNotEmpty()) return
+        loadAll()
     }
 
     // ── Public action methods (called from other screens) ──────────

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 /**
  * ViewModel for Home screen
@@ -121,6 +122,7 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
     // Add AuthRepository to query database directly for fresh data
     private val authRepository = AuthRepository()
     private val socialRepository = SocialRepository()
+    private var lastLoadedAtMs: Long = 0L
 
     private val _uiState = MutableStateFlow(ProfileUiState())
     val uiState: StateFlow<ProfileUiState> = _uiState.asStateFlow()
@@ -129,12 +131,12 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
         loadProfile()
     }
 
-    fun loadProfile() {
+    fun loadProfile(forceSpinner: Boolean = _uiState.value.user == null) {
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    isLoading = true,
-                    isRatingsLoading = true,
+                    isLoading = forceSpinner,
+                    isRatingsLoading = forceSpinner || it.userRatings.isEmpty(),
                     errorMessage = null
                 )
             }
@@ -155,6 +157,7 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
                         isLoading = false
                     )
                 }
+                lastLoadedAtMs = Clock.System.now().toEpochMilliseconds()
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
@@ -167,8 +170,19 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
         }
     }
 
-    fun refresh() {
-        loadProfile()
+    fun refresh(forceSpinner: Boolean = false) {
+        loadProfile(forceSpinner = forceSpinner)
+    }
+
+    fun preloadFromHome() {
+        if (_uiState.value.user != null) return
+        loadProfile(forceSpinner = false)
+    }
+
+    fun refreshIfStale(maxAgeMs: Long = 30_000L) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (now - lastLoadedAtMs <= maxAgeMs && _uiState.value.user != null) return
+        loadProfile(forceSpinner = false)
     }
 }
 

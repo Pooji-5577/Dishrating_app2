@@ -84,7 +84,7 @@ fun DishDetailScreen(
         modifier = modifier
     ) { paddingValues ->
         when {
-            uiState.isLoading -> {
+            uiState.isLoading && uiState.dish == null -> {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()

@@ -19,17 +19,19 @@ import com.google.firebase.crashlytics.FirebaseCrashlytics
  */
 object CrashlyticsHelper {
 
-    private val instance: FirebaseCrashlytics
-        get() = FirebaseCrashlytics.getInstance()
+    private fun instanceOrNull(): FirebaseCrashlytics? =
+        runCatching { FirebaseCrashlytics.getInstance() }
+            .onFailure { println("CrashlyticsHelper: Firebase Crashlytics unavailable: ${it.message}") }
+            .getOrNull()
 
     /** Attach the signed-in user's ID so crashes are grouped per user in the console. */
     fun setUser(userId: String) {
-        instance.setUserId(userId)
+        instanceOrNull()?.setUserId(userId)
     }
 
     /** Clear user identity on sign-out. */
     fun clearUser() {
-        instance.setUserId("")
+        instanceOrNull()?.setUserId("")
     }
 
     /**
@@ -37,25 +39,25 @@ object CrashlyticsHelper {
      * Call this at key navigation or lifecycle events.
      */
     fun log(message: String) {
-        instance.log(message)
+        instanceOrNull()?.log(message)
     }
 
     /** Record a caught exception as a non-fatal issue (appears in Crashlytics dashboard). */
     fun recordNonFatal(throwable: Throwable) {
-        instance.recordException(throwable)
+        instanceOrNull()?.recordException(throwable)
     }
 
     /** Attach arbitrary key-value metadata to the next crash report. */
     fun setKey(key: String, value: String) {
-        instance.setCustomKey(key, value)
+        instanceOrNull()?.setCustomKey(key, value)
     }
 
     fun setKey(key: String, value: Int) {
-        instance.setCustomKey(key, value)
+        instanceOrNull()?.setCustomKey(key, value)
     }
 
     fun setKey(key: String, value: Boolean) {
-        instance.setCustomKey(key, value)
+        instanceOrNull()?.setCustomKey(key, value)
     }
 
     /**
@@ -77,7 +79,7 @@ object CrashlyticsHelper {
      *  crash signature.
      */
     fun simulateCrash() {
-        instance.log("simulateCrash() called — intentional test crash")
+        instanceOrNull()?.log("simulateCrash() called — intentional test crash")
         throw RuntimeException(
             "SmackCheck · Crashlytics test crash — safe to ignore in Firebase Console"
         )
@@ -89,6 +91,6 @@ object CrashlyticsHelper {
      * without building a release APK.
      */
     fun enableCollection() {
-        instance.setCrashlyticsCollectionEnabled(true)
+        instanceOrNull()?.setCrashlyticsCollectionEnabled(true)
     }
 }
