@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -195,10 +196,11 @@ fun DarkHomeScreen(
     ) {
         LazyColumn(
             modifier = Modifier
-                .fillMaxSize(),
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.navigationBars),
             contentPadding = PaddingValues(
                 start = 0.dp, end = 0.dp,
-                top = 0.dp, bottom = 120.dp
+                top = 0.dp, bottom = 96.dp
             ),
             verticalArrangement = Arrangement.spacedBy(0.dp)
         ) {
@@ -363,7 +365,7 @@ fun DarkHomeScreen(
                                         .clip(CircleShape)
                                         .background(MaroonLight)
                                         .clickable {
-                                            if (currentUserHasStory) onCurrentUserStoryClick() else onAddStoryClick()
+                                            onCurrentUserStoryClick()
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -654,6 +656,34 @@ fun DarkHomeScreen(
             onProfileClick = onProfileClick,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // Loading overlay — shown only on first load while data is empty
+        if (isLoading && allRestaurants.isEmpty() && allDishes.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(PageBg.copy(alpha = 0.9f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = Maroon,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Text(
+                        text = "Finding the best food around you...",
+                        fontFamily = jakartaSans,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 16.sp,
+                        color = TextGray
+                    )
+                }
+            }
+        }
     }
 }
 

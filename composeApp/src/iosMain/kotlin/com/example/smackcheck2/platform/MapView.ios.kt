@@ -84,6 +84,8 @@ actual fun PlatformMapView(
     markers: List<MapMarker>,
     onMarkerClick: (String) -> Unit,
     showMyLocation: Boolean,
+    recenterTrigger: Int,
+    fitBoundsTrigger: Int,
     modifier: Modifier
 ) {
     val delegate = remember(onMarkerClick) { MapViewDelegate(onMarkerClick) }

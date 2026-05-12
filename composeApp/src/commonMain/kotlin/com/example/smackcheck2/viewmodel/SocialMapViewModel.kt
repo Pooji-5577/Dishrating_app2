@@ -61,6 +61,28 @@ class SocialMapViewModel(
         loadNearbyUsers(force = false)
     }
 
+    /**
+     * Called when the map screen becomes visible.
+     */
+    fun onActive() {
+        // Resume auto-refresh if we already have a location
+        if (_uiState.value.currentLatitude != null) {
+            startAutoRefresh()
+        }
+        // If posts were never loaded, warm them now
+        if (_uiState.value.nearbyUsers.isEmpty() && !_uiState.value.isLoading) {
+            loadNearbyUsers(force = false)
+        }
+    }
+
+    /**
+     * Called when the map screen is hidden (user switched to another tab).
+     */
+    fun onInactive() {
+        stopAutoRefresh()
+        dismissUserPreview()
+    }
+
     private fun hydrateNearbyPostsFromCache() {
         val now = Clock.System.now().toEpochMilliseconds()
         val cacheValid = cachedWorldPosts.isNotEmpty() &&
@@ -99,16 +121,14 @@ class SocialMapViewModel(
         _uiState.update { it.copy(
             currentLatitude = latitude,
             currentLongitude = longitude,
-            locationPermissionGranted = true
+            locationPermissionGranted = true,
+            isLoading = false
         ) }
-        
+
         // Update user's location in database
         updateUserLocationInDb(latitude, longitude)
-        
-        // Load nearby users
-        loadNearbyUsers()
-        
-        // Start auto-refresh
+
+        // Start auto-refresh (posts were already loaded in init)
         startAutoRefresh()
     }
 
@@ -118,7 +138,7 @@ class SocialMapViewModel(
     fun requestCurrentLocation() {
         if (locationRequestJob?.isActive == true) return
         locationRequestJob = viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = it.nearbyUsers.isEmpty()) }
             
             if (locationService == null) {
                 _uiState.update { it.copy(
@@ -252,14 +272,24 @@ class SocialMapViewModel(
     /**
      * Load the current user's own dish posts for MY RATINGS mode.
      */
-    fun loadMyRatings() {
-        if (myRatingsJob?.isActive == true) return
-        if (hasLoadedMyRatings && _uiState.value.myRatingMarkers.isNotEmpty()) return
+    fun loadMyRatings(force: Boolean = false) {
+        if (myRatingsJob?.isActive == true) {
+            if (!force) return
+            myRatingsJob?.cancel()
+        }
+        if (!force && hasLoadedMyRatings && _uiState.value.myRatingMarkers.isNotEmpty()) return
         myRatingsJob = viewModelScope.launch {
             repository.getMyRatingPosts()
                 .onSuccess { markers ->
                     hasLoadedMyRatings = true
-                    _uiState.update { it.copy(myRatingMarkers = markers) }
+                    val validMarkers = markers.filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                    println("SocialMapViewModel: loadMyRatings success - ${markers.size} total, ${validMarkers.size} valid markers")
+                    _uiState.update {
+                        it.copy(
+                            myRatingMarkers = markers,
+                            fitBoundsTrigger = if (validMarkers.isNotEmpty()) it.fitBoundsTrigger + 1 else it.fitBoundsTrigger
+                        )
+                    }
                 }
                 .onFailure { error ->
                     println("SocialMapViewModel: loadMyRatings failed: ${error.message}")
@@ -271,9 +301,9 @@ class SocialMapViewModel(
      * Switch between NEARBY and MY_RATINGS map modes.
      */
     fun setMapMode(mode: MapMode) {
-        _uiState.update { it.copy(mapMode = mode) }
+        _uiState.update { it.copy(mapMode = mode, selectedUser = null) }
         if (mode == MapMode.MY_RATINGS) {
-            loadMyRatings()
+            loadMyRatings(force = true)
         } else {
             loadNearbyUsers(force = _uiState.value.nearbyUsers.isEmpty())
         }

@@ -3,6 +3,7 @@ package com.example.smackcheck2.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.RestaurantPhotoService
+import com.example.smackcheck2.model.Restaurant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,6 +93,30 @@ class RestaurantPhotoViewModel : ViewModel() {
 
         thumbnailUrlCache[restaurantId] = url
         updateState(restaurantId, PhotoState.ThumbnailLoaded(url))
+    }
+
+    /**
+     * Warm the first visible restaurant card images from already-loaded list data.
+     */
+    fun preloadThumbnails(restaurants: List<Restaurant>, limit: Int = 12) {
+        restaurants
+            .asSequence()
+            .filter { it.id.isNotBlank() }
+            .distinctBy { it.id }
+            .take(limit)
+            .forEach { restaurant ->
+                val knownUrl = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull()
+                if (!knownUrl.isNullOrBlank()) {
+                    setThumbnailUrl(restaurant.id, knownUrl)
+                } else {
+                    loadThumbnail(
+                        restaurantId = restaurant.id,
+                        placeId = restaurant.googlePlaceId,
+                        name = restaurant.name,
+                        city = restaurant.city
+                    )
+                }
+            }
     }
 
     /**

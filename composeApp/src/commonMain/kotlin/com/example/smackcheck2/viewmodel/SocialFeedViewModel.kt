@@ -97,7 +97,9 @@ class SocialFeedViewModel(
         viewModelScope.launch(crashGuard) {
             try {
                 val userId = authRepository.getCurrentUserId() ?: return@launch
+                println("SocialFeedViewModel: Loading stories for user $userId")
                 socialRepository.getStories().onSuccess { stories ->
+                    val myStories = stories.filter { it.userId == userId }
                     val storyUsers = stories
                         .filter { it.userId != userId }
                         .distinctBy { it.userId }
@@ -109,11 +111,20 @@ class SocialFeedViewModel(
                                 isFollowing = true
                             )
                         }
+                    println("SocialFeedViewModel: Loaded ${stories.size} total stories, ${myStories.size} mine, ${storyUsers.size} other users")
                     _uiState.update {
                         it.copy(
                             currentUserId = userId,
                             stories = stories,
                             storyUsers = storyUsers
+                        )
+                    }
+                }.onFailure { error ->
+                    println("SocialFeedViewModel: Failed to load stories: ${error.message}")
+                    _uiState.update {
+                        it.copy(
+                            currentUserId = userId,
+                            errorMessage = "Failed to load stories: ${error.message}"
                         )
                     }
                 }

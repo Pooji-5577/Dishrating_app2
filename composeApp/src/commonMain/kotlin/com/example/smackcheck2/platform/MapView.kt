@@ -21,5 +21,7 @@ expect fun PlatformMapView(
     markers: List<MapMarker> = emptyList(),
     onMarkerClick: (String) -> Unit = {},
     showMyLocation: Boolean = false,
+    recenterTrigger: Int = 0,
+    fitBoundsTrigger: Int = 0,
     modifier: Modifier = Modifier
 )

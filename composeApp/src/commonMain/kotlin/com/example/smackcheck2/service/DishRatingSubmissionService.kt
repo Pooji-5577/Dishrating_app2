@@ -3,6 +3,7 @@ package com.example.smackcheck2.service
 import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Restaurant
@@ -89,7 +90,8 @@ class DishRatingSubmissionService(
     private val storageRepository: StorageRepository = StorageRepository(),
     private val authRepository: AuthRepository = AuthRepository(),
     private val achievementService: AchievementService = AchievementService(),
-    private val notificationService: NotificationService = NotificationService()
+    private val notificationService: NotificationService = NotificationService(),
+    private val socialRepository: SocialRepository = SocialRepository()
 ) {
 
     /**
@@ -117,6 +119,13 @@ class DishRatingSubmissionService(
 
         val ratingId = insertRating(request, dish.id, userId, imageUrl)
             .getOrElse { return Result.failure(it) }
+
+        // Auto-publish the review photo to Stories (24h visibility)
+        if (imageUrl != null) {
+            socialRepository.uploadStory(userId, imageUrl)
+                .onSuccess { println("DishRatingSubmissionService: Auto-published story for rating $ratingId") }
+                .onFailure { println("DishRatingSubmissionService: Failed to auto-publish story: ${it.message}") }
+        }
 
         val xpEarned = calculateXp(request, imageUrl)
         awardXp(userId, xpEarned)

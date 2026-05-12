@@ -58,7 +58,8 @@ fun DarkTopDishesScreen(
     location: String,
     dishes: List<Dish>,
     onNavigateBack: () -> Unit,
-    onDishClick: (String) -> Unit = {}
+    onDishClick: (String) -> Unit = {},
+    isActive: Boolean = true
 ) {
     Scaffold(
         containerColor = appColors().Background,

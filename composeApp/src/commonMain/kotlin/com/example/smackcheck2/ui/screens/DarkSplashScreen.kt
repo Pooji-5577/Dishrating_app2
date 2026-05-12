@@ -15,7 +15,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -25,22 +28,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import kotlinx.coroutines.delay
 
 /**
- * Dark themed Splash Screen
+ * Splash Screen – shown only after first-time login / registration.
+ * Clean white background, centred fork+knife icon in a soft-pink circle,
+ * elegant serif wordmark and spaced-out tagline.
  */
 @Composable
 fun DarkSplashScreen(
     onNavigateToLogin: () -> Unit,
     onNavigateToHome: () -> Unit,
-    isAuthenticated: Boolean?
+    isAuthenticated: Boolean?,
+    isDataReady: Boolean = false
 ) {
     val scale = remember { Animatable(0f) }
     val alpha = remember { Animatable(0f) }
-    
+    var animationDone by remember { mutableStateOf(false) }
+
     LaunchedEffect(Unit) {
         scale.animateTo(
             targetValue = 1f,
@@ -50,77 +58,90 @@ fun DarkSplashScreen(
             targetValue = 1f,
             animationSpec = tween(durationMillis = 600)
         )
+        animationDone = true
     }
-    
-    LaunchedEffect(isAuthenticated) {
-        if (isAuthenticated != null) {
-            delay(900)
-            if (isAuthenticated) {
+
+    // Navigate once auth is known AND splash animation is done AND home data is ready.
+    // For unauthenticated users we don't wait for data (go straight to login).
+    LaunchedEffect(isAuthenticated, animationDone, isDataReady) {
+        if (isAuthenticated == null) return@LaunchedEffect
+        if (!animationDone) return@LaunchedEffect
+
+        if (isAuthenticated) {
+            // Wait until home data is loaded, then navigate
+            if (isDataReady) {
+                delay(300) // Small pause so the transition feels intentional
                 onNavigateToHome()
-            } else {
-                onNavigateToLogin()
             }
+            // If not ready, keep showing splash until isDataReady triggers this again
+        } else {
+            delay(300)
+            onNavigateToLogin()
         }
     }
 
-    // Safety timeout: if auth state never resolves (network down, Supabase unreachable),
-    // fall through to Login after 6 seconds so the app is never permanently stuck.
+    // Safety timeout: if auth or data never resolves, fall through after 6 seconds
     LaunchedEffect(Unit) {
         delay(6000)
-        onNavigateToLogin()
+        if (isAuthenticated == true && !isDataReady) {
+            // Even without data, don't trap the user on splash forever
+            onNavigateToHome()
+        } else if (isAuthenticated == null) {
+            onNavigateToLogin()
+        }
     }
-    
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(appColors().Background),
+            .background(Color(0xFFF5F5F0)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Logo with glow effect
+            // Soft pink circle with fork+knife icon
             Box(
+                modifier = Modifier
+                    .size(140.dp)
+                    .scale(scale.value)
+                    .background(
+                        color = Color(0xFFF5D5D5),
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    ),
                 contentAlignment = Alignment.Center
             ) {
-                // Glow background
-                Box(
-                    modifier = Modifier
-                        .size(150.dp)
-                        .scale(scale.value)
-                        .background(
-                            color = appColors().Primary.copy(alpha = 0.2f),
-                            shape = androidx.compose.foundation.shape.CircleShape
-                        )
-                )
-                
                 Icon(
                     imageVector = Icons.Filled.Restaurant,
                     contentDescription = "SmackCheck Logo",
-                    modifier = Modifier
-                        .size(100.dp)
-                        .scale(scale.value),
-                    tint = appColors().Primary
+                    modifier = Modifier.size(64.dp),
+                    tint = Color(0xFF9B2335)
                 )
             }
-            
-            Spacer(modifier = Modifier.height(32.dp))
-            
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Elegant serif wordmark
             SmackCheckWordmark(
                 modifier = Modifier.alpha(alpha.value),
-                fontFamily = PlusJakartaSans(),
-                fontSize = 36.sp,
+                fontFamily = NewsreaderFontFamily(),
+                fontSize = 38.sp,
+                smackColor = Color(0xFF5A1A1A),
+                checkColor = Color(0xFF5A1A1A),
                 letterSpacing = 0.sp
             )
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Tagline
             Text(
-                text = "Rate • Discover • Share",
-                fontSize = 16.sp,
-                color = appColors().TextSecondary,
+                text = "Rate \u2022 Discover \u2022 Share",
+                fontSize = 14.sp,
+                fontFamily = PlusJakartaSans(),
+                fontWeight = FontWeight.Medium,
+                color = Color(0xFF8A8A8A),
                 modifier = Modifier.alpha(alpha.value),
-                letterSpacing = 2.sp
+                letterSpacing = 3.sp
             )
         }
     }

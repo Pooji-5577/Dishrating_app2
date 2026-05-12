@@ -114,27 +114,14 @@ const FOOD_TYPE_BLACKLIST = new Set([
   'resort_hotel',
 ])
 
-const FOOD_TYPE_WHITELIST = new Set([
-  'restaurant',
-  'cafe',
-  'bar',
-  'bakery',
-  'meal_takeaway',
-  'meal_delivery',
-  'food',
-])
-
 function isFoodPlace(place: GooglePlaceResult): boolean {
   const types = place.types ?? []
 
+  // Only filter out obvious non-food places. Many legitimate restaurants
+  // have generic types like ["establishment", "point_of_interest"] so
+  // requiring a whitelist match excludes too many valid places.
   if (types.some(t => FOOD_TYPE_BLACKLIST.has(t))) {
     console.log(`Filtered out (blacklist): "${place.name}" (types: ${types.join(', ')})`)
-    return false
-  }
-
-  const hasFood = types.some(t => FOOD_TYPE_WHITELIST.has(t))
-  if (!hasFood) {
-    console.log(`Filtered out (no food type): "${place.name}" (types: ${types.join(', ')})`)
     return false
   }
 
@@ -221,15 +208,14 @@ async function handleNearbySearch(
 ): Promise<Response> {
   const { latitude, longitude, radiusInMeters, keyword } = body
 
+  // Build a broader keyword so we don't miss cafes, bakeries, bars, etc.
+  const searchKeyword = keyword ? keyword : 'restaurant|food|cafe|bakery|bar'
+
   let url = `https://maps.googleapis.com/maps/api/place/nearbysearch/json` +
     `?location=${latitude},${longitude}` +
     `&radius=${radiusInMeters}` +
-    `&type=restaurant` +
+    `&keyword=${encodeURIComponent(searchKeyword)}` +
     `&key=${apiKey}`
-
-  if (keyword) {
-    url += `&keyword=${encodeURIComponent(keyword)}`
-  }
 
   console.log(`Nearby search: lat=${latitude}, lng=${longitude}, radius=${radiusInMeters}, keyword=${keyword ?? 'none'}`)
 
@@ -353,7 +339,6 @@ async function handleTextSearch(
   try {
     let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json` +
       `?query=${encodeURIComponent(query)}` +
-      `&type=restaurant` +
       `&key=${apiKey}`
 
     // Add location biasing if coordinates are provided

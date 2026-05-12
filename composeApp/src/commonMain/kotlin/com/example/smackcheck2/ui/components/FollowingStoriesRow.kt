@@ -77,7 +77,7 @@ fun FollowingStoriesRow(
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.clickable {
-                        if (currentUserHasStory) onCurrentUserStoryClick() else onAddStoryClick()
+                        onCurrentUserStoryClick()
                     }
                 ) {
                     // Dashed circle border with plus icon

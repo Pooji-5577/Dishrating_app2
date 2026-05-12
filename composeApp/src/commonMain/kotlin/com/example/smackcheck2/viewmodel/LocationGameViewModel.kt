@@ -56,7 +56,9 @@ data class LocationHomeUiState(
     val noRestaurantsFound: Boolean = false,
     val isManuallySelected: Boolean = false,
     // ISO 3166-1 alpha-2 country code derived from the user's last detected GPS
-    val countryCode: String? = null
+    val countryCode: String? = null,
+    // Set to true once the first batch of DB data is loaded so Splash can navigate
+    val isInitialDataLoaded: Boolean = false
 )
 
 /**
@@ -72,11 +74,19 @@ class LocationHomeViewModel : ViewModel() {
     private var hasStartedHomePreload = false
 
     init {
-        preloadHomeFromSplash()
+        // Only preload if the user is already signed in.
+        // For first-time users the Splash screen will trigger this after login.
+        if (authRepository.isSignedIn()) {
+            preloadHomeFromSplash()
+        }
     }
 
     fun preloadHomeFromSplash() {
         if (hasStartedHomePreload) return
+        if (!authRepository.isSignedIn()) {
+            println("LocationHomeViewModel: Skipping preload — user not authenticated yet")
+            return
+        }
         hasStartedHomePreload = true
         loadSavedLocation()
     }
@@ -344,11 +354,12 @@ class LocationHomeViewModel : ViewModel() {
                             allRestaurants = restaurants,
                             topDishes = topDishes,
                             isLoading = false,
+                            isInitialDataLoaded = true,
                             noRestaurantsFound = restaurants.isEmpty()
                         )
                     }
                 }.onFailure {
-                    _uiState.update { it.copy(isLoading = false) }
+                    _uiState.update { it.copy(isLoading = false, isInitialDataLoaded = true) }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false) }
@@ -406,6 +417,7 @@ class LocationHomeViewModel : ViewModel() {
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
+                                isInitialDataLoaded = true,
                                 topRestaurants = topRestaurants,
                                 topDishes = topDishes,
                                 allRestaurants = restaurants,
@@ -419,6 +431,7 @@ class LocationHomeViewModel : ViewModel() {
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
+                                isInitialDataLoaded = true,
                                 error = if (it.nearbyRestaurants.isEmpty())
                                     "Failed to load restaurants: ${error.message}"
                                 else null,

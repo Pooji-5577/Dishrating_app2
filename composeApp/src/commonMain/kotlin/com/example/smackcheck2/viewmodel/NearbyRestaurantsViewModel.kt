@@ -50,6 +50,7 @@ class NearbyRestaurantsViewModel(
     val uiState: StateFlow<NearbyRestaurantsUiState> = _uiState.asStateFlow()
 
     private var currentLocation: LocationResult? = null
+    private var hasRequestedLiveRefresh = false
     
     // Geofencing support
     private val geofenceRepository = GeofenceRepository(geofencingService)
@@ -75,7 +76,7 @@ class NearbyRestaurantsViewModel(
     /**
      * Load nearby restaurants based on current location
      */
-    fun loadNearbyRestaurants(radiusInMeters: Int = 2000) {
+    fun loadNearbyRestaurants(radiusInMeters: Int = 5000) {
         if (locationService == null || placesService == null) {
             _uiState.value = NearbyRestaurantsUiState.Error("Location or Places service not available")
             return
@@ -156,6 +157,31 @@ class NearbyRestaurantsViewModel(
     }
 
     /**
+     * Seed from Home's already-loaded nearby results so this screen can paint immediately.
+     */
+    fun preloadFromHome(restaurants: List<NearbyRestaurant>, location: LocationResult? = null) {
+        if (restaurants.isNotEmpty() && _uiState.value !is NearbyRestaurantsUiState.Success) {
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            cachedRestaurants = restaurants
+            cachedLocation = location ?: cachedLocation
+            cachedRadiusMeters = 5000
+            cachedAtMs = nowMs
+            currentLocation = cachedLocation
+            _uiState.value = NearbyRestaurantsUiState.Success(
+                restaurants = restaurants,
+                currentLocation = cachedLocation,
+                geofencingEnabled = _geofenceEnabled.value,
+                monitoredCount = if (_geofenceEnabled.value) geofenceRepository.monitoredCount() else 0
+            )
+        }
+
+        if (!hasRequestedLiveRefresh) {
+            hasRequestedLiveRefresh = true
+            loadNearbyRestaurants()
+        }
+    }
+
+    /**
      * Toggle geofencing on/off
      */
     fun toggleGeofencing() {
@@ -216,5 +242,24 @@ class NearbyRestaurantsViewModel(
      */
     fun changeRadius(radiusInMeters: Int) {
         loadNearbyRestaurants(radiusInMeters)
+    }
+
+    /**
+     * Called when the screen becomes visible. Warm data if empty.
+     */
+    fun onActive() {
+        val state = _uiState.value
+        if (state is NearbyRestaurantsUiState.Initial || state is NearbyRestaurantsUiState.Error) {
+            loadNearbyRestaurants()
+        }
+    }
+
+    /**
+     * Called when the screen is hidden. Stop geofencing to save battery.
+     */
+    fun onInactive() {
+        if (_geofenceEnabled.value) {
+            geofenceRepository.stopMonitoringAll()
+        }
     }
 }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -72,6 +73,8 @@ import com.example.smackcheck2.ui.screens.ProgressDashboardScreen
 import com.example.smackcheck2.platform.LocalLocationService
 import com.example.smackcheck2.platform.LocalPlacesService
 import com.example.smackcheck2.platform.LocalGeofencingService
+import com.example.smackcheck2.platform.LocationResult
+import com.example.smackcheck2.platform.NearbyRestaurant
 import com.example.smackcheck2.platform.RequestLocationPermission
 import com.example.smackcheck2.platform.LocalImagePicker
 import com.example.smackcheck2.platform.LocalShareService
@@ -132,8 +135,8 @@ import kotlinx.coroutines.launch
 /**
  * Navigation state holder for managing current screen with Compose state
  */
-class NavigationState {
-    var currentScreen by mutableStateOf<Screen>(Screen.Splash)
+class NavigationState(initialScreen: Screen = Screen.Splash) {
+    var currentScreen by mutableStateOf<Screen>(initialScreen)
         private set
 
     private val backStack = mutableListOf<Screen>()
@@ -152,6 +155,9 @@ class NavigationState {
         private set
     
     var restaurantId by mutableStateOf("")
+        private set
+
+    var selectedRestaurantPreview by mutableStateOf<Restaurant?>(null)
         private set
     
     var dishId by mutableStateOf("")
@@ -200,6 +206,9 @@ class NavigationState {
     
     fun navigateToWithArgs(screen: Screen, vararg args: Pair<String, String>) {
         backStack.add(currentScreen)
+        if (screen is Screen.RestaurantDetail) {
+            selectedRestaurantPreview = null
+        }
         args.forEach { (key, value) ->
             when (key) {
                 "imageUri" -> imageUri = value
@@ -211,6 +220,13 @@ class NavigationState {
             }
         }
         currentScreen = screen
+    }
+
+    fun navigateToRestaurantDetail(restaurantId: String, restaurant: Restaurant? = null) {
+        backStack.add(currentScreen)
+        this.restaurantId = restaurantId
+        selectedRestaurantPreview = restaurant
+        currentScreen = Screen.RestaurantDetail
     }
     
     fun navigateBack(): Boolean {
@@ -255,6 +271,25 @@ class NavigationState {
     }
 }
 
+private fun NearbyRestaurant.toRestaurantPreview(city: String?): Restaurant =
+    Restaurant(
+        id = id,
+        name = name,
+        city = city ?: address ?: "Unknown",
+        cuisine = "Restaurant",
+        imageUrls = emptyList(),
+        averageRating = rating?.toFloat() ?: 0f,
+        reviewCount = userRatingsTotal ?: 0,
+        latitude = latitude,
+        longitude = longitude,
+        googlePlaceId = id,
+        photoUrl = photoUrl,
+        isOpenNow = isOpen
+    )
+
+private fun List<Restaurant>.findRestaurantPreview(restaurantId: String): Restaurant? =
+    firstOrNull { it.id == restaurantId || it.googlePlaceId == restaurantId }
+
 /**
  * Main Navigation Host composable
  * Manages navigation between all screens.
@@ -263,7 +298,17 @@ class NavigationState {
  */
 @Composable
 fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
-    val navigationState = remember { NavigationState() }
+    val authRepository = remember { AuthRepository() }
+    val isSignedIn = remember { authRepository.isSignedIn() }
+
+    val navigationState = remember {
+        NavigationState(
+            initialScreen = when {
+                isSignedIn -> Screen.DarkHome
+                else -> Screen.Login
+            }
+        )
+    }
     val authViewModel: AuthViewModel = viewModel { AuthViewModel() }
     val authState by authViewModel.authState.collectAsState()
 
@@ -277,6 +322,9 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
     val notificationViewModel: NotificationViewModel = viewModel { NotificationViewModel() }
     val socialFeedViewModel: SocialFeedViewModel = viewModel { SocialFeedViewModel(preferencesRepository) }
     val socialMapViewModel: SocialMapViewModel = viewModel { SocialMapViewModel(locationService) }
+    val nearbyRestaurantsViewModel: NearbyRestaurantsViewModel = viewModel {
+        NearbyRestaurantsViewModel(locationService, placesService, geofencingService)
+    }
     val profileViewModel: ProfileViewModel = viewModel { ProfileViewModel(authViewModel) }
 
     val imagePicker = LocalImagePicker.current
@@ -310,6 +358,7 @@ fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
             notificationViewModel = notificationViewModel,
             socialFeedViewModel = socialFeedViewModel,
             socialMapViewModel = socialMapViewModel,
+            nearbyRestaurantsViewModel = nearbyRestaurantsViewModel,
             profileViewModel = profileViewModel,
             preferencesRepository = preferencesRepository,
             imagePicker = imagePicker,
@@ -332,6 +381,7 @@ private fun NavHostContent(
     notificationViewModel: NotificationViewModel,
     socialFeedViewModel: SocialFeedViewModel,
     socialMapViewModel: SocialMapViewModel,
+    nearbyRestaurantsViewModel: NearbyRestaurantsViewModel,
     profileViewModel: ProfileViewModel,
     preferencesRepository: PreferencesRepository,
     imagePicker: com.example.smackcheck2.platform.ImagePicker?,
@@ -344,9 +394,90 @@ private fun NavHostContent(
         is AuthState.Unknown -> null
     }
 
+    val isMapVisible = navigationState.currentScreen is Screen.SocialMap
+    val isTopDishesVisible = navigationState.currentScreen is Screen.TopDishes
+    val isNearbyRestaurantsVisible = navigationState.currentScreen is Screen.NearbyRestaurants
+    val isBackgroundScreenVisible = isMapVisible || isTopDishesVisible || isNearbyRestaurantsVisible
+
     Box(modifier = Modifier.fillMaxSize()) {
-    when (navigationState.currentScreen) {
-        is Screen.Splash -> {
+        // Map layer - always composed so native MapView stays warm
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(if (isMapVisible) 1f else 0f)
+                .alpha(if (isMapVisible) 1f else 0f)
+        ) {
+            SocialMapScreen(
+                isActive = isMapVisible,
+                viewModel = socialMapViewModel,
+                onNavigateBack = { navigationState.navigateBack() },
+                onUserProfileClick = { userId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to userId
+                    )
+                },
+                onDishDetailClick = { ratingId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.DishDetail,
+                        "dishId" to ratingId
+                    )
+                },
+                onRateDishClick = { navigationState.navigateTo(Screen.DishCapture) },
+                onHomeClick = { navigationState.navigateToMainTab(Screen.DarkHome) },
+                onMapClick = { navigationState.navigateToMainTab(Screen.SocialMap) },
+                onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
+                onExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) },
+                onProfileClick = { navigationState.navigateToMainTab(Screen.Profile) }
+            )
+        }
+
+        // Top Dishes layer - always composed so it opens instantly
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(if (isTopDishesVisible) 1f else 0f)
+                .alpha(if (isTopDishesVisible) 1f else 0f)
+        ) {
+            val locationHomeUiState by locationHomeViewModel.uiState.collectAsState()
+            DarkTopDishesScreen(
+                isActive = isTopDishesVisible,
+                location = locationHomeUiState.selectedLocation ?: "Nearby",
+                dishes = locationHomeUiState.topDishes,
+                onNavigateBack = { navigationState.navigateBack() },
+                onDishClick = { dishId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.DishDetail,
+                        "dishId" to dishId
+                    )
+                }
+            )
+        }
+
+        // Nearby Restaurants layer - always composed so it opens instantly
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(if (isNearbyRestaurantsVisible) 1f else 0f)
+                .alpha(if (isNearbyRestaurantsVisible) 1f else 0f)
+        ) {
+            NearbyRestaurantsScreen(
+                isActive = isNearbyRestaurantsVisible,
+                viewModel = nearbyRestaurantsViewModel,
+                photoViewModel = restaurantPhotoViewModel,
+                onNavigateBack = { navigationState.navigateBack() },
+                onRestaurantClick = { restaurant ->
+                    navigationState.navigateToRestaurantDetail(
+                        restaurantId = restaurant.id,
+                        restaurant = restaurant.toRestaurantPreview(locationUiState.selectedLocation)
+                    )
+                }
+            )
+        }
+
+        if (!isBackgroundScreenVisible) {
+            when (navigationState.currentScreen) {
+                is Screen.Splash -> {
             LaunchedEffect(Unit) {
                 locationHomeViewModel.preloadHomeFromSplash()
             }
@@ -355,6 +486,7 @@ private fun NavHostContent(
                     socialFeedViewModel.preloadHomeSurfaceFromSplash()
                 }
             }
+            val locationHomeUiState by locationHomeViewModel.uiState.collectAsState()
             DarkSplashScreen(
                 onNavigateToLogin = { navigationState.replaceWith(Screen.Login) },
                 onNavigateToHome = {
@@ -365,7 +497,8 @@ private fun NavHostContent(
                         navigationState.replaceWith(Screen.DarkHome)
                     }
                 },
-                isAuthenticated = isAuthenticated
+                isAuthenticated = isAuthenticated,
+                isDataReady = locationHomeUiState.isInitialDataLoaded
             )
         }
 
@@ -380,7 +513,7 @@ private fun NavHostContent(
                     if (user != null && user.username.isBlank()) {
                         navigationState.replaceWith(Screen.ProfileSetup)
                     } else {
-                        navigationState.replaceWith(Screen.DarkHome)
+                        navigationState.replaceWith(Screen.Splash)
                     }
                 }
             )
@@ -399,13 +532,13 @@ private fun NavHostContent(
                 onNavigateToHome = { navigationState.replaceWith(Screen.ProfileSetup) }
             )
         }
-        
+
         is Screen.ProfileSetup -> {
             val profileSetupViewModel: ProfileSetupViewModel = viewModel { ProfileSetupViewModel() }
             ProfileSetupScreen(
                 viewModel = profileSetupViewModel,
                 currentUser = authViewModel.getCurrentUser(),
-                onComplete = { navigationState.replaceWith(Screen.DarkHome) }
+                onComplete = { navigationState.replaceWith(Screen.Splash) }
             )
         }
 
@@ -419,10 +552,10 @@ private fun NavHostContent(
                 onNavigateToLocationSelection = { navigationState.navigateTo(Screen.LocationSelection) },
                 onNavigateToGame = { navigationState.navigateTo(Screen.Game) },
                 onNavigateToRestaurant = { restaurantId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.RestaurantDetail,
-                        "restaurantId" to restaurantId
-                    )
+                    val state = locationHomeViewModel.uiState.value
+                    val restaurant = (state.topRestaurants + state.allRestaurants)
+                        .findRestaurantPreview(restaurantId)
+                    navigationState.navigateToRestaurantDetail(restaurantId, restaurant)
                 },
                 onNavigateToAllRestaurants = { navigationState.navigateTo(Screen.AllRestaurants) },
                 onNavigateToTopDishes = { navigationState.navigateTo(Screen.TopDishes) },
@@ -643,6 +776,8 @@ private fun NavHostContent(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
                         actionLabel = "Dish Rated"
                     )
+                    // Refresh stories so the auto-published story appears immediately
+                    socialFeedViewModel.refreshHomeData()
                     dishRatingViewModel.resetForm()
                     navigationState.clearCaptureData()
                     navigationState.popToRoot()
@@ -749,31 +884,6 @@ private fun NavHostContent(
             )
         }
 
-        is Screen.SocialMap -> {
-            SocialMapScreen(
-                viewModel = socialMapViewModel,
-                onNavigateBack = { navigationState.navigateBack() },
-                onUserProfileClick = { userId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.UserProfile,
-                        "userId" to userId
-                    )
-                },
-                onDishDetailClick = { ratingId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.DishDetail,
-                        "dishId" to ratingId
-                    )
-                },
-                onRateDishClick = { navigationState.navigateTo(Screen.DishCapture) },
-                onHomeClick = { navigationState.navigateToMainTab(Screen.DarkHome) },
-                onMapClick = { navigationState.navigateToMainTab(Screen.SocialMap) },
-                onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
-                onExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) },
-                onProfileClick = { navigationState.navigateToMainTab(Screen.Profile) }
-            )
-        }
-        
         is Screen.Search -> {
             val searchViewModel: SearchViewModel = viewModel {
                 SearchViewModel(locationService, placesService)
@@ -814,6 +924,7 @@ private fun NavHostContent(
                 photoViewModel = restaurantPhotoViewModel,
                 preferencesRepository = preferencesRepository,
                 restaurantId = navigationState.restaurantId,
+                initialRestaurant = navigationState.selectedRestaurantPreview,
                 userAvatarUrl = currentUser?.profilePhotoUrl,
                 onNavigateBack = { navigationState.navigateBack() },
                 onNotificationClick = { navigationState.navigateTo(Screen.Notifications) },
@@ -945,24 +1056,9 @@ private fun NavHostContent(
                 photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.RestaurantDetail,
-                        "restaurantId" to restaurantId
-                    )
-                }
-            )
-        }
-        
-        is Screen.TopDishes -> {
-            val uiState by locationHomeViewModel.uiState.collectAsState()
-            DarkTopDishesScreen(
-                location = uiState.selectedLocation ?: "Nearby",
-                dishes = uiState.topDishes,
-                onNavigateBack = { navigationState.navigateBack() },
-                onDishClick = { dishId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.DishDetail,
-                        "dishId" to dishId
+                    navigationState.navigateToRestaurantDetail(
+                        restaurantId = restaurantId,
+                        restaurant = combinedRestaurants.findRestaurantPreview(restaurantId)
                     )
                 }
             )
@@ -976,9 +1072,9 @@ private fun NavHostContent(
                 photoViewModel = restaurantPhotoViewModel,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRestaurantClick = { restaurantId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.RestaurantDetail,
-                        "restaurantId" to restaurantId
+                    navigationState.navigateToRestaurantDetail(
+                        restaurantId = restaurantId,
+                        restaurant = uiState.topRestaurants.findRestaurantPreview(restaurantId)
                     )
                 }
             )
@@ -992,26 +1088,6 @@ private fun NavHostContent(
             DarkGameScreen(
                 viewModel = gamificationViewModel,
                 onNavigateBack = { navigationState.navigateBack() }
-            )
-        }
-
-        is Screen.NearbyRestaurants -> {
-            val placesService = LocalPlacesService.current
-            val geofencingService = LocalGeofencingService.current
-            val nearbyRestaurantsViewModel: NearbyRestaurantsViewModel = viewModel {
-                NearbyRestaurantsViewModel(locationService, placesService, geofencingService)
-            }
-            NearbyRestaurantsScreen(
-                viewModel = nearbyRestaurantsViewModel,
-                photoViewModel = restaurantPhotoViewModel,
-                onNavigateBack = { navigationState.navigateBack() },
-                onRestaurantClick = { restaurant ->
-                    // Navigate to restaurant detail or handle restaurant click
-                    navigationState.navigateToWithArgs(
-                        Screen.RestaurantDetail,
-                        "restaurantId" to restaurant.id
-                    )
-                }
             )
         }
 
@@ -1044,6 +1120,23 @@ private fun NavHostContent(
 
             // Combine database and nearby restaurants
             val combinedRestaurants = (uiState.allRestaurants + nearbyAsRestaurants).distinctBy { it.id }
+            val preloadLatitude = uiState.currentLatitude
+            val preloadLongitude = uiState.currentLongitude
+            val currentLocationForPreload = if (
+                preloadLatitude != null &&
+                preloadLongitude != null &&
+                preloadLatitude != 0.0 &&
+                preloadLongitude != 0.0
+            ) {
+                LocationResult(
+                    latitude = preloadLatitude,
+                    longitude = preloadLongitude,
+                    cityName = uiState.selectedLocation,
+                    countryCode = uiState.countryCode
+                )
+            } else {
+                null
+            }
 
             // Home stage preload:
             // - Ensure home data is already prepared from splash.
@@ -1059,6 +1152,27 @@ private fun NavHostContent(
                 preloadSearchViewModel.preloadFilterOptionsIfNeeded()
                 profileViewModel.preloadFromHome()
                 gamificationViewModel.preloadFromHome()
+            }
+
+            LaunchedEffect(
+                uiState.topRestaurants,
+                combinedRestaurants,
+                uiState.nearbyRestaurants,
+                currentLocationForPreload
+            ) {
+                val photoPreloadRestaurants = (
+                    uiState.topRestaurants +
+                        nearbyAsRestaurants +
+                        combinedRestaurants.take(8)
+                    ).distinctBy { it.id }
+                restaurantPhotoViewModel.preloadThumbnails(photoPreloadRestaurants, limit = 16)
+
+                if (uiState.nearbyRestaurants.isNotEmpty()) {
+                    nearbyRestaurantsViewModel.preloadFromHome(
+                        restaurants = uiState.nearbyRestaurants,
+                        location = currentLocationForPreload
+                    )
+                }
             }
 
             RequestLocationPermission(
@@ -1125,9 +1239,9 @@ private fun NavHostContent(
                         )
                     },
                     onRestaurantClick = { restaurantId ->
-                        navigationState.navigateToWithArgs(
-                            Screen.RestaurantDetail,
-                            "restaurantId" to restaurantId
+                        navigationState.navigateToRestaurantDetail(
+                            restaurantId = restaurantId,
+                            restaurant = combinedRestaurants.findRestaurantPreview(restaurantId)
                         )
                     },
                     onSearchClick = { navigationState.navigateTo(Screen.Search) },
@@ -1526,7 +1640,8 @@ private fun NavHostContent(
                     if (restaurant != null) {
                         dishRatingViewModel.setRestaurant(restaurant)
                         dishRatingViewModel.submitRating { _ ->
-                            // Success is handled by LaunchedEffect above
+                            // Refresh stories so the auto-published story appears immediately
+                            socialFeedViewModel.refreshHomeData()
                         }
                     }
                 },
@@ -1803,19 +1918,19 @@ private fun NavHostContent(
             val storyState by socialFeedViewModel.uiState.collectAsState()
             val userStories = storyState.stories.filter { it.userId == navigationState.userId }
 
-            if (userStories.isEmpty()) {
-                LaunchedEffect(navigationState.userId) {
+            // Refresh stories when screen opens if we haven't loaded any yet
+            LaunchedEffect(navigationState.userId) {
+                if (storyState.stories.isEmpty()) {
                     socialFeedViewModel.refreshHomeData()
-                    navigationState.navigateBack()
                 }
-            } else {
-                StoryViewerScreen(
-                    stories = userStories,
-                    currentUserId = storyState.currentUserId,
-                    onNavigateBack = { navigationState.navigateBack() },
-                    onStoryDeleted = { socialFeedViewModel.refreshHomeData() }
-                )
             }
+
+            StoryViewerScreen(
+                stories = userStories,
+                currentUserId = storyState.currentUserId,
+                onNavigateBack = { navigationState.navigateBack() },
+                onStoryDeleted = { socialFeedViewModel.refreshHomeData() }
+            )
         }
 
         is Screen.NotificationsList -> {
@@ -1835,7 +1950,20 @@ private fun NavHostContent(
                 onMarkAllRead = { notificationsViewModel.markAllAsRead() }
             )
         }
+
+        is Screen.TopDishes -> {
+            // Handled outside this when block in the always-alive top dishes layer
+        }
+
+        is Screen.NearbyRestaurants -> {
+            // Handled outside this when block in the always-alive nearby restaurants layer
+        }
+
+        is Screen.SocialMap -> {
+            // Handled outside this when block in the always-alive map layer
+        }
     }
+    } // end if(!isBackgroundScreenVisible)
     } // end Box
 }
 

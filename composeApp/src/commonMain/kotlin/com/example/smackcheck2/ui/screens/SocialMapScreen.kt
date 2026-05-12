@@ -60,10 +60,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -114,6 +114,7 @@ fun SocialMapScreen(
     onCameraClick: () -> Unit = {},
     onExploreClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
+    isActive: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -121,25 +122,37 @@ fun SocialMapScreen(
     val jakartaSans = PlusJakartaSans()
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    
+
     var showSettings by remember { mutableStateOf(false) }
     var showRadiusSlider by remember { mutableStateOf(false) }
-    
+
     // Sheet state for selected user preview
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    
-    // Request location on first load
-    LaunchedEffect(uiState.currentLatitude, uiState.isLoading) {
-        if (uiState.currentLatitude == null && !uiState.isLoading) {
+
+    // Notify ViewModel of active / inactive lifecycle
+    DisposableEffect(isActive) {
+        if (isActive) {
+            viewModel.onActive()
+        } else {
+            viewModel.onInactive()
+        }
+        onDispose { }
+    }
+
+    // Request location on first load (only while active)
+    LaunchedEffect(isActive, uiState.currentLatitude, uiState.isLoading) {
+        if (isActive && uiState.currentLatitude == null && !uiState.isLoading) {
             viewModel.requestCurrentLocation()
         }
     }
-    
-    // Show error messages
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { error ->
-            snackbarHostState.showSnackbar(error)
-            viewModel.clearError()
+
+    // Show error messages (only while active)
+    LaunchedEffect(isActive, uiState.errorMessage) {
+        if (isActive) {
+            uiState.errorMessage?.let { error ->
+                snackbarHostState.showSnackbar(error)
+                viewModel.clearError()
+            }
         }
     }
 
@@ -334,42 +347,43 @@ fun SocialMapScreen(
                     val currentLat = uiState.currentLatitude ?: 40.7128
                     val currentLng = uiState.currentLongitude ?: -74.0060
 
-                    // Derive marker list from current mode
+                    // Derive marker list from current mode (skip invalid coords)
                     val activeMarkerSource = if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
                         uiState.myRatingMarkers else uiState.nearbyUsers
                     val markers = remember(activeMarkerSource) {
-                        activeMarkerSource.map { user ->
-                            MapMarker(
-                                id = user.latestRatingId ?: user.userId,
-                                latitude = user.latitude,
-                                longitude = user.longitude,
-                                title = user.latestDishName ?: user.username,
-                                snippet = user.latestRestaurantName ?: user.username,
-                                rating = user.latestRating,
-                                imageUrl = user.latestDishImage ?: user.avatarUrl
-                            )
-                        }
+                        activeMarkerSource
+                            .filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                            .map { user ->
+                                MapMarker(
+                                    id = user.latestRatingId ?: user.userId,
+                                    latitude = user.latitude,
+                                    longitude = user.longitude,
+                                    title = user.latestDishName ?: user.username,
+                                    snippet = user.latestRestaurantName ?: user.username,
+                                    rating = user.latestRating,
+                                    imageUrl = user.latestDishImage ?: user.avatarUrl
+                                )
+                            }
                     }
 
-                    // Use recenterTrigger as key to force map re-center when Locate Me is tapped
-                    key(uiState.recenterTrigger) {
-                        PlatformMapView(
-                            latitude = currentLat,
-                            longitude = currentLng,
-                            zoom = 14f,
-                            markers = markers,
-                            onMarkerClick = { markerId ->
-                                val user = activeMarkerSource.find {
-                                    it.latestRatingId == markerId || it.userId == markerId
-                                }
-                                viewModel.selectUser(user)
-                            },
-                            showMyLocation = uiState.locationPermissionGranted,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
+                    PlatformMapView(
+                        latitude = currentLat,
+                        longitude = currentLng,
+                        zoom = 14f,
+                        markers = markers,
+                        onMarkerClick = { markerId ->
+                            val user = activeMarkerSource.find {
+                                it.latestRatingId == markerId || it.userId == markerId
+                            }
+                            viewModel.selectUser(user)
+                        },
+                        showMyLocation = uiState.locationPermissionGranted,
+                        recenterTrigger = uiState.recenterTrigger,
+                        fitBoundsTrigger = uiState.fitBoundsTrigger,
+                        modifier = Modifier.fillMaxSize()
+                    )
 
-                    // Empty state overlay — shown when there are no nearby posts
+                    // Empty state overlay — shown when there are no valid markers
                     if (markers.isEmpty() && !uiState.isLoading) {
                         Box(
                             modifier = Modifier
@@ -396,7 +410,10 @@ fun SocialMapScreen(
                                         modifier = Modifier.size(40.dp)
                                     )
                                     Text(
-                                        "No dish posts nearby yet — be the first!",
+                                        if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
+                                            "You haven't rated any dishes yet."
+                                        else
+                                            "No dish posts nearby yet — be the first!",
                                         color = themeColors.TextPrimary,
                                         fontWeight = FontWeight.Medium,
                                         fontSize = 15.sp,
@@ -585,8 +602,10 @@ fun SocialMapScreen(
                     }
 
                     // Empty state overlay when no dish posts
+                    val activeListEmpty = if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
+                        uiState.myRatingMarkers.isEmpty() else uiState.nearbyUsers.isEmpty()
                     AnimatedVisibility(
-                        visible = uiState.nearbyUsers.isEmpty() && !uiState.isLoading,
+                        visible = activeListEmpty && !uiState.isLoading,
                         enter = fadeIn(),
                         exit = fadeOut(),
                         modifier = Modifier.align(Alignment.Center)
@@ -613,24 +632,28 @@ fun SocialMapScreen(
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Text(
-                                    text = "No dish posts yet",
+                                    text = if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
+                                        "No ratings yet" else "No dish posts yet",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                     color = themeColors.TextPrimary
                                 )
                                 Spacer(Modifier.height(8.dp))
                                 Text(
-                                    text = "Be the first to share a dish rating in your area!",
+                                    text = if (uiState.mapMode == com.example.smackcheck2.model.MapMode.MY_RATINGS)
+                                        "Your rated dishes will appear here." else "Be the first to share a dish rating in your area!",
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = themeColors.TextSecondary,
                                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                                 )
                                 Spacer(Modifier.height(20.dp))
-                                Button(
-                                    onClick = onRateDishClick,
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("Rate a Dish")
+                                if (uiState.mapMode != com.example.smackcheck2.model.MapMode.MY_RATINGS) {
+                                    Button(
+                                        onClick = onRateDishClick,
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Text("Rate a Dish")
+                                    }
                                 }
                             }
                         }

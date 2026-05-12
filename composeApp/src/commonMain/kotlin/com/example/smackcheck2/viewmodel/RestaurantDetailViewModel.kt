@@ -31,12 +31,25 @@ class RestaurantDetailViewModel(
         return uuidPattern.matches(id)
     }
 
+    fun seedRestaurant(restaurant: Restaurant) {
+        val current = _uiState.value
+        if (current.restaurant?.id == restaurant.id && !current.isLoading) return
+        _uiState.update {
+            it.copy(
+                restaurant = restaurant,
+                isLoading = false,
+                errorMessage = null
+            )
+        }
+    }
+
     /**
      * Load restaurant details, dishes, and reviews
      */
     fun loadRestaurant(restaurantId: String) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            val hasSeededRestaurant = _uiState.value.restaurant?.id == restaurantId
+            _uiState.update { it.copy(isLoading = !hasSeededRestaurant, errorMessage = null) }
 
             try {
                 if (restaurantId.isBlank()) {
