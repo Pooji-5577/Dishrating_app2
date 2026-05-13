@@ -29,6 +29,7 @@ import com.example.smackcheck2.platform.LocationService
 import com.example.smackcheck2.platform.PlacesService
 import com.example.smackcheck2.platform.PreferencesManager
 import com.example.smackcheck2.platform.ShareService
+import com.example.smackcheck2.util.ImageProcessorContext
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -57,21 +58,38 @@ class MainActivity : ComponentActivity() {
         // CrashlyticsHelper.simulateCrash()
 
         // Initialize Microsoft Clarity for session recording & heatmaps
-        Clarity.initialize(applicationContext, ClarityConfig(projectId = "w0rgf1ugzh"))
+        runCatching {
+            Clarity.initialize(applicationContext, ClarityConfig(projectId = "w0rgf1ugzh"))
+        }.onFailure {
+            println("MainActivity: Clarity init failed: ${it.message}")
+        }
 
         // Initialize Mixpanel analytics
         Analytics.setContext(applicationContext)
-        Analytics.initialize(BuildConfig.MIXPANEL_TOKEN)
+        runCatching {
+            Analytics.initialize(BuildConfig.MIXPANEL_TOKEN)
+        }.onFailure {
+            println("MainActivity: Analytics init failed: ${it.message}")
+        }
 
         // Initialize Supabase session early for session restoration
-        SupabaseClientProvider.initializeSession()
+        runCatching {
+            SupabaseClientProvider.initializeSession()
+        }.onFailure {
+            println("MainActivity: Supabase session init failed: ${it.message}")
+        }
         // Handle deep link if app was launched via OAuth redirect
-        SupabaseClientProvider.client.handleDeeplinks(intent)
+        runCatching {
+            SupabaseClientProvider.client.handleDeeplinks(intent)
+        }.onFailure {
+            println("MainActivity: Supabase deep link handling failed: ${it.message}")
+        }
         // Handle deep link from a tapped push notification, if any
         handleNotificationIntent(intent)
 
         // Set app context for push notification channels
         com.example.smackcheck2.notifications.SmackCheckNotificationHelper.appContext = applicationContext
+        ImageProcessorContext.appContext = applicationContext
 
         // Initialize AppLocationManager for global location state management
         AppLocationManager.initialize(applicationContext)

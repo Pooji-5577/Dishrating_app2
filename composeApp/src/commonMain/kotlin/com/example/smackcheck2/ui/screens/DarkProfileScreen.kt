@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -139,19 +142,10 @@ fun DarkProfileScreen(
     // Profile tab state
     var selectedTab by remember { mutableStateOf(0) } // 0=My Ratings, 1=Saved, 2=Reviews
 
-    // Load user ratings
-    var userRatings by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
+    // Use ViewModel-backed ratings to avoid duplicate fetch on every screen entry.
+    val userRatings = uiState.userRatings
     var savedItems by remember { mutableStateOf<List<FeedItem>>(emptyList()) }
     val user = uiState.user
-
-    // Wire selected cuisines to user profile preference tags
-    LaunchedEffect(user?.id) {
-        val uid = user?.id ?: return@LaunchedEffect
-        try {
-            val repo = SocialRepository()
-            repo.getUserRatings(uid).onSuccess { items -> userRatings = items }
-        } catch (_: Exception) {}
-    }
 
     // Load saved/bookmarked posts
     LaunchedEffect(preferencesRepository, selectedTab) {
@@ -170,8 +164,9 @@ fun DarkProfileScreen(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(ProfileBg),
-        contentPadding = PaddingValues(bottom = 80.dp)
+            .background(ProfileBg)
+            .windowInsetsPadding(WindowInsets.navigationBars),
+        contentPadding = PaddingValues(bottom = 96.dp)
     ) {
         // ── Top bar ──────────────────────────────────────────────────────────
         item {

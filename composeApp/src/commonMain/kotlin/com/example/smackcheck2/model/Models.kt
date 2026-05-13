@@ -245,7 +245,8 @@ data class SocialMapUiState(
     val lastRefreshTime: Long = 0L,
     val locationPermissionGranted: Boolean = false,
     val mapMode: MapMode = MapMode.NEARBY,
-    val recenterTrigger: Int = 0
+    val recenterTrigger: Int = 0,
+    val fitBoundsTrigger: Int = 0
 )
 
 

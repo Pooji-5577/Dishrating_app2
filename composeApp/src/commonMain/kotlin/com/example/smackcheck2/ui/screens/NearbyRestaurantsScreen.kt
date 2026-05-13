@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -56,7 +57,8 @@ fun NearbyRestaurantsScreen(
     viewModel: NearbyRestaurantsViewModel,
     photoViewModel: RestaurantPhotoViewModel,
     onNavigateBack: () -> Unit,
-    onRestaurantClick: (NearbyRestaurant) -> Unit
+    onRestaurantClick: (NearbyRestaurant) -> Unit,
+    isActive: Boolean = true
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val geofenceEnabled by viewModel.geofenceEnabled.collectAsState()
@@ -64,20 +66,32 @@ fun NearbyRestaurantsScreen(
     var showMapView by remember { mutableStateOf(false) }
     var selectedRadius by remember { mutableStateOf(2000) }
     var showRadiusDialog by remember { mutableStateOf(false) }
-    
-    // Show snackbar for geofence events
+
+    // Notify ViewModel of active / inactive lifecycle
+    DisposableEffect(isActive) {
+        if (isActive) {
+            viewModel.onActive()
+        } else {
+            viewModel.onInactive()
+        }
+        onDispose { }
+    }
+
+    // Show snackbar for geofence events (only while active)
     val snackbarHostState = remember { SnackbarHostState() }
-    LaunchedEffect(geofenceEvent) {
-        geofenceEvent?.let { event ->
-            val message = when (event) {
-                is GeofenceEvent.Entered -> "You're near ${event.restaurantName}! Time to rate some dishes?"
-                is GeofenceEvent.Exited -> "Left ${event.restaurantName} area"
+    LaunchedEffect(isActive, geofenceEvent) {
+        if (isActive) {
+            geofenceEvent?.let { event ->
+                val message = when (event) {
+                    is GeofenceEvent.Entered -> "You're near ${event.restaurantName}! Time to rate some dishes?"
+                    is GeofenceEvent.Exited -> "Left ${event.restaurantName} area"
+                }
+                snackbarHostState.showSnackbar(
+                    message = message,
+                    duration = SnackbarDuration.Short
+                )
+                viewModel.clearGeofenceEvent()
             }
-            snackbarHostState.showSnackbar(
-                message = message,
-                duration = SnackbarDuration.Short
-            )
-            viewModel.clearGeofenceEvent()
         }
     }
 
@@ -284,7 +298,7 @@ private fun RestaurantsList(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(restaurants) { restaurant ->
+        items(restaurants, key = { it.id }) { restaurant ->
             val distanceText = if (currentLocation != null &&
                 restaurant.latitude != 0.0 && restaurant.longitude != 0.0)
                 formatDist(distanceKm(currentLocation.latitude, currentLocation.longitude, restaurant.latitude, restaurant.longitude))
@@ -313,11 +327,15 @@ private fun RestaurantCard(
     val photoState = photoStates[restaurant.id]
 
     LaunchedEffect(restaurant.id) {
-        photoViewModel.loadThumbnail(
-            restaurantId = restaurant.id,
-            placeId = restaurant.id,
-            name = restaurant.name
-        )
+        if (!restaurant.photoUrl.isNullOrBlank()) {
+            photoViewModel.setThumbnailUrl(restaurant.id, restaurant.photoUrl)
+        } else {
+            photoViewModel.loadThumbnail(
+                restaurantId = restaurant.id,
+                placeId = restaurant.id,
+                name = restaurant.name
+            )
+        }
     }
 
     Card(

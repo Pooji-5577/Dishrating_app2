@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 
 /**
  * UI State for Nearby Restaurants Screen
@@ -37,11 +38,19 @@ class NearbyRestaurantsViewModel(
     private val placesService: PlacesService?,
     geofencingService: GeofencingService? = null
 ) : ViewModel() {
+    companion object {
+        private const val CACHE_TTL_MS = 90_000L
+        private var cachedRestaurants: List<NearbyRestaurant> = emptyList()
+        private var cachedLocation: LocationResult? = null
+        private var cachedRadiusMeters: Int = 2000
+        private var cachedAtMs: Long = 0L
+    }
 
     private val _uiState = MutableStateFlow<NearbyRestaurantsUiState>(NearbyRestaurantsUiState.Initial)
     val uiState: StateFlow<NearbyRestaurantsUiState> = _uiState.asStateFlow()
 
     private var currentLocation: LocationResult? = null
+    private var hasRequestedLiveRefresh = false
     
     // Geofencing support
     private val geofenceRepository = GeofenceRepository(geofencingService)
@@ -67,26 +76,47 @@ class NearbyRestaurantsViewModel(
     /**
      * Load nearby restaurants based on current location
      */
-    fun loadNearbyRestaurants(radiusInMeters: Int = 2000) {
+    fun loadNearbyRestaurants(radiusInMeters: Int = 5000) {
         if (locationService == null || placesService == null) {
             _uiState.value = NearbyRestaurantsUiState.Error("Location or Places service not available")
             return
         }
 
+        val nowMs = Clock.System.now().toEpochMilliseconds()
+        val cacheValid = cachedRestaurants.isNotEmpty() &&
+            cachedLocation != null &&
+            cachedRadiusMeters == radiusInMeters &&
+            (nowMs - cachedAtMs) <= CACHE_TTL_MS
+
+        if (cacheValid && _uiState.value !is NearbyRestaurantsUiState.Success) {
+            _uiState.value = NearbyRestaurantsUiState.Success(
+                restaurants = cachedRestaurants,
+                currentLocation = cachedLocation,
+                geofencingEnabled = _geofenceEnabled.value,
+                monitoredCount = if (_geofenceEnabled.value) geofenceRepository.monitoredCount() else 0
+            )
+        }
+
         viewModelScope.launch {
-            _uiState.value = NearbyRestaurantsUiState.Loading
+            if (!cacheValid) {
+                _uiState.value = NearbyRestaurantsUiState.Loading
+            }
 
             try {
                 // Check location permission
                 if (!locationService.hasLocationPermission()) {
-                    _uiState.value = NearbyRestaurantsUiState.Error("Location permission not granted")
+                    if (!cacheValid) {
+                        _uiState.value = NearbyRestaurantsUiState.Error("Location permission not granted")
+                    }
                     return@launch
                 }
 
                 // Get current location
                 val location = locationService.getCurrentLocation()
                 if (location == null) {
-                    _uiState.value = NearbyRestaurantsUiState.Error("Unable to get current location")
+                    if (!cacheValid) {
+                        _uiState.value = NearbyRestaurantsUiState.Error("Unable to get current location")
+                    }
                     return@launch
                 }
 
@@ -98,6 +128,11 @@ class NearbyRestaurantsViewModel(
                     longitude = location.longitude,
                     radiusInMeters = radiusInMeters
                 )
+
+                cachedRestaurants = restaurants
+                cachedLocation = location
+                cachedRadiusMeters = radiusInMeters
+                cachedAtMs = Clock.System.now().toEpochMilliseconds()
 
                 // Update geofences if enabled
                 if (_geofenceEnabled.value && restaurants.isNotEmpty()) {
@@ -112,10 +147,37 @@ class NearbyRestaurantsViewModel(
                 )
 
             } catch (e: Exception) {
-                _uiState.value = NearbyRestaurantsUiState.Error(
-                    "Error loading restaurants: ${e.message}"
-                )
+                if (!cacheValid) {
+                    _uiState.value = NearbyRestaurantsUiState.Error(
+                        "Error loading restaurants: ${e.message}"
+                    )
+                }
             }
+        }
+    }
+
+    /**
+     * Seed from Home's already-loaded nearby results so this screen can paint immediately.
+     */
+    fun preloadFromHome(restaurants: List<NearbyRestaurant>, location: LocationResult? = null) {
+        if (restaurants.isNotEmpty() && _uiState.value !is NearbyRestaurantsUiState.Success) {
+            val nowMs = Clock.System.now().toEpochMilliseconds()
+            cachedRestaurants = restaurants
+            cachedLocation = location ?: cachedLocation
+            cachedRadiusMeters = 5000
+            cachedAtMs = nowMs
+            currentLocation = cachedLocation
+            _uiState.value = NearbyRestaurantsUiState.Success(
+                restaurants = restaurants,
+                currentLocation = cachedLocation,
+                geofencingEnabled = _geofenceEnabled.value,
+                monitoredCount = if (_geofenceEnabled.value) geofenceRepository.monitoredCount() else 0
+            )
+        }
+
+        if (!hasRequestedLiveRefresh) {
+            hasRequestedLiveRefresh = true
+            loadNearbyRestaurants()
         }
     }
 
@@ -180,5 +242,24 @@ class NearbyRestaurantsViewModel(
      */
     fun changeRadius(radiusInMeters: Int) {
         loadNearbyRestaurants(radiusInMeters)
+    }
+
+    /**
+     * Called when the screen becomes visible. Warm data if empty.
+     */
+    fun onActive() {
+        val state = _uiState.value
+        if (state is NearbyRestaurantsUiState.Initial || state is NearbyRestaurantsUiState.Error) {
+            loadNearbyRestaurants()
+        }
+    }
+
+    /**
+     * Called when the screen is hidden. Stop geofencing to save battery.
+     */
+    fun onInactive() {
+        if (_geofenceEnabled.value) {
+            geofenceRepository.stopMonitoringAll()
+        }
     }
 }

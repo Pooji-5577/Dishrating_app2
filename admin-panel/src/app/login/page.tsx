@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import { fetchWithAdminAuth } from '@/lib/adminApi'
 
 function LoginForm() {
   const router = useRouter()
@@ -127,11 +128,7 @@ function LoginForm() {
       }
 
       // Check admin status via server-side API (bypasses RLS)
-      const adminCheck = await fetch('/api/check-admin', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: data.user.id }),
-      })
+      const adminCheck = await fetchWithAdminAuth('/api/check-admin', { method: 'POST' })
       const adminResult = await adminCheck.json()
 
       if (!adminResult.isAdmin) {

@@ -23,8 +23,17 @@ import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.net.URL
+import java.util.concurrent.ConcurrentHashMap
+
+private const val MAX_CUSTOM_MARKER_ICONS = 36
+
+// Static cache across recompositions and screen navigations
+private val globalBitmapCache = ConcurrentHashMap<String, BitmapDescriptor>()
 
 @Composable
 actual fun PlatformMapView(
@@ -34,44 +43,90 @@ actual fun PlatformMapView(
     markers: List<MapMarker>,
     onMarkerClick: (String) -> Unit,
     showMyLocation: Boolean,
+    recenterTrigger: Int,
+    fitBoundsTrigger: Int,
     modifier: Modifier
 ) {
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(latitude, longitude), zoom)
     }
 
-    // Animate to user location when GPS coordinates arrive after map is already open
-    LaunchedEffect(latitude, longitude) {
+    // Animate to user location when GPS coordinates arrive or recenter is triggered
+    LaunchedEffect(latitude, longitude, recenterTrigger) {
         cameraPositionState.animate(
             update = CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), zoom),
             durationMs = 800
         )
     }
 
+    // Fit camera to all markers when fitBoundsTrigger changes
+    LaunchedEffect(fitBoundsTrigger, markers.size) {
+        val validMarkers = markers.filter { it.latitude != 0.0 || it.longitude != 0.0 }
+        if (validMarkers.size >= 2) {
+            val builder = com.google.android.gms.maps.model.LatLngBounds.Builder()
+            validMarkers.forEach { builder.include(LatLng(it.latitude, it.longitude)) }
+            val bounds = builder.build()
+            cameraPositionState.animate(
+                update = CameraUpdateFactory.newLatLngBounds(bounds, 120),
+                durationMs = 800
+            )
+        } else if (validMarkers.size == 1) {
+            val m = validMarkers.first()
+            cameraPositionState.animate(
+                update = CameraUpdateFactory.newLatLngZoom(LatLng(m.latitude, m.longitude), 15f),
+                durationMs = 800
+            )
+        }
+    }
+
     val markerIcons = remember { mutableStateMapOf<String, BitmapDescriptor>() }
 
-    // Load circular marker images
-    LaunchedEffect(markers) {
-        markers.forEach { marker ->
-            val url = marker.imageUrl
-            if (url != null && !markerIcons.containsKey(marker.id)) {
-                withContext(Dispatchers.IO) {
+    val iconCandidates = remember(markers) {
+        markers
+            .asSequence()
+            .filter { !it.imageUrl.isNullOrBlank() }
+            .take(MAX_CUSTOM_MARKER_ICONS)
+            .toList()
+    }
+
+    // Load marker images in parallel with global caching
+    LaunchedEffect(iconCandidates) {
+        val missing = iconCandidates.filter {
+            !globalBitmapCache.containsKey(it.id) && !markerIcons.containsKey(it.id)
+        }
+
+        // Populate from global cache first
+        iconCandidates.forEach { marker ->
+            globalBitmapCache[marker.id]?.let { markerIcons[marker.id] = it }
+        }
+
+        if (missing.isEmpty()) return@LaunchedEffect
+
+        coroutineScope {
+            missing.map { marker ->
+                async(Dispatchers.IO) {
+                    val url = marker.imageUrl ?: return@async null
                     try {
-                        val stream = URL(url).openStream()
-                        val original = BitmapFactory.decodeStream(stream)
-                        stream.close()
-                        if (original != null) {
-                            val icon = createCircularMarkerBitmap(original, 120)
-                            original.recycle()
-                            val descriptor = BitmapDescriptorFactory.fromBitmap(icon)
-                            withContext(Dispatchers.Main) {
-                                markerIcons[marker.id] = descriptor
-                            }
+                        globalBitmapCache[marker.id]?.let { descriptor ->
+                            marker.id to descriptor
+                        } ?: run {
+                            val stream = URL(url).openStream()
+                            val original = BitmapFactory.decodeStream(stream)
+                            stream.close()
+                            if (original != null) {
+                                val icon = createCircularMarkerBitmap(original, 120)
+                                original.recycle()
+                                val descriptor = BitmapDescriptorFactory.fromBitmap(icon)
+                                globalBitmapCache[marker.id] = descriptor
+                                marker.id to descriptor
+                            } else null
                         }
                     } catch (_: Exception) {
-                        // Keep default pin on failure
+                        null
                     }
                 }
+            }.awaitAll().filterNotNull().forEach { (id, descriptor) ->
+                markerIcons[id] = descriptor
             }
         }
     }
@@ -87,7 +142,7 @@ actual fun PlatformMapView(
                 state = MarkerState(position = LatLng(marker.latitude, marker.longitude)),
                 title = marker.title,
                 snippet = marker.snippet ?: marker.rating?.let { "Rating: ${"%.1f".format(it)}" },
-                icon = markerIcons[marker.id],
+                icon = markerIcons[marker.id] ?: globalBitmapCache[marker.id],
                 onClick = {
                     onMarkerClick(marker.id)
                     true

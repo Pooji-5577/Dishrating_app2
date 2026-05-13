@@ -1,32 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/adminAuth'
 import { createServiceClient } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   try {
-    const { targetUserId, title, body, senderUserId } = await req.json()
+    const auth = await requireAdmin(req)
+    if (!auth.ok) {
+      return NextResponse.json({ error: auth.error }, { status: auth.status })
+    }
 
-    if (!title || !body || !senderUserId) {
+    const { targetUserId, title, body } = await req.json()
+
+    if (!title || !body) {
       return NextResponse.json(
-        { error: 'Missing required fields: title, body, senderUserId' },
+        { error: 'Missing required fields: title, body' },
         { status: 400 }
       )
     }
 
     const supabase = createServiceClient()
-
-    // Verify the sender is an admin
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', senderUserId)
-      .single()
-
-    if (profileError || !profile?.is_admin) {
-      return NextResponse.json(
-        { error: 'Unauthorized: admin access required' },
-        { status: 403 }
-      )
-    }
 
     let targetUsers: { id: string }[] = []
 
@@ -59,9 +51,9 @@ export async function POST(req: NextRequest) {
             body,
             event_type: 'admin_broadcast',
             data: {
-              source_id: `admin_${senderUserId}_${Date.now()}_${user.id}`,
+              source_id: `admin_${auth.adminUserId}_${Date.now()}_${user.id}`,
               screen: 'Home',
-              sent_by: senderUserId,
+              sent_by: auth.adminUserId,
             },
           })
 

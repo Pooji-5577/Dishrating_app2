@@ -64,7 +64,7 @@ class PlacesService {
     suspend fun findNearbyRestaurants(
         latitude: Double,
         longitude: Double,
-        radiusInMeters: Int = 2000,
+        radiusInMeters: Int = 5000,
         keyword: String? = null,
         minRating: Double? = null
     ): List<NearbyRestaurant> {

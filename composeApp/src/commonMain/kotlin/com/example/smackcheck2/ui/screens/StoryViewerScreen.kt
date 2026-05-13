@@ -62,6 +62,35 @@ fun StoryViewerScreen(
     val scope = rememberCoroutineScope()
     val socialRepository = remember { SocialRepository() }
 
+    if (stories.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "No stories yet",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = "Your rated dish photos will appear here for 24 hours",
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                )
+            }
+        }
+        return
+    }
+
     val pagerState = rememberPagerState(
         initialPage = initialStoryIndex,
         pageCount = { stories.size }

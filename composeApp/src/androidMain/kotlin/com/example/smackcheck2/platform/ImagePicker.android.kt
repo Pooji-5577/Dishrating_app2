@@ -12,6 +12,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import com.example.smackcheck2.util.ImageOrientationHelper
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.io.File
 import kotlin.coroutines.resume
@@ -82,10 +83,11 @@ actual class ImagePicker(
                 captureResultCallback = { resultUri ->
                     if (resultUri != null) {
                         try {
-                            val bytes = readBytesFromUri(resultUri)
-                            val mimeType = context.contentResolver.getType(resultUri) ?: "image/jpeg"
-                            Log.d(TAG, "Image captured: ${bytes.size} bytes, mimeType=$mimeType")
-                            continuation.resume(ImageResult(resultUri.toString(), bytes, mimeType))
+                            val normalized = normalizeImageResult(resultUri)
+                            val bytes = normalized.bytes
+                            val mimeType = normalized.mimeType
+                            Log.d(TAG, "Image captured+normalized: ${bytes.size} bytes, mimeType=$mimeType")
+                            continuation.resume(normalized)
                         } catch (e: Exception) {
                             Log.e(TAG, "Error reading captured image", e)
                             continuation.resume(null)
@@ -112,10 +114,11 @@ actual class ImagePicker(
                 galleryResultCallback = { uri ->
                     if (uri != null) {
                         try {
-                            val bytes = readBytesFromUri(uri)
-                            val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                            Log.d(TAG, "Image picked: ${bytes.size} bytes, mimeType=$mimeType")
-                            continuation.resume(ImageResult(uri.toString(), bytes, mimeType))
+                            val normalized = normalizeImageResult(uri)
+                            val bytes = normalized.bytes
+                            val mimeType = normalized.mimeType
+                            Log.d(TAG, "Image picked+normalized: ${bytes.size} bytes, mimeType=$mimeType")
+                            continuation.resume(normalized)
                         } catch (e: Exception) {
                             Log.e(TAG, "Error reading picked image", e)
                             continuation.resume(null)
@@ -200,5 +203,32 @@ actual class ImagePicker(
         return context.contentResolver.openInputStream(uri)?.use { inputStream ->
             inputStream.readBytes()
         } ?: throw Exception("Failed to read from URI: $uri")
+    }
+
+    /**
+     * Normalize image orientation and return a JPEG-backed ImageResult.
+     * Falls back to original bytes when EXIF/bitmap decode fails.
+     */
+    private fun normalizeImageResult(uri: Uri): ImageResult {
+        val rotatedBitmap = ImageOrientationHelper.rotateImageIfRequired(context, uri)
+        if (rotatedBitmap != null) {
+            try {
+                val bytes = ImageOrientationHelper.bitmapToJpegBytes(rotatedBitmap)
+                val normalizedFile = File(context.cacheDir, "images/normalized_${System.currentTimeMillis()}.jpg")
+                normalizedFile.parentFile?.mkdirs()
+                normalizedFile.writeBytes(bytes)
+                return ImageResult(
+                    uri = Uri.fromFile(normalizedFile).toString(),
+                    bytes = bytes,
+                    mimeType = "image/jpeg"
+                )
+            } finally {
+                if (!rotatedBitmap.isRecycled) rotatedBitmap.recycle()
+            }
+        }
+
+        val bytes = readBytesFromUri(uri)
+        val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
+        return ImageResult(uri.toString(), bytes, mimeType)
     }
 }

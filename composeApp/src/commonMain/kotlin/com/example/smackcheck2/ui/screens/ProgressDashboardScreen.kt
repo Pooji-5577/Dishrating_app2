@@ -17,6 +17,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -204,8 +207,11 @@ fun ProgressDashboardScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(PBg)) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize().background(PBg),
-        contentPadding = PaddingValues(bottom = 80.dp)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PBg)
+            .windowInsetsPadding(WindowInsets.navigationBars),
+        contentPadding = PaddingValues(bottom = 96.dp)
     ) {
         // ── Top bar ──────────────────────────────────────────────────────────
         item {

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { fetchWithAdminAuth } from '@/lib/adminApi'
+import { ensureAdminSession } from '@/lib/adminSession'
 import { StatsCard } from '@/components/StatsCard'
 
 interface Stats {
@@ -23,21 +24,8 @@ export default function DashboardPage() {
   }, [])
 
   async function checkAuthAndLoadData() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push('/login')
-      return
-    }
-
-    const res = await fetch('/api/check-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: session.user.id }),
-    })
-    const { isAdmin } = await res.json()
-    if (!isAdmin) {
-      await supabase.auth.signOut()
-      router.push('/login')
+    const auth = await ensureAdminSession(router)
+    if (!auth.ok) {
       return
     }
 
@@ -46,7 +34,7 @@ export default function DashboardPage() {
 
   async function loadStats() {
     try {
-      const res = await fetch('/api/stats')
+      const res = await fetchWithAdminAuth('/api/stats')
       const data = await res.json()
       setStats(data)
     } catch (error) {

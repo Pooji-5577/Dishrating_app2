@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { fetchWithAdminAuth } from '@/lib/adminApi'
+import { ensureAdminSession } from '@/lib/adminSession'
 import { UserTable, UserRow } from '@/components/UserTable'
 
 export default function UsersPage() {
@@ -23,20 +24,7 @@ export default function UsersPage() {
   }, [searchQuery, page])
 
   async function checkAuth() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push('/login')
-      return
-    }
-    const res = await fetch('/api/check-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: session.user.id }),
-    })
-    const { isAdmin } = await res.json()
-    if (!isAdmin) {
-      router.push('/login')
-    }
+    await ensureAdminSession(router)
   }
 
   const loadUsers = useCallback(async () => {
@@ -45,7 +33,7 @@ export default function UsersPage() {
       const params = new URLSearchParams({ page: String(page) })
       if (searchQuery.trim()) params.set('search', searchQuery)
 
-      const res = await fetch(`/api/users?${params}`)
+      const res = await fetchWithAdminAuth(`/api/users?${params}`)
       const data = await res.json()
 
       setUsers(data.users || [])

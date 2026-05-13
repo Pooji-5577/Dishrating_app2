@@ -64,6 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Review
+import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.ui.components.BottomNavBar
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
@@ -94,6 +95,7 @@ fun RestaurantDetailScreen(
     photoViewModel: RestaurantPhotoViewModel? = null,
     preferencesRepository: PreferencesRepository? = null,
     restaurantId: String,
+    initialRestaurant: Restaurant? = null,
     userAvatarUrl: String? = null,
     onNavigateBack: () -> Unit,
     onNotificationClick: () -> Unit = {},
@@ -117,6 +119,7 @@ fun RestaurantDetailScreen(
     val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(restaurantId) {
+        initialRestaurant?.let { viewModel.seedRestaurant(it) }
         viewModel.loadRestaurant(restaurantId)
         preferencesRepository?.let { repo ->
             bookmarkedDishIds = repo.getBookmarks()

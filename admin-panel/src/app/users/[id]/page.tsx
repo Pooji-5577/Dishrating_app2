@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { fetchWithAdminAuth } from '@/lib/adminApi'
+import { ensureAdminSession } from '@/lib/adminSession'
 import { StatsCard } from '@/components/StatsCard'
 import { NotificationForm } from '@/components/NotificationForm'
 import Link from 'next/link'
@@ -50,19 +51,8 @@ export default function UserDetailPage() {
   }, [userId])
 
   async function checkAuthAndLoad() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push('/login')
-      return
-    }
-    const res = await fetch('/api/check-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: session.user.id }),
-    })
-    const { isAdmin } = await res.json()
-    if (!isAdmin) {
-      router.push('/login')
+    const auth = await ensureAdminSession(router)
+    if (!auth.ok) {
       return
     }
 
@@ -71,7 +61,7 @@ export default function UserDetailPage() {
 
   async function loadUserData() {
     try {
-      const res = await fetch(`/api/users/${userId}`)
+      const res = await fetchWithAdminAuth(`/api/users/${userId}`)
       const data = await res.json()
 
       if (data.error) {

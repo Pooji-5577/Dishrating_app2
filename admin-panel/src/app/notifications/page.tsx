@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { fetchWithAdminAuth } from '@/lib/adminApi'
+import { ensureAdminSession } from '@/lib/adminSession'
 import { NotificationForm } from '@/components/NotificationForm'
 
 interface SentNotification {
@@ -24,19 +25,8 @@ export default function NotificationsPage() {
   }, [])
 
   async function checkAuthAndLoad() {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) {
-      router.push('/login')
-      return
-    }
-    const res = await fetch('/api/check-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: session.user.id }),
-    })
-    const { isAdmin } = await res.json()
-    if (!isAdmin) {
-      router.push('/login')
+    const auth = await ensureAdminSession(router)
+    if (!auth.ok) {
       return
     }
 
@@ -45,7 +35,7 @@ export default function NotificationsPage() {
 
   async function loadRecentNotifications() {
     try {
-      const res = await fetch('/api/notifications')
+      const res = await fetchWithAdminAuth('/api/notifications')
       const data = await res.json()
       setRecentNotifications(data.notifications || [])
     } catch (error) {

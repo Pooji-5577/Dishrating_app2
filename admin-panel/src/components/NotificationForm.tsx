@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { fetchWithAdminAuth } from '@/lib/adminApi'
 
 interface NotificationFormProps {
   targetUserId?: string
@@ -37,16 +38,12 @@ export function NotificationForm({ targetUserId, targetUserName, onSuccess }: No
         return
       }
 
-      const response = await fetch('/api/notifications/send', {
+      const response = await fetchWithAdminAuth('/api/notifications/send', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
           targetUserId: sendToAll ? undefined : targetUserId,
           title: title.trim(),
           body: body.trim(),
-          senderUserId: session.user.id,
         }),
       })
 
