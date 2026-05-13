@@ -1,10 +1,13 @@
 package com.example.smackcheck2.data.repository
 
 import com.example.smackcheck2.data.SupabaseClientProvider
+import com.example.smackcheck2.data.ImageDelivery
 import com.example.smackcheck2.data.dto.*
 import com.example.smackcheck2.model.FeedItem
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.datetime.Instant
 
 /**
@@ -38,53 +41,67 @@ class FeedAssembler(
         val restaurantIds = ratings.map { it.restaurantId }.distinct()
         val ratingIds = ratings.mapNotNull { it.id }
 
-        val profilesMap = batchFetchProfiles(userIds)
-        val dishesMap = batchFetchDishes(dishIds)
+        val feedData = coroutineScope {
+            val profilesDeferred = async { batchFetchProfiles(userIds) }
+            val dishesDeferred = async { batchFetchDishes(dishIds) }
+            val commentsDeferred = async { batchFetchCommentsCount(ratingIds) }
+            val likesDeferred = async { batchFetchLikedRatingIds(currentUserId, ratingIds) }
+            val additionalImagesDeferred = async { batchFetchAdditionalImages(ratingIds) }
 
-        val dishRestaurantIds = dishesMap.values.map { it.restaurantId }.distinct()
-        val allRestaurantIds = (restaurantIds + dishRestaurantIds).distinct()
-        val validRestaurantIds = allRestaurantIds.filter { it.isNotBlank() }
-        val restaurantsMap = batchFetchRestaurants(validRestaurantIds)
+            val profilesMap = profilesDeferred.await()
+            val dishesMap = dishesDeferred.await()
 
-        val commentsCountMap = batchFetchCommentsCount(ratingIds)
-        val likedRatingIds = batchFetchLikedRatingIds(currentUserId, ratingIds)
-        val additionalImagesMap = batchFetchAdditionalImages(ratingIds)
+            val dishRestaurantIds = dishesMap.values.map { it.restaurantId }.distinct()
+            val validRestaurantIds = (restaurantIds + dishRestaurantIds)
+                .distinct()
+                .filter { it.isNotBlank() }
+            val restaurantsMap = batchFetchRestaurants(validRestaurantIds)
+            val missingRestaurantIds = validRestaurantIds.filter { it !in restaurantsMap }
+            val fallbackRestaurantNames = batchFetchFallbackRestaurantNames(missingRestaurantIds)
 
-        val missingRestaurantIds = validRestaurantIds.filter { it !in restaurantsMap }
-        val fallbackRestaurantNames = batchFetchFallbackRestaurantNames(missingRestaurantIds)
+            FeedData(
+                profilesMap = profilesMap,
+                dishesMap = dishesMap,
+                restaurantsMap = restaurantsMap,
+                commentsCountMap = commentsDeferred.await(),
+                likedRatingIds = likesDeferred.await(),
+                additionalImagesMap = additionalImagesDeferred.await(),
+                fallbackRestaurantNames = fallbackRestaurantNames
+            )
+        }
 
         return ratings.mapNotNull { rating ->
             val ratingId = rating.id ?: return@mapNotNull null
-            val profile = profilesMap[rating.userId]
-            val dish = dishesMap[rating.dishId]
-            val restaurant = restaurantsMap[rating.restaurantId]
-            val dishRestaurant = if (restaurant == null && dish != null) restaurantsMap[dish.restaurantId] else null
+            val profile = feedData.profilesMap[rating.userId]
+            val dish = feedData.dishesMap[rating.dishId]
+            val restaurant = feedData.restaurantsMap[rating.restaurantId]
+            val dishRestaurant = if (restaurant == null && dish != null) feedData.restaurantsMap[dish.restaurantId] else null
 
             val restaurantName = resolveRestaurantName(
                 restaurant, dishRestaurant, dish,
-                rating.restaurantId, fallbackRestaurantNames
+                rating.restaurantId, feedData.fallbackRestaurantNames
             )
 
-            val additionalImages = additionalImagesMap[ratingId] ?: emptyList()
+            val additionalImages = feedData.additionalImagesMap[ratingId] ?: emptyList()
             val allImages = buildImageList(rating.imageUrl, dish?.imageUrl, additionalImages)
 
             FeedItem(
                 id = ratingId,
                 userId = rating.userId,
-                userProfileImageUrl = profile?.profilePhotoUrl,
+                userProfileImageUrl = ImageDelivery.avatar(profile?.profilePhotoUrl),
                 userName = profile?.name ?: "Unknown",
-                dishImageUrl = allImages.firstOrNull(),
+                dishImageUrl = ImageDelivery.feed(allImages.firstOrNull()),
                 dishName = dish?.name ?: "Unknown Dish",
                 dishId = rating.dishId,
                 restaurantName = restaurantName,
                 restaurantCity = (restaurant ?: dishRestaurant)?.city ?: "",
                 rating = rating.rating,
                 likesCount = rating.likesCount,
-                commentsCount = commentsCountMap[ratingId] ?: 0,
-                isLiked = likedRatingIds.contains(ratingId),
+                commentsCount = feedData.commentsCountMap[ratingId] ?: 0,
+                isLiked = feedData.likedRatingIds.contains(ratingId),
                 timestamp = parseTimestamp(rating.createdAt),
                 comment = rating.comment,
-                imageUrls = allImages,
+                imageUrls = allImages.mapNotNull { ImageDelivery.feed(it) },
                 price = rating.price
             )
         }
@@ -214,4 +231,14 @@ class FeedAssembler(
             0L
         }
     }
+
+    private data class FeedData(
+        val profilesMap: Map<String, ProfileDto>,
+        val dishesMap: Map<String, DishDto>,
+        val restaurantsMap: Map<String, RestaurantDto>,
+        val commentsCountMap: Map<String, Int>,
+        val likedRatingIds: Set<String>,
+        val additionalImagesMap: Map<String, List<String>>,
+        val fallbackRestaurantNames: Map<String, String>
+    )
 }

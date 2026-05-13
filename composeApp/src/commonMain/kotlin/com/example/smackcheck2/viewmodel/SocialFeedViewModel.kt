@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.FeedReadRepository
 import com.example.smackcheck2.data.repository.RealtimeFeedRepository
 import com.example.smackcheck2.location.SharedLocationState
 import com.example.smackcheck2.data.repository.FeedUpdate
@@ -23,12 +24,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Instant
 
 class SocialFeedViewModel(
     private val preferencesRepository: PreferencesRepository
 ) : ViewModel() {
 
     private val socialRepository = SocialRepository()
+    private val feedReadRepository = FeedReadRepository()
     private val authRepository = AuthRepository()
     private val databaseRepository = DatabaseRepository()
     private val realtimeFeedRepository = RealtimeFeedRepository()
@@ -138,7 +141,11 @@ class SocialFeedViewModel(
         viewModelScope.launch(crashGuard) {
             try {
                 val userId = authRepository.getCurrentUserId()
-                val result = socialRepository.getTrendingFeed(limit = 6, offset = 0, currentUserId = userId)
+                val result = feedReadRepository.getFeedPage(
+                    filter = FeedFilter.TRENDING,
+                    limit = 6,
+                    currentUserId = userId
+                )
                 result.onSuccess { dishes ->
                     _uiState.update { it.copy(topDishes = dishes) }
                 }
@@ -274,7 +281,7 @@ class SocialFeedViewModel(
                 _uiState.update { it.copy(isLoading = true, errorMessage = null, currentOffset = 0, hasMoreItems = true) }
 
                 val userId = authRepository.getCurrentUserId()
-                val result = fetchPage(offset = 0, userId = userId)
+                val result = fetchPage(cursor = null, userId = userId)
 
                 result.fold(
                     onSuccess = { feedItems ->
@@ -289,7 +296,7 @@ class SocialFeedViewModel(
                                 feedItems = deduped,
                                 isLoading = false,
                                 isRefreshing = false,
-                                currentOffset = PAGE_SIZE,
+                                currentOffset = deduped.size,
                                 hasMoreItems = deduped.size == PAGE_SIZE,
                                 scrollToIndex = scrollIndex
                             )
@@ -332,7 +339,7 @@ class SocialFeedViewModel(
             try {
                 _uiState.update { it.copy(isLoadingMore = true) }
                 val userId = authRepository.getCurrentUserId()
-                val result = fetchPage(offset = state.currentOffset, userId = userId)
+                val result = fetchPage(cursor = state.nextCursor(), userId = userId)
 
                 result.fold(
                     onSuccess = { newItems ->
@@ -342,7 +349,7 @@ class SocialFeedViewModel(
                             current.copy(
                                 feedItems = current.feedItems + deduped,
                                 isLoadingMore = false,
-                                currentOffset = current.currentOffset + PAGE_SIZE,
+                                currentOffset = current.currentOffset + deduped.size,
                                 hasMoreItems = newItems.size == PAGE_SIZE
                             )
                         }
@@ -359,30 +366,36 @@ class SocialFeedViewModel(
         }
     }
 
-    private suspend fun fetchPage(offset: Int, userId: String?): Result<List<FeedItem>> {
+    private suspend fun fetchPage(cursor: FeedCursor?, userId: String?): Result<List<FeedItem>> {
         val location = SharedLocationState.currentLocation.value
         val hasLocation = location != null && (location.latitude != 0.0 || location.longitude != 0.0)
 
         val result = try {
             when (_uiState.value.filter) {
-                FeedFilter.FOLLOWING -> {
-                    if (userId != null) socialRepository.getFollowingFeed(userId, limit = PAGE_SIZE, offset = offset)
-                    else socialRepository.getFeedAll(limit = PAGE_SIZE, offset = offset, currentUserId = userId)
-                }
-                FeedFilter.TRENDING -> socialRepository.getHighestRatedFeed(
+                FeedFilter.FOLLOWING -> feedReadRepository.getFeedPage(
+                    filter = FeedFilter.FOLLOWING,
                     limit = PAGE_SIZE,
-                    offset = offset,
-                    currentUserId = userId,
-                    userLat = if (hasLocation) location?.latitude else null,
-                    userLon = if (hasLocation) location?.longitude else null
+                    cursorCreatedAt = cursor?.createdAt,
+                    cursorId = cursor?.id,
+                    currentUserId = userId
+                )
+                FeedFilter.TRENDING -> feedReadRepository.getFeedPage(
+                    filter = FeedFilter.TRENDING,
+                    limit = PAGE_SIZE,
+                    cursorCreatedAt = cursor?.createdAt,
+                    cursorId = cursor?.id,
+                    cursorRating = cursor?.rating,
+                    currentUserId = userId
                 )
                 FeedFilter.NEARBY -> {
                     if (hasLocation) {
-                        socialRepository.getNearbyFeed(
+                        feedReadRepository.getFeedPage(
+                            filter = FeedFilter.NEARBY,
+                            limit = PAGE_SIZE,
+                            cursorCreatedAt = cursor?.createdAt,
+                            cursorId = cursor?.id,
                             userLat = location!!.latitude,
                             userLon = location.longitude,
-                            limit = PAGE_SIZE,
-                            offset = offset,
                             currentUserId = userId,
                             userCity = location.city
                         )
@@ -392,8 +405,15 @@ class SocialFeedViewModel(
                     }
                 }
                 FeedFilter.MY_RATINGS -> {
-                    if (userId != null) socialRepository.getUserRatings(userId, limit = PAGE_SIZE, offset = offset)
-                    else Result.success(emptyList())
+                    if (userId != null) {
+                        feedReadRepository.getFeedPage(
+                            filter = FeedFilter.MY_RATINGS,
+                            limit = PAGE_SIZE,
+                            cursorCreatedAt = cursor?.createdAt,
+                            cursorId = cursor?.id,
+                            currentUserId = userId
+                        )
+                    } else Result.success(emptyList())
                 }
             }
         } catch (e: CancellationException) {
@@ -410,6 +430,22 @@ class SocialFeedViewModel(
             }
         }
     }
+
+    private fun SocialFeedUiState.nextCursor(): FeedCursor? {
+        val last = feedItems.lastOrNull() ?: return null
+        if (last.timestamp <= 0L) return null
+        return FeedCursor(
+            createdAt = Instant.fromEpochMilliseconds(last.timestamp).toString(),
+            id = last.id,
+            rating = if (filter == FeedFilter.TRENDING) last.rating.toDouble() else null
+        )
+    }
+
+    private data class FeedCursor(
+        val createdAt: String,
+        val id: String,
+        val rating: Double?
+    )
 
     fun setFilter(filter: FeedFilter) {
         if (_uiState.value.filter == filter) return

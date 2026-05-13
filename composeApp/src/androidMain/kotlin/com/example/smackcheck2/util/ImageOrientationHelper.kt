@@ -210,13 +210,13 @@ object ImageOrientationHelper {
      *
      * @param context  Android context
      * @param uri      Image URI
-     * @param maxDimension Maximum width or height in pixels (default 2048)
+     * @param maxDimension Maximum width or height in pixels (default 1280)
      * @return Decoded bitmap, or null on failure
      */
     private fun decodeBitmapFromUri(
         context: Context,
         uri: Uri,
-        maxDimension: Int = 2048
+        maxDimension: Int = 1280
     ): Bitmap? {
         // First pass: get image dimensions without loading pixels
         val options = BitmapFactory.Options().apply {
@@ -267,10 +267,10 @@ object ImageOrientationHelper {
      * Compress a bitmap to JPEG bytes for uploading to Supabase Storage.
      *
      * @param bitmap  The correctly-oriented bitmap
-     * @param quality JPEG compression quality (0–100, default 85)
+     * @param quality JPEG compression quality (0–100, default 78)
      * @return JPEG byte array
      */
-    fun bitmapToJpegBytes(bitmap: Bitmap, quality: Int = 85): ByteArray {
+    fun bitmapToJpegBytes(bitmap: Bitmap, quality: Int = 78): ByteArray {
         val stream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, quality, stream)
         return stream.toByteArray()
@@ -291,7 +291,7 @@ object ImageOrientationHelper {
             cacheDir.mkdirs()
             val file = File(cacheDir, fileName)
             file.outputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 78, out)
             }
             file
         } catch (e: Exception) {

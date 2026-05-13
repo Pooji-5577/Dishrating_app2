@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -134,17 +136,13 @@ fun DarkLoginScreen(
                 .background(circleColor, CircleShape)
         )
 
-        // ── Scrollable content column ──
+        // ── Fixed logo + tagline (NOT scrollable) ──
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp),
+                .align(Alignment.TopCenter)
+                .offset(y = 375.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Space to clear the header + circle
-            Spacer(modifier = Modifier.height(370.dp))
-
             SmackCheckWordmark(
                 fontFamily = PlusJakartaSans(),
                 fontSize = 30.sp,
@@ -161,9 +159,18 @@ fun DarkLoginScreen(
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.4.sp
             )
+        }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
+        // ── Scrollable form fields only ──
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 28.dp, end = 28.dp, top = 460.dp)
+                .navigationBarsPadding()
+                .imePadding()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             // ── Email field ──
             Text(
                 text = "Email Address",
@@ -370,8 +377,7 @@ fun DarkLoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // ── Sign Up link ──
             Row(

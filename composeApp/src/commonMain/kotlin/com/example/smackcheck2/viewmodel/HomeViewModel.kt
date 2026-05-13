@@ -36,23 +36,13 @@ class HomeViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             try {
-                val result = databaseRepository.getFeed()
+                val userId = authRepository.getCurrentUserId()
+                val result = databaseRepository.getFeed(currentUserId = userId)
                 result.fold(
                     onSuccess = { feedItems ->
-                        // Check which items the user has liked
-                        val userId = authRepository.getCurrentUserId()
-                        val itemsWithLikeStatus = if (userId != null) {
-                            feedItems.map { item ->
-                                val isLiked = databaseRepository.hasUserLiked(userId, item.id)
-                                item.copy(isLiked = isLiked)
-                            }
-                        } else {
-                            feedItems
-                        }
-
                         _uiState.update {
                             it.copy(
-                                feedItems = itemsWithLikeStatus,
+                                feedItems = feedItems,
                                 isLoading = false
                             )
                         }

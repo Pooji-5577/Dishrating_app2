@@ -15,7 +15,8 @@ import kotlin.uuid.Uuid
  * Repository for database operations using Supabase Postgrest
  */
 class DatabaseRepository(
-    private val schemaAdapter: SupabaseSchemaAdapter = SupabaseSchemaAdapter()
+    private val schemaAdapter: SupabaseSchemaAdapter = SupabaseSchemaAdapter(),
+    private val feedAssembler: FeedAssembler = FeedAssembler()
 ) {
 
     private val client = SupabaseClientProvider.client
@@ -809,66 +810,20 @@ class DatabaseRepository(
     /**
      * Get social feed items
      */
-    suspend fun getFeed(limit: Int = 20, offset: Int = 0): Result<List<FeedItem>> {
+    suspend fun getFeed(
+        limit: Int = 20,
+        offset: Int = 0,
+        currentUserId: String? = null
+    ): Result<List<FeedItem>> {
         return try {
             val ratings = postgrest["ratings"]
                 .select {
                     order("created_at", Order.DESCENDING)
-                    limit(limit.toLong())
+                    range(offset.toLong(), (offset + limit - 1).toLong())
                 }
                 .decodeList<RatingDto>()
 
-            val feedItems = ratings.mapNotNull { rating ->
-                try {
-                    val profile = postgrest["profiles"]
-                        .select {
-                            filter {
-                                eq("id", rating.userId)
-                            }
-                        }
-                        .decodeSingleOrNull<ProfileDto>()
-
-                    val dish = postgrest["dishes"]
-                        .select {
-                            filter {
-                                eq("id", rating.dishId)
-                            }
-                        }
-                        .decodeSingleOrNull<DishDto>()
-
-                    val restaurant = postgrest["restaurants"]
-                        .select {
-                            filter {
-                                eq("id", rating.restaurantId)
-                            }
-                        }
-                        .decodeSingleOrNull<RestaurantDto>()
-
-                    val createdMillis = try {
-                        rating.createdAt?.let { Instant.parse(it).toEpochMilliseconds() } ?: 0L
-                    } catch (_: Exception) { 0L }
-
-                    FeedItem(
-                        id = rating.id ?: return@mapNotNull null,
-                        userId = rating.userId,
-                        userProfileImageUrl = profile?.profilePhotoUrl,
-                        userName = profile?.name ?: "Unknown",
-                        dishImageUrl = rating.imageUrl ?: dish?.imageUrl,
-                        dishName = dish?.name ?: "Unknown Dish",
-                        restaurantName = restaurant?.name ?: "Unknown Restaurant",
-                        rating = rating.rating,
-                        likesCount = rating.likesCount,
-                        commentsCount = 0,
-                        isLiked = false,
-                        timestamp = createdMillis,
-                        price = rating.price
-                    )
-                } catch (e: Exception) {
-                    null
-                }
-            }
-
-            Result.success(feedItems)
+            Result.success(feedAssembler.mapRatingsToFeedItems(ratings, currentUserId))
         } catch (e: Exception) {
             Result.failure(e)
         }
