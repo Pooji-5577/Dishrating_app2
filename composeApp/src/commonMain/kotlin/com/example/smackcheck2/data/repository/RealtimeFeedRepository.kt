@@ -18,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
+import com.example.smackcheck2.util.Logger
 
 /**
  * RealtimeFeedRepository - Manages real-time feed updates using Supabase Realtime
@@ -32,8 +33,8 @@ class RealtimeFeedRepository(
     private val feedAssembler: FeedAssembler = FeedAssembler()
 ) {
     
-    private val client = SupabaseClientProvider.client
-    private val postgrest = client.postgrest
+    private val client get() = SupabaseClientProvider.client
+    private val postgrest get() = client.postgrest
     private val realtime = client.realtime
     
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -68,7 +69,7 @@ class RealtimeFeedRepository(
             feedChannel?.postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
                 table = "ratings"
             }?.onEach { change ->
-                println("RealtimeFeed: New rating received")
+                Logger.d("RealtimeFeedRepository", "RealtimeFeed: New rating received")
                 val newRating = change.record
                 // Fetch complete feed item and emit
                 scope.launch {
@@ -81,7 +82,7 @@ class RealtimeFeedRepository(
                             _feedItems.update { items -> listOf(it) + items }
                         }
                     } catch (e: Exception) {
-                        println("RealtimeFeed: Error processing new rating: ${e.message}")
+                        Logger.e("RealtimeFeedRepository", "RealtimeFeed: Error processing new rating: ${e.message}", e)
                     }
                 }
             }?.launchIn(scope)
@@ -90,7 +91,7 @@ class RealtimeFeedRepository(
             feedChannel?.postgresChangeFlow<PostgresAction.Delete>(schema = "public") {
                 table = "ratings"
             }?.onEach { change ->
-                println("RealtimeFeed: Rating deleted")
+                Logger.d("RealtimeFeedRepository", "RealtimeFeed: Rating deleted")
                 val oldRating = change.oldRecord
                 val ratingId = oldRating["id"]?.toString()?.removeSurrounding("\"") ?: return@onEach
                 _feedUpdates.emit(FeedUpdate.PostDeleted(ratingId))
@@ -100,10 +101,10 @@ class RealtimeFeedRepository(
             
             // Subscribe to channel
             feedChannel?.subscribe()
-            println("RealtimeFeed: Subscribed to feed channel for user $userId")
+            Logger.d("RealtimeFeedRepository", "RealtimeFeed: Subscribed to feed channel for user $userId")
             
         } catch (e: Exception) {
-            println("RealtimeFeed: Failed to subscribe to feed: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: Failed to subscribe to feed: ${e.message}", e)
         }
     }
     
@@ -159,10 +160,10 @@ class RealtimeFeedRepository(
             }?.launchIn(scope)
             
             likesChannel?.subscribe()
-            println("RealtimeFeed: Subscribed to likes channel")
+            Logger.d("RealtimeFeedRepository", "RealtimeFeed: Subscribed to likes channel")
             
         } catch (e: Exception) {
-            println("RealtimeFeed: Failed to subscribe to likes: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: Failed to subscribe to likes: ${e.message}", e)
         }
     }
     
@@ -210,10 +211,10 @@ class RealtimeFeedRepository(
             }?.launchIn(scope)
             
             commentsChannel?.subscribe()
-            println("RealtimeFeed: Subscribed to comments channel")
+            Logger.d("RealtimeFeedRepository", "RealtimeFeed: Subscribed to comments channel")
             
         } catch (e: Exception) {
-            println("RealtimeFeed: Failed to subscribe to comments: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: Failed to subscribe to comments: ${e.message}", e)
         }
     }
     
@@ -234,7 +235,7 @@ class RealtimeFeedRepository(
                 val notificationUserId = newNotification["user_id"]?.toString()?.removeSurrounding("\"")
                 if (notificationUserId != userId) return@onEach
                 
-                println("RealtimeFeed: New notification received")
+                Logger.d("RealtimeFeedRepository", "RealtimeFeed: New notification received")
                 val notification = Notification(
                     id = newNotification["id"]?.toString()?.removeSurrounding("\"") ?: "",
                     type = newNotification["type"]?.toString()?.removeSurrounding("\"") ?: "",
@@ -263,10 +264,10 @@ class RealtimeFeedRepository(
             }?.launchIn(scope)
             
             notificationsChannel?.subscribe()
-            println("RealtimeFeed: Subscribed to notifications channel for user $userId")
+            Logger.d("RealtimeFeedRepository", "RealtimeFeed: Subscribed to notifications channel for user $userId")
             
         } catch (e: Exception) {
-            println("RealtimeFeed: Failed to subscribe to notifications: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: Failed to subscribe to notifications: ${e.message}", e)
         }
     }
     
@@ -351,7 +352,7 @@ class RealtimeFeedRepository(
             
             feedAssembler.mapRatingsToFeedItems(listOf(rating), currentUserId).firstOrNull()
         } catch (e: Exception) {
-            println("RealtimeFeed: Error fetching feed item: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: Error fetching feed item: ${e.message}", e)
             null
         }
     }
@@ -361,7 +362,7 @@ class RealtimeFeedRepository(
      */
     suspend fun toggleLike(ratingId: String, userId: String): Result<Boolean> {
         return try {
-            println("[DEBUG][RealtimeRepo] toggleLike: ratingId=$ratingId, userId=$userId")
+            Logger.d("RealtimeFeedRepository", "[DEBUG][RealtimeRepo] toggleLike: ratingId=$ratingId, userId=$userId")
             // Check if already liked
             val existingLike = try {
                 postgrest["likes"]
@@ -373,13 +374,13 @@ class RealtimeFeedRepository(
                     }
                     .decodeSingleOrNull<LikeDto>()
             } catch (e: Exception) {
-                println("[DEBUG][RealtimeRepo] toggleLike: Query existing like failed: ${e::class.simpleName} - ${e.message}")
+                Logger.e("RealtimeFeedRepository", "[DEBUG][RealtimeRepo] toggleLike: Query existing like failed: ${e::class.simpleName} - ${e.message}", e)
                 null
             }
 
             if (existingLike != null) {
                 // Unlike — remove from likes table
-                println("[DEBUG][RealtimeRepo] toggleLike: Existing like found (id=${existingLike.id}), deleting...")
+                Logger.d("RealtimeFeedRepository", "[DEBUG][RealtimeRepo] toggleLike: Existing like found (id=${existingLike.id}), deleting...")
                 postgrest["likes"].delete {
                     filter {
                         eq("user_id", userId)
@@ -388,23 +389,22 @@ class RealtimeFeedRepository(
                 }
                 // Decrement likes_count on ratings table so count persists across reloads
                 updateLikesCount(ratingId, delta = -1)
-                println("[DEBUG][RealtimeRepo] toggleLike: DELETE success — unliked")
+                Logger.d("RealtimeFeedRepository", "[DEBUG][RealtimeRepo] toggleLike: DELETE success — unliked")
                 Result.success(false)
             } else {
                 // Like — generate UUID for id since the DB column has no default
-                println("[DEBUG][RealtimeRepo] toggleLike: No existing like, inserting...")
+                Logger.d("RealtimeFeedRepository", "[DEBUG][RealtimeRepo] toggleLike: No existing like, inserting...")
                 @OptIn(ExperimentalUuidApi::class)
                 val dto = LikeDto(id = Uuid.random().toString(), userId = userId, ratingId = ratingId)
                 postgrest["likes"].insert(dto)
                 // Increment likes_count on ratings table so count persists across reloads
                 updateLikesCount(ratingId, delta = 1)
-                println("[DEBUG][RealtimeRepo] toggleLike: INSERT success — liked")
+                Logger.d("RealtimeFeedRepository", "[DEBUG][RealtimeRepo] toggleLike: INSERT success — liked")
                 Result.success(true)
             }
         } catch (e: Exception) {
-            println("[DEBUG][RealtimeRepo] toggleLike FAILED: ${e::class.simpleName} - ${e.message}")
-            e.printStackTrace()
-            println("RealtimeFeed: toggleLike error: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "[DEBUG][RealtimeRepo] toggleLike FAILED: ${e::class.simpleName} - ${e.message}", e)
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: toggleLike error: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -429,7 +429,7 @@ class RealtimeFeedRepository(
                     }
             }
         } catch (e: Exception) {
-            println("RealtimeFeed: updateLikesCount error: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: updateLikesCount error: ${e.message}", e)
         }
     }
     
@@ -448,9 +448,9 @@ class RealtimeFeedRepository(
             commentsChannel = null
             notificationsChannel = null
             
-            println("RealtimeFeed: Unsubscribed from all channels")
+            Logger.d("RealtimeFeedRepository", "RealtimeFeed: Unsubscribed from all channels")
         } catch (e: Exception) {
-            println("RealtimeFeed: Error unsubscribing: ${e.message}")
+            Logger.e("RealtimeFeedRepository", "RealtimeFeed: Error unsubscribing: ${e.message}", e)
         }
     }
     

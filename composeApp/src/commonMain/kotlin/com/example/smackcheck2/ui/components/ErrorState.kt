@@ -26,7 +26,7 @@ fun ErrorStateDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
     title: String = "Error",
-    retryText: String = "Retry",
+    retryText: String = "Try Again",
     dismissText: String = "Cancel"
 ) {
     AlertDialog(

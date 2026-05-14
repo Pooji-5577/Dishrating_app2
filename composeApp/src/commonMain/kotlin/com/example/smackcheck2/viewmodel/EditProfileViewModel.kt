@@ -3,6 +3,8 @@ package com.example.smackcheck2.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
+import com.example.smackcheck2.data.repository.EditableProfileUpdate
+import com.example.smackcheck2.data.repository.ProfileRepository
 import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.model.EditProfileUiState
 import com.example.smackcheck2.model.User
@@ -15,6 +17,7 @@ import kotlinx.coroutines.launch
 
 class EditProfileViewModel(
     private val authRepository: AuthRepository = AuthRepository(),
+    private val profileRepository: ProfileRepository = ProfileRepository(authRepository),
     private val storageRepository: StorageRepository = StorageRepository(),
     initialUser: User?
 ) : ViewModel() {
@@ -105,15 +108,16 @@ class EditProfileViewModel(
                 return@launch
             }
 
-            val updatedUser = currentUser.copy(
+            val update = EditableProfileUpdate(
                 name = state.name,
                 username = state.username,
                 bio = state.bio,
-                lastLocation = state.location.ifBlank { null },
+                location = state.location,
+                email = state.email,
                 profilePhotoUrl = state.profilePhotoUrl
             )
 
-            val result = authRepository.updateProfile(updatedUser)
+            val result = profileRepository.updateEditableProfile(currentUser, update)
             result.fold(
                 onSuccess = {
                     _uiState.update { it.copy(isSaving = false, isSuccess = true) }

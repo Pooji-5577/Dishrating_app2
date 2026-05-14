@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.ProfileInvalidationBus
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.gamification.PointsConfig
 import com.example.smackcheck2.model.HomeFeedUiState
@@ -119,6 +120,11 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
 
     init {
         loadProfile()
+        viewModelScope.launch {
+            ProfileInvalidationBus.events.collect {
+                refresh(forceSpinner = false)
+            }
+        }
     }
 
     fun loadProfile(forceSpinner: Boolean = _uiState.value.user == null) {

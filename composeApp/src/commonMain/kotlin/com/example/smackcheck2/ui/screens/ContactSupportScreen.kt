@@ -53,11 +53,12 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import kotlinx.coroutines.launch
 
 private val SupportBackground = Color(0xFFF6F6F6)
 private val SupportCard = Color.White
-private val SupportPrimary = Color(0xFF642223)
+private val SupportPrimary = BrandRedDark
 private val SupportPrimaryEnd = Color(0xFFFF7669)
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)

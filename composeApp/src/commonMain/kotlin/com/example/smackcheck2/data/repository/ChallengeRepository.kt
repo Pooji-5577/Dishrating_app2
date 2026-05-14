@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.RateReview
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Share
 import com.example.smackcheck2.ui.screens.Challenge
+import com.example.smackcheck2.util.Logger
 
 /**
  * Repository for challenge management with real user stats
@@ -116,19 +117,18 @@ class ChallengeRepository {
                 val xpResult = databaseRepository.addXpToUser(userId, challenge.xpReward)
                 xpResult.fold(
                     onSuccess = {
-                        println("ChallengeRepository: ✓ Awarded ${challenge.xpReward} XP for completing '${challenge.title}'")
+                        Logger.d("ChallengeRepository", "ChallengeRepository: ✓ Awarded ${challenge.xpReward} XP for completing '${challenge.title}'")
                         completedChallenges.add(challenge.id)
                     },
                     onFailure = { error ->
-                        println("ChallengeRepository: ✗ Failed to award XP for challenge: ${error.message}")
+                        Logger.e("ChallengeRepository", "ChallengeRepository: ✗ Failed to award XP for challenge: ${error.message}", error)
                     }
                 )
             }
 
             Result.success(Pair(dailyChallenges, weeklyChallenges))
         } catch (e: Exception) {
-            println("ChallengeRepository: Error loading challenges: ${e.message}")
-            e.printStackTrace()
+            Logger.e("ChallengeRepository", "ChallengeRepository: Error loading challenges: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -143,7 +143,7 @@ class ChallengeRepository {
                 xpResult.fold(
                     onSuccess = {
                         completedChallenges.add(challengeId)
-                        println("ChallengeRepository: ✓ Challenge $challengeId completed, awarded $xpReward XP")
+                        Logger.d("ChallengeRepository", "ChallengeRepository: ✓ Challenge $challengeId completed, awarded $xpReward XP")
                     },
                     onFailure = { error ->
                         return Result.failure(error)

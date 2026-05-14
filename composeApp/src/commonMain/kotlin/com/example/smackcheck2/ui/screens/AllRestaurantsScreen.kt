@@ -121,7 +121,7 @@ fun AllRestaurantsScreen(
                         label = { Text("All") }
                     )
                 }
-                items(cuisines) { cuisine ->
+                items(cuisines, key = { it }) { cuisine ->
                     FilterChip(
                         selected = selectedCuisine == cuisine,
                         onClick = { 
@@ -170,7 +170,7 @@ fun AllRestaurantsScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(filteredRestaurants) { restaurant ->
+                items(filteredRestaurants, key = { it.id }) { restaurant ->
                     RestaurantListCard(
                         restaurant = restaurant,
                         photoViewModel = photoViewModel,

@@ -12,7 +12,8 @@ import kotlinx.serialization.Serializable
 
 class FeedReadRepository {
 
-    private val postgrest = SupabaseClientProvider.client.postgrest
+    private val postgrest
+        get() = SupabaseClientProvider.client.postgrest
 
     suspend fun getFeedPage(
         filter: FeedFilter,

@@ -12,6 +12,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -49,8 +51,7 @@ actual fun ImagePickerEffect(
             val capturedUri = pendingCameraUri!!
             scope.launch {
                 // Apply EXIF orientation correction
-                val processed = processImageOrientation(capturedUri.toString())
-                val resultUri = processed.correctedUri ?: capturedUri.toString()
+                val resultUri = normalizeImageUri(capturedUri, forcePortrait = true)
                 onImageReady(resultUri)
             }
         }
@@ -63,8 +64,7 @@ actual fun ImagePickerEffect(
         if (uri != null) {
             scope.launch {
                 // Apply EXIF orientation correction
-                val processed = processImageOrientation(uri.toString())
-                val resultUri = processed.correctedUri ?: uri.toString()
+                val resultUri = normalizeImageUri(uri, forcePortrait = false)
                 onImageReady(resultUri)
             }
         }
@@ -99,3 +99,27 @@ actual fun ImagePickerEffect(
         }
     )
 }
+
+private suspend fun normalizeImageUri(uri: Uri, forcePortrait: Boolean): String =
+    withContext(Dispatchers.IO) {
+        val context = ImageProcessorContext.appContext ?: return@withContext uri.toString()
+        val rotatedBitmap = ImageOrientationHelper.rotateImageIfRequired(context, uri)
+            ?: return@withContext uri.toString()
+
+        val normalizedBitmap = if (forcePortrait) {
+            ImageOrientationHelper.forcePortrait(rotatedBitmap)
+        } else {
+            rotatedBitmap
+        }
+
+        try {
+            val fileName = "corrected_${System.currentTimeMillis()}.jpg"
+            val savedFile = ImageOrientationHelper.saveBitmapToCache(context, normalizedBitmap, fileName)
+            savedFile?.let { Uri.fromFile(it).toString() } ?: uri.toString()
+        } finally {
+            if (normalizedBitmap !== rotatedBitmap && !normalizedBitmap.isRecycled) {
+                normalizedBitmap.recycle()
+            }
+            if (!rotatedBitmap.isRecycled) rotatedBitmap.recycle()
+        }
+    }

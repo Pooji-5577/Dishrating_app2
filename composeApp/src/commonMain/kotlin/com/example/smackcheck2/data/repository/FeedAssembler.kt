@@ -23,7 +23,8 @@ class FeedAssembler(
     private val client: io.github.jan.supabase.SupabaseClient = SupabaseClientProvider.client
 ) {
 
-    private val postgrest = client.postgrest
+    private val postgrest
+        get() = client.postgrest
 
     /**
      * Map a batch of ratings into FeedItems using bulk queries.

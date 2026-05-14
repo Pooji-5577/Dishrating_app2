@@ -3,6 +3,7 @@ package com.example.smackcheck2.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -10,39 +11,39 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Surface
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.Restaurant
@@ -52,6 +53,8 @@ import com.example.smackcheck2.ui.components.BottomNavBar
 import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRedDark
+import com.example.smackcheck2.ui.theme.BrandRedLight
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
@@ -62,10 +65,10 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.math.*
 
-// ─── Design tokens ───────────────────────────────────────────────────────────
-private val Maroon      = Color(0xFF642223)
-private val MaroonLight = Color(0xFFBB5B5C)
-private val MaroonAlpha = Color(0x33642223)   // rgba(100,34,35,0.20)
+// ─── Design tokens (use centralized brand colors) ───────────────────────────
+private val Maroon      = BrandRedDark
+private val MaroonLight = BrandRedLight
+private val MaroonAlpha = BrandRedDark.copy(alpha = 0.20f)
 private val PageBg      = Color(0xFFF6F6F6)
 private val CardBg      = Color.White
 private val CreamAlpha  = Color(0xE6E4E2DF)   // rgba(228,226,223,0.90)
@@ -125,6 +128,13 @@ private fun Restaurant.matchesChip(chip: String): Boolean = when (chip) {
     else       -> true
 }
 
+private fun Restaurant.rankingIdentityKey(): String {
+    val normalizedName = name.trim().lowercase()
+    return normalizedName.ifBlank {
+        googlePlaceId?.trim()?.takeIf { it.isNotBlank() } ?: id
+    }
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Main composable
 // ═════════════════════════════════════════════════════════════════════════════
@@ -144,6 +154,7 @@ fun DarkHomeScreen(
     currentLatitude: Double? = null,
     currentLongitude: Double? = null,
     hasUnreadNotifications: Boolean = false,
+    savedRestaurantIds: Set<String> = emptySet(),
     onLocationClick: () -> Unit = {},
     onDishClick: (String) -> Unit = {},
     onFeedItemDishClick: (String) -> Unit = {},
@@ -163,6 +174,7 @@ fun DarkHomeScreen(
     onSocialFeedClick: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     onAddRestaurantClick: () -> Unit = {},
+    onToggleRestaurantSaved: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val jakartaSans   = PlusJakartaSans()
@@ -186,6 +198,7 @@ fun DarkHomeScreen(
     val topDishes   = allDishes.take(6)
     val nearbyCards = filteredRestaurants.take(4)
     val rankingList = filteredRestaurants
+        .distinctBy { it.rankingIdentityKey() }
         .sortedByDescending { it.averageRating }
         .take(3)
 
@@ -297,7 +310,7 @@ fun DarkHomeScreen(
                         contentPadding = PaddingValues(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(chips) { chip ->
+                        items(chips, key = { it }) { chip ->
                             val active = chip == selectedChip
                             Box(
                                 modifier = Modifier
@@ -572,18 +585,13 @@ fun DarkHomeScreen(
                         NearbyRestaurantCard(
                             restaurant = restaurant,
                             distanceText = distText,
+                            isSaved = savedRestaurantIds.contains(restaurant.id),
                             jakartaSans = jakartaSans,
                             newsreader = newsreader,
-                            onClick = { onRestaurantClick(restaurant.id) }
+                            onClick = { onRestaurantClick(restaurant.id) },
+                            onSaveClick = { onToggleRestaurantSaved(restaurant.id) }
                         )
                     }
-
-                    // Map banner
-                    MapBanner(
-                        count = filteredRestaurants.size,
-                        jakartaSans = jakartaSans,
-                        onExploreClick = onMapClick
-                    )
 
                     nearbyCards.drop(1).take(1).forEach { restaurant ->
                         val distText = if (currentLatitude != null && currentLongitude != null &&
@@ -594,9 +602,11 @@ fun DarkHomeScreen(
                         NearbyRestaurantCard(
                             restaurant = restaurant,
                             distanceText = distText,
+                            isSaved = savedRestaurantIds.contains(restaurant.id),
                             jakartaSans = jakartaSans,
                             newsreader = newsreader,
-                            onClick = { onRestaurantClick(restaurant.id) }
+                            onClick = { onRestaurantClick(restaurant.id) },
+                            onSaveClick = { onToggleRestaurantSaved(restaurant.id) }
                         )
                     }
                 }
@@ -669,10 +679,9 @@ fun DarkHomeScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    CircularProgressIndicator(
-                        color = Maroon,
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(48.dp)
+                    SmoothLoadingSpinner(
+                        modifier = Modifier.size(48.dp),
+                        color = Maroon
                     )
                     Text(
                         text = "Finding the best food around you...",
@@ -684,6 +693,50 @@ fun DarkHomeScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SmoothLoadingSpinner(
+    modifier: Modifier = Modifier,
+    color: Color = Maroon
+) {
+    val transition = rememberInfiniteTransition(label = "smooth_spinner")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1200, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "spinner_rotation"
+    )
+    val sweep by transition.animateFloat(
+        initialValue = 48f,
+        targetValue = 300f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 950, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "spinner_sweep"
+    )
+
+    Canvas(modifier = modifier) {
+        val strokePx = 4.dp.toPx()
+        drawArc(
+            color = color.copy(alpha = 0.22f),
+            startAngle = 0f,
+            sweepAngle = 360f,
+            useCenter = false,
+            style = Stroke(width = strokePx, cap = StrokeCap.Round)
+        )
+        drawArc(
+            color = color,
+            startAngle = rotation,
+            sweepAngle = sweep,
+            useCenter = false,
+            style = Stroke(width = strokePx, cap = StrokeCap.Round)
+        )
     }
 }
 
@@ -866,9 +919,11 @@ private fun TopDishCard(
 private fun NearbyRestaurantCard(
     restaurant: Restaurant,
     distanceText: String,
+    isSaved: Boolean,
     jakartaSans: androidx.compose.ui.text.font.FontFamily,
     newsreader: androidx.compose.ui.text.font.FontFamily,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onSaveClick: () -> Unit
 ) {
     Box(
         modifier = Modifier
@@ -923,12 +978,13 @@ private fun NearbyRestaurantCard(
                         .padding(16.dp)
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(CreamAlpha),
+                        .background(CreamAlpha)
+                        .clickable { onSaveClick() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.BookmarkBorder,
-                        contentDescription = "Bookmark",
+                        imageVector = if (isSaved) Icons.Filled.Bookmark else Icons.Filled.BookmarkBorder,
+                        contentDescription = if (isSaved) "Unsave restaurant" else "Save restaurant",
                         tint = Maroon,
                         modifier = Modifier.size(18.dp)
                     )
@@ -1033,104 +1089,17 @@ text = fmt1f(restaurant.averageRating),
                             .size(48.dp)
                             .clip(CircleShape)
                             .background(Color(0xFFE1E3E3))
-                            .clickable { onClick() },
+                            .clickable { onSaveClick() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Filled.FavoriteBorder,
-                            contentDescription = "Favourite",
-                            tint = TextBlack,
+                            imageVector = if (isSaved) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
+                            contentDescription = if (isSaved) "Unsave restaurant" else "Save restaurant",
+                            tint = if (isSaved) Maroon else TextBlack,
                             modifier = Modifier.size(20.dp)
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-// ─── Map Banner ───────────────────────────────────────────────────────────────
-@Composable
-private fun MapBanner(
-    count: Int,
-    jakartaSans: androidx.compose.ui.text.font.FontFamily,
-    onExploreClick: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(192.dp)
-            .clip(RoundedCornerShape(32.dp))
-            .background(MapDark)
-            .clickable { onExploreClick() },
-        contentAlignment = Alignment.Center
-    ) {
-        // Blurred dark overlay
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0x66000000))
-        )
-
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(Color(0x1AFFFFFF)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.LocationOn,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "$count restaurants near you",
-                    fontFamily = jakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp,
-                    color = Color.White
-                )
-                Text(
-                    text = "READY TO EXPLORE?",
-                    fontFamily = jakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    letterSpacing = 1.2.sp,
-                    color = Color.White.copy(alpha = 0.6f)
-                )
-            }
-
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(
-                        Brush.linearGradient(
-                            colors = listOf(Maroon, Color(0xFFFF7669))
-                        )
-                    )
-                    .clickable { onExploreClick() }
-                    .padding(horizontal = 32.dp, vertical = 12.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Explore Map",
-                    fontFamily = jakartaSans,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = Color.White
-                )
             }
         }
     }

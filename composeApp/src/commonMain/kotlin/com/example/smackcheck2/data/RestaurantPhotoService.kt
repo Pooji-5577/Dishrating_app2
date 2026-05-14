@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.example.smackcheck2.util.Logger
 
 /**
  * Supabase response for restaurant photo data.
@@ -63,25 +64,25 @@ class RestaurantPhotoService {
             // Step 1: Check if photos are already cached in Supabase
             val cached = getCachedPhotos(restaurantId)
             if (cached.isNotEmpty() && !hasLegacyGooglePhotoEndpoint(cached)) {
-                println("[DEBUG][PhotoService] Supabase cache hit for '$restaurantName' (id=$restaurantId): ${cached.size} photos")
+                Logger.d("RestaurantPhotoService", "[DEBUG][PhotoService] Supabase cache hit for '$restaurantName' (id=$restaurantId): ${cached.size} photos")
                 return cached
             }
-            println("[DEBUG][PhotoService] No cache for '$restaurantName' — calling Edge Function (placeId=$placeId, city=$city)")
+            Logger.d("RestaurantPhotoService", "[DEBUG][PhotoService] No cache for '$restaurantName' — calling Edge Function (placeId=$placeId, city=$city)")
 
             // Step 2: Call Edge Function to fetch from Google Places API
             val fetched = fetchPhotosFromEdgeFunction(restaurantName, city, placeId)
             if (fetched.isNotEmpty()) {
-                println("[DEBUG][PhotoService] Edge Function returned ${fetched.size} photos for '$restaurantName'")
+                Logger.d("RestaurantPhotoService", "[DEBUG][PhotoService] Edge Function returned ${fetched.size} photos for '$restaurantName'")
                 // Step 3: Cache URLs in Supabase for future requests
                 cachePhotoUrls(restaurantId, fetched)
                 return fetched
             }
 
             // Step 4: Fallback — return empty (UI will show placeholder)
-            println("[DEBUG][PhotoService] No photos found anywhere for '$restaurantName' (id=$restaurantId, placeId=$placeId)")
+            Logger.d("RestaurantPhotoService", "[DEBUG][PhotoService] No photos found anywhere for '$restaurantName' (id=$restaurantId, placeId=$placeId)")
             emptyList()
         } catch (e: Exception) {
-            println("[DEBUG][PhotoService] ERROR for '$restaurantName': ${e::class.simpleName} - ${e.message}")
+            Logger.e("RestaurantPhotoService", "[DEBUG][PhotoService] ERROR for '$restaurantName': ${e::class.simpleName} - ${e.message}", e)
             emptyList()
         }
     }
@@ -128,7 +129,7 @@ class RestaurantPhotoService {
                 else -> emptyList()
             }
         } catch (e: Exception) {
-            println("getCachedPhotos error: ${e.message}")
+            Logger.e("RestaurantPhotoService", "getCachedPhotos error: ${e.message}", e)
             emptyList()
         }
     }
@@ -165,12 +166,12 @@ class RestaurantPhotoService {
 
             if (response.status.value != 200) {
                 val errorText = response.body<String>()
-                println("Edge Function error (${response.status.value}): $errorText")
+                Logger.e("RestaurantPhotoService", "Edge Function error (${response.status.value}): $errorText")
                 return emptyList()
             }
 
             val responseText = response.body<String>()
-            println("Edge Function response: $responseText")
+            Logger.d("RestaurantPhotoService", "Edge Function response: $responseText")
 
             // Parse the JSON response: { "photos": ["url1", "url2", ...] }
             val jsonElement = json.parseToJsonElement(responseText)
@@ -178,7 +179,7 @@ class RestaurantPhotoService {
 
             photosArray.map { it.jsonPrimitive.content }
         } catch (e: Exception) {
-            println("fetchPhotosFromEdgeFunction error: ${e.message}")
+            Logger.e("RestaurantPhotoService", "fetchPhotosFromEdgeFunction error: ${e.message}", e)
             emptyList()
         }
     }
@@ -205,7 +206,7 @@ class RestaurantPhotoService {
                     filter { eq("id", restaurantId) }
                 }
         } catch (e: Exception) {
-            println("cachePhotoUrls error: ${e.message}")
+            Logger.e("RestaurantPhotoService", "cachePhotoUrls error: ${e.message}", e)
         }
     }
 }

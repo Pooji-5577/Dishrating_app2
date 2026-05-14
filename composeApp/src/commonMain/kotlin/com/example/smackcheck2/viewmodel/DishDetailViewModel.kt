@@ -3,6 +3,7 @@ package com.example.smackcheck2.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.DishDetailUiState
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -68,7 +69,7 @@ class DishDetailViewModel : ViewModel() {
                     }
 
                     val restaurant = restaurantDeferred.await()
-                    val related = relatedDeferred.await()
+                    val related = enrichRelatedDishesWithRatings(relatedDeferred.await())
                     val reviews = reviewsDeferred.await()
                     val featured = reviews
                         .filter { !it.dishImageUrl.isNullOrBlank() }
@@ -117,5 +118,27 @@ class DishDetailViewModel : ViewModel() {
      */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    private suspend fun enrichRelatedDishesWithRatings(dishes: List<Dish>): List<Dish> {
+        if (dishes.isEmpty()) return dishes
+
+        val ratingsByDish = databaseRepository
+            .getRatingsByDishIds(dishes.map { it.id })
+            .groupBy { it.dishId }
+
+        return dishes.map { dish ->
+            val ratings = ratingsByDish[dish.id].orEmpty()
+            if (ratings.isEmpty()) return@map dish
+
+            val firstRatingImage = ratings.firstOrNull { !it.imageUrl.isNullOrBlank() }?.imageUrl
+            val averageRating = ratings.map { it.rating }.average().toFloat()
+
+            dish.copy(
+                imageUrl = dish.imageUrl?.takeIf { it.isNotBlank() } ?: firstRatingImage,
+                rating = averageRating,
+                ratingCount = ratings.size
+            )
+        }
     }
 }

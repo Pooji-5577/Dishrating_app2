@@ -3,6 +3,7 @@ package com.example.smackcheck2.data
 import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.example.smackcheck2.util.Logger
 
 /**
  * Repository for saving dish entries to Supabase.
@@ -73,7 +74,7 @@ object DishRepository {
             true
         } catch (e: Exception) {
             // Log the error for debugging; caller handles the failure
-            println("DishRepository.saveDish error: ${e.message}")
+            Logger.e("DishRepository", "DishRepository.saveDish error: ${e.message}", e)
             false
         }
     }

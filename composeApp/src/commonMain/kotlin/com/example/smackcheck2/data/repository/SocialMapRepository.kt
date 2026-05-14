@@ -8,14 +8,15 @@ import io.github.jan.supabase.postgrest.rpc
 import io.github.jan.supabase.auth.auth
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.example.smackcheck2.util.Logger
 
 /**
  * Repository for Social Map features - fetches nearby users with dish posts
  */
 class SocialMapRepository {
 
-    private val client = SupabaseClientProvider.client
-    private val postgrest = client.postgrest
+    private val client get() = SupabaseClientProvider.client
+    private val postgrest get() = client.postgrest
 
     /**
      * Get nearby users who have posted dishes recently
@@ -62,7 +63,7 @@ class SocialMapRepository {
 
             Result.success(markers)
         } catch (e: Exception) {
-            println("SocialMapRepository: Error fetching nearby users: ${e.message}")
+            Logger.e("SocialMapRepository", "SocialMapRepository: Error fetching nearby users: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -93,7 +94,7 @@ class SocialMapRepository {
 
             Result.success(profile)
         } catch (e: Exception) {
-            println("SocialMapRepository: Error fetching user profile: ${e.message}")
+            Logger.e("SocialMapRepository", "SocialMapRepository: Error fetching user profile: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -112,7 +113,7 @@ class SocialMapRepository {
             )
             Result.success(Unit)
         } catch (e: Exception) {
-            println("SocialMapRepository: Error updating location: ${e.message}")
+            Logger.e("SocialMapRepository", "SocialMapRepository: Error updating location: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -128,7 +129,7 @@ class SocialMapRepository {
             )
             Result.success(Unit)
         } catch (e: Exception) {
-            println("SocialMapRepository: Error toggling location sharing: ${e.message}")
+            Logger.e("SocialMapRepository", "SocialMapRepository: Error toggling location sharing: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -180,7 +181,7 @@ class SocialMapRepository {
             Result.success(markersByUser)
         } catch (e: Exception) {
             // If PostGIS function fails, fall back to non-PostGIS version
-            println("SocialMapRepository: PostGIS query failed, trying fallback: ${e.message}")
+            Logger.e("SocialMapRepository", "SocialMapRepository: PostGIS query failed, trying fallback: ${e.message}", e)
             getNearbyUsersWithDishes(userLat, userLng, radiusMeters)
         }
     }
@@ -219,7 +220,7 @@ class SocialMapRepository {
 
             Result.success(markers)
         } catch (e: Exception) {
-            println("SocialMapRepository: Error fetching all dish posts: ${e.message}")
+            Logger.e("SocialMapRepository", "SocialMapRepository: Error fetching all dish posts: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -259,7 +260,7 @@ class SocialMapRepository {
                 }
             Result.success(markers)
         } catch (e: Exception) {
-            println("SocialMapRepository: Error fetching my rating posts: ${e.message}")
+            Logger.e("SocialMapRepository", "SocialMapRepository: Error fetching my rating posts: ${e.message}", e)
             Result.failure(e)
         }
     }

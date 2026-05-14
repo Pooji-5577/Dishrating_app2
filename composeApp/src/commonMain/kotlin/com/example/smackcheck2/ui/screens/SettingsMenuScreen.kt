@@ -43,12 +43,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 
 private val SettingsBg = Color(0xFFF6F6F6)
 private val CardWhite = Color(0xFFFFFFFF)
 private val DeepMaroon = Color(0xFF3B1011)
-private val WarmMaroon = Color(0xFF642223)
-private val CrimsonRed = Color(0xFF9B2335)
+private val WarmMaroon = BrandRedDark
+private val CrimsonRed = BrandRed
 private val MutedGrey = Color(0xFF767777)
 private val DividerGrey = Color(0xFFEAE0D8)
 

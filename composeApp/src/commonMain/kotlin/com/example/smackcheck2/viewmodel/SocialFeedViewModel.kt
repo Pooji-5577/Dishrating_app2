@@ -19,12 +19,14 @@ import com.example.smackcheck2.data.repository.NotificationService
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
+import com.example.smackcheck2.util.Logger
 
 class SocialFeedViewModel(
     private val preferencesRepository: PreferencesRepository
@@ -38,8 +40,7 @@ class SocialFeedViewModel(
     private val notificationService = NotificationService()
 
     private val crashGuard = CoroutineExceptionHandler { _, throwable ->
-        println("SocialFeedViewModel: Uncaught coroutine error: ${throwable::class.simpleName} - ${throwable.message}")
-        throwable.printStackTrace()
+        Logger.e("SocialFeedViewModel", "SocialFeedViewModel: Uncaught coroutine error: ${throwable::class.simpleName} - ${throwable.message}", throwable)
         _uiState.update {
             it.copy(
                 isLoading = false,
@@ -57,6 +58,7 @@ class SocialFeedViewModel(
 
     private var loadFeedJob: Job? = null
     private var realtimeSubscriptionJob: Job? = null
+    private var userSearchJob: Job? = null
 
     // Track if we're subscribed to real-time updates
     private var isSubscribedToRealtime = false
@@ -100,7 +102,7 @@ class SocialFeedViewModel(
         viewModelScope.launch(crashGuard) {
             try {
                 val userId = authRepository.getCurrentUserId() ?: return@launch
-                println("SocialFeedViewModel: Loading stories for user $userId")
+                Logger.d("SocialFeedViewModel", "SocialFeedViewModel: Loading stories for user $userId")
                 socialRepository.getStories().onSuccess { stories ->
                     val myStories = stories.filter { it.userId == userId }
                     val storyUsers = stories
@@ -114,7 +116,7 @@ class SocialFeedViewModel(
                                 isFollowing = true
                             )
                         }
-                    println("SocialFeedViewModel: Loaded ${stories.size} total stories, ${myStories.size} mine, ${storyUsers.size} other users")
+                    Logger.d("SocialFeedViewModel", "SocialFeedViewModel: Loaded ${stories.size} total stories, ${myStories.size} mine, ${storyUsers.size} other users")
                     _uiState.update {
                         it.copy(
                             currentUserId = userId,
@@ -123,7 +125,7 @@ class SocialFeedViewModel(
                         )
                     }
                 }.onFailure { error ->
-                    println("SocialFeedViewModel: Failed to load stories: ${error.message}")
+                    Logger.e("SocialFeedViewModel", "SocialFeedViewModel: Failed to load stories: ${error.message}", error)
                     _uiState.update {
                         it.copy(
                             currentUserId = userId,
@@ -132,7 +134,7 @@ class SocialFeedViewModel(
                     }
                 }
             } catch (e: Exception) {
-                println("SocialFeedViewModel: Failed to load story users: ${e.message}")
+                Logger.e("SocialFeedViewModel", "SocialFeedViewModel: Failed to load story users: ${e.message}", e)
             }
         }
     }
@@ -150,7 +152,7 @@ class SocialFeedViewModel(
                     _uiState.update { it.copy(topDishes = dishes) }
                 }
             } catch (e: Exception) {
-                println("SocialFeedViewModel: Failed to load top dishes: ${e.message}")
+                Logger.e("SocialFeedViewModel", "SocialFeedViewModel: Failed to load top dishes: ${e.message}", e)
             }
         }
     }
@@ -162,6 +164,69 @@ class SocialFeedViewModel(
         loadStoryUsers()
         loadTopDishes()
         loadNearbyRestaurantCount()
+    }
+
+    fun searchUserSuggestions(query: String) {
+        userSearchJob?.cancel()
+
+        val trimmed = query.trim()
+        if (trimmed.removePrefix("@").length < 2) {
+            _uiState.update {
+                it.copy(userSearchSuggestions = emptyList(), isUserSearchLoading = false)
+            }
+            return
+        }
+
+        _uiState.update { it.copy(isUserSearchLoading = true) }
+
+        userSearchJob = viewModelScope.launch(crashGuard) {
+            delay(250)
+
+            val currentUserId = authRepository.getCurrentUserId()
+            socialRepository.searchUserSuggestions(
+                usernameOrHandle = trimmed,
+                currentUserId = currentUserId
+            ).onSuccess { suggestions ->
+                _uiState.update {
+                    it.copy(
+                        userSearchSuggestions = suggestions,
+                        isUserSearchLoading = false
+                    )
+                }
+            }.onFailure { error ->
+                Logger.e("SocialFeedViewModel", "SocialFeedViewModel: user search failed: ${error.message}", error)
+                _uiState.update {
+                    it.copy(
+                        userSearchSuggestions = emptyList(),
+                        isUserSearchLoading = false
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearUserSearchSuggestions() {
+        userSearchJob?.cancel()
+        _uiState.update {
+            it.copy(userSearchSuggestions = emptyList(), isUserSearchLoading = false)
+        }
+    }
+
+    fun submitUserSearch(query: String, onUserFound: (String) -> Unit) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+
+        viewModelScope.launch(crashGuard) {
+            val suggestion = _uiState.value.userSearchSuggestions.firstOrNull { user ->
+                user.username.equals(trimmed.removePrefix("@"), ignoreCase = true)
+            }
+            val userId = suggestion?.id ?: socialRepository.findUserIdByUsername(trimmed).getOrNull()
+
+            if (!userId.isNullOrBlank()) {
+                clearUserSearchSuggestions()
+                onUserFound(userId)
+            }
+        }
     }
     
     /**
@@ -178,7 +243,7 @@ class SocialFeedViewModel(
                 realtimeFeedRepository.subscribeToLikes(userId)
                 realtimeFeedRepository.subscribeToComments(userId)
                 isSubscribedToRealtime = true
-                println("SocialFeedViewModel: Subscribed to real-time updates")
+                Logger.d("SocialFeedViewModel", "SocialFeedViewModel: Subscribed to real-time updates")
 
                 realtimeFeedRepository.feedUpdates.collect { update ->
                     try {
@@ -186,14 +251,14 @@ class SocialFeedViewModel(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        println("SocialFeedViewModel: handleFeedUpdate failed: ${e.message}")
+                        Logger.e("SocialFeedViewModel", "SocialFeedViewModel: handleFeedUpdate failed: ${e.message}", e)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 isSubscribedToRealtime = false
-                println("SocialFeedViewModel: realtime subscription failed: ${e.message}")
+                Logger.e("SocialFeedViewModel", "SocialFeedViewModel: realtime subscription failed: ${e.message}", e)
             }
         }
     }
@@ -217,7 +282,7 @@ class SocialFeedViewModel(
                     val currentUserId = authRepository.getCurrentUserId()
                     // Skip count update for own likes — already handled by optimistic update in toggleLike()
                     if (update.userId == currentUserId) {
-                        println("[DEBUG][SocialFeed] Ignoring own LikeAdded real-time event (already optimistic)")
+                        Logger.d("SocialFeedViewModel", "[DEBUG][SocialFeed] Ignoring own LikeAdded real-time event (already optimistic)")
                         state
                     } else {
                         val updatedItems = state.feedItems.map { item ->
@@ -232,7 +297,7 @@ class SocialFeedViewModel(
                     val currentUserId = authRepository.getCurrentUserId()
                     // Skip count update for own unlikes — already handled by optimistic update in toggleLike()
                     if (update.userId == currentUserId) {
-                        println("[DEBUG][SocialFeed] Ignoring own LikeRemoved real-time event (already optimistic)")
+                        Logger.d("SocialFeedViewModel", "[DEBUG][SocialFeed] Ignoring own LikeRemoved real-time event (already optimistic)")
                         state
                     } else {
                         val updatedItems = state.feedItems.map { item ->
@@ -419,7 +484,7 @@ class SocialFeedViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            println("SocialFeedViewModel: fetchPage failed: ${e::class.simpleName} - ${e.message}")
+            Logger.e("SocialFeedViewModel", "SocialFeedViewModel: fetchPage failed: ${e::class.simpleName} - ${e.message}", e)
             Result.failure(e)
         }
         // Apply bookmark state from local storage
@@ -472,12 +537,12 @@ class SocialFeedViewModel(
     fun toggleLike(itemId: String) {
         val currentUserId = authRepository.getCurrentUserId()
         if (currentUserId == null) {
-            println("[DEBUG][SocialFeed] toggleLike: No user ID — user not logged in")
+            Logger.d("SocialFeedViewModel", "[DEBUG][SocialFeed] toggleLike: No user ID — user not logged in")
             return
         }
         // Capture pre-toggle state so we can revert on failure
         val wasLiked = _uiState.value.feedItems.find { it.id == itemId }?.isLiked ?: false
-        println("[DEBUG][SocialFeed] toggleLike: itemId=$itemId, wasLiked=$wasLiked, userId=$currentUserId")
+        Logger.d("SocialFeedViewModel", "[DEBUG][SocialFeed] toggleLike: itemId=$itemId, wasLiked=$wasLiked, userId=$currentUserId")
 
         // Optimistic update
         _uiState.update { state ->
@@ -495,14 +560,14 @@ class SocialFeedViewModel(
         viewModelScope.launch {
             val user = authRepository.getCurrentUser()
             if (user == null) {
-                println("SocialFeedViewModel: User not signed in, cannot toggle like")
+                Logger.d("SocialFeedViewModel", "SocialFeedViewModel: User not signed in, cannot toggle like")
                 return@launch
             }
 
             val result = realtimeFeedRepository.toggleLike(itemId, user.id)
             result.fold(
                 onSuccess = { isNowLiked ->
-                    println("[DEBUG][SocialFeed] toggleLike SUCCESS: itemId=$itemId, isNowLiked=$isNowLiked")
+                    Logger.d("SocialFeedViewModel", "[DEBUG][SocialFeed] toggleLike SUCCESS: itemId=$itemId, isNowLiked=$isNowLiked")
                     if (isNowLiked) {
                         val item = _uiState.value.feedItems.find { it.id == itemId }
                         if (item != null && item.userId != user.id) {
@@ -518,8 +583,7 @@ class SocialFeedViewModel(
                     }
                 },
                 onFailure = { e ->
-                    println("[DEBUG][SocialFeed] toggleLike FAILED: itemId=$itemId, error=${e::class.simpleName} - ${e.message}")
-                    e.printStackTrace()
+                    Logger.e("SocialFeedViewModel", "[DEBUG][SocialFeed] toggleLike FAILED: itemId=$itemId, error=${e::class.simpleName} - ${e.message}", e)
                     // Revert optimistic UI toggle back to original state
                     _uiState.update { state ->
                         val revertedItems = state.feedItems.map { item ->
@@ -572,7 +636,7 @@ class SocialFeedViewModel(
         viewModelScope.launch {
             realtimeFeedRepository.unsubscribeAll()
             isSubscribedToRealtime = false
-            println("SocialFeedViewModel: Unsubscribed from real-time updates")
+            Logger.d("SocialFeedViewModel", "SocialFeedViewModel: Unsubscribed from real-time updates")
         }
     }
 }

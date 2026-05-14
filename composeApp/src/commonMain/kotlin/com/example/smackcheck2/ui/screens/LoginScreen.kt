@@ -27,6 +27,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -92,7 +93,7 @@ fun LoginScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.height(72.dp))
@@ -108,7 +109,7 @@ fun LoginScreen(
                 },
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1A1A1A),
+                color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
 
@@ -128,7 +129,7 @@ fun LoginScreen(
                 text = "Email Address",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF1A1A1A),
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 6.dp)
@@ -159,7 +160,7 @@ fun LoginScreen(
                 text = "Password",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = Color(0xFF1A1A1A),
+                color = MaterialTheme.colorScheme.onBackground,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 6.dp)
@@ -275,7 +276,7 @@ fun LoginScreen(
             ) {
                 HorizontalDivider(
                     modifier = Modifier.weight(1f),
-                    color = Color(0xFFE0E0E0)
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
                 Text(
                     text = "  Or  ",
@@ -284,7 +285,7 @@ fun LoginScreen(
                 )
                 HorizontalDivider(
                     modifier = Modifier.weight(1f),
-                    color = Color(0xFFE0E0E0)
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
             }
 
@@ -307,10 +308,10 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE0E0E0)),
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color.White,
-                    contentColor = Color(0xFF1A1A1A)
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onBackground
                 )
             ) {
                 // Google "G" logo using coloured text segments
@@ -320,7 +321,7 @@ fun LoginScreen(
                     text = "Continue with Google",
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    color = Color(0xFF1A1A1A)
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             }
 
@@ -340,7 +341,7 @@ fun LoginScreen(
                 )
                 TextButton(onClick = onNavigateToRegister) {
                     Text(
-                        text = "Sign up",
+                        text = "Sign Up",
                         color = BrandRed,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
@@ -369,11 +370,11 @@ private fun GoogleLogoText() {
 
 @Composable
 private fun lightTextFieldColors() = TextFieldDefaults.colors(
-    focusedTextColor = Color(0xFF1A1A1A),
-    unfocusedTextColor = Color(0xFF1A1A1A),
-    focusedContainerColor = Color(0xFFF2F2F2),
-    unfocusedContainerColor = Color(0xFFF2F2F2),
-    errorContainerColor = Color(0xFFF2F2F2),
+    focusedTextColor = MaterialTheme.colorScheme.onBackground,
+    unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+    errorContainerColor = MaterialTheme.colorScheme.surfaceVariant,
     focusedIndicatorColor = Color.Transparent,
     unfocusedIndicatorColor = Color.Transparent,
     errorIndicatorColor = Color.Transparent,

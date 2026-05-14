@@ -12,6 +12,7 @@ import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.model.ThemePreference
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 /**
  * Theme state manager for toggling between light and dark themes
@@ -67,7 +68,7 @@ class ThemeState(
                 val pref = if (isDarkMode) ThemePreference.DARK else ThemePreference.LIGHT
                 preferencesRepository.saveThemePreference(pref)
             } catch (e: Exception) {
-                println("ThemeState: Failed to save theme preference: ${e.message}")
+                Logger.e("ThemeState", "ThemeState: Failed to save theme preference: ${e.message}", e)
             }
         }
     }

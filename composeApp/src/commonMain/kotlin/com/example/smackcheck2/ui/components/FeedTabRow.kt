@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FeedFilter
+import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 
 private val tabs = listOf(
@@ -77,7 +78,7 @@ fun FeedTabRow(
                         modifier = Modifier
                             .height(2.5.dp)
                             .width(if (isSelected) 40.dp else 0.dp)
-                            .background(Color(0xFF9B2335))
+                            .background(BrandRed)
                     )
                 }
             }

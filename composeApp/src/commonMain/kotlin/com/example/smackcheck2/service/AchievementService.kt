@@ -2,6 +2,7 @@ package com.example.smackcheck2.service
 
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.util.Logger
 
 /**
  * Service for automatically checking and awarding achievements
@@ -42,10 +43,10 @@ class AchievementService {
                     if (!hasAlready) {
                         val awardResult = databaseRepository.awardBadge(userId, badgeId)
                         if (awardResult.isSuccess) {
-                            println("AchievementService: ✓ Awarded badge: $badgeId")
+                            Logger.d("AchievementService", "AchievementService: ✓ Awarded badge: $badgeId")
                             newlyUnlocked.add(badgeId)
                         } else {
-                            println("AchievementService: ✗ Failed to award badge: $badgeId - ${awardResult.exceptionOrNull()?.message}")
+                            Logger.e("AchievementService", "AchievementService: ✗ Failed to award badge: $badgeId - ${awardResult.exceptionOrNull()?.message}")
                         }
                     }
                 }
@@ -53,8 +54,7 @@ class AchievementService {
 
             Result.success(newlyUnlocked)
         } catch (e: Exception) {
-            println("AchievementService: Error checking achievements: ${e.message}")
-            e.printStackTrace()
+            Logger.e("AchievementService", "AchievementService: Error checking achievements: ${e.message}", e)
             Result.failure(e)
         }
     }

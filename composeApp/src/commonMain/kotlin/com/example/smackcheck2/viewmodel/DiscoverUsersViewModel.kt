@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 class DiscoverUsersViewModel : ViewModel() {
 
@@ -20,8 +21,7 @@ class DiscoverUsersViewModel : ViewModel() {
     private val authRepository = AuthRepository()
 
     private val crashGuard = CoroutineExceptionHandler { _, throwable ->
-        println("DiscoverUsersViewModel: Uncaught coroutine error: ${throwable::class.simpleName} - ${throwable.message}")
-        throwable.printStackTrace()
+        Logger.e("DiscoverUsersViewModel", "DiscoverUsersViewModel: Uncaught coroutine error: ${throwable::class.simpleName} - ${throwable.message}", throwable)
         _uiState.update {
             it.copy(
                 isLoading = false,

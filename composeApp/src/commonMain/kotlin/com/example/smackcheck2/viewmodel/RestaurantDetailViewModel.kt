@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 /**
  * ViewModel for Restaurant Detail Screen
@@ -201,7 +202,7 @@ class RestaurantDetailViewModel(
             val topDishes = enrichedDishes.sortedByDescending { it.rating }.take(6)
             _uiState.update { it.copy(dishes = enrichedDishes, topDishes = topDishes) }
         }.onFailure { error ->
-            println("RestaurantDetailViewModel: Failed to load dishes: ${error.message}")
+            Logger.e("RestaurantDetailViewModel", "RestaurantDetailViewModel: Failed to load dishes: ${error.message}", error)
             // Don't update error state, just leave dishes empty
         }
     }
@@ -220,7 +221,7 @@ class RestaurantDetailViewModel(
                 )
             }
         }.onFailure { error ->
-            println("RestaurantDetailViewModel: Failed to load reviews: ${error.message}")
+            Logger.e("RestaurantDetailViewModel", "RestaurantDetailViewModel: Failed to load reviews: ${error.message}", error)
             // Still set loading to false even if reviews fail
             _uiState.update { it.copy(isLoading = false) }
         }

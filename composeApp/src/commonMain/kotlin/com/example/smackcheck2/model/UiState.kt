@@ -276,7 +276,9 @@ data class SocialFeedUiState(
     val stories: List<Story> = emptyList(),
     val currentUserId: String? = null,
     val topDishes: List<FeedItem> = emptyList(),
-    val nearbyRestaurantCount: Int = 0
+    val nearbyRestaurantCount: Int = 0,
+    val userSearchSuggestions: List<UserSummary> = emptyList(),
+    val isUserSearchLoading: Boolean = false
 )
 
 enum class FeedFilter { FOLLOWING, TRENDING, NEARBY, MY_RATINGS }

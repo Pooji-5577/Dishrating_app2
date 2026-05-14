@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -16,7 +17,7 @@ fun SmackCheckWordmark(
     modifier: Modifier = Modifier,
     fontFamily: FontFamily,
     fontSize: TextUnit,
-    smackColor: Color = Color(0xFF642223),
+    smackColor: Color = BrandRedDark,
     checkColor: Color = Color(0xFF2D2F2F),
     letterSpacing: TextUnit = (-1.0).sp
 ) {

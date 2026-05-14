@@ -51,9 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.data.ImageDelivery
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Review
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishDetailViewModel
 
@@ -246,7 +248,7 @@ fun DishDetailScreen(
                                         modifier = Modifier
                                             .size(32.dp)
                                             .clip(CircleShape)
-                                            .background(Color(0xFF642223)),
+                                            .background(BrandRedDark),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         if (!featured.userProfileUrl.isNullOrBlank()) {
@@ -350,7 +352,7 @@ fun DishDetailScreen(
                                     Icon(
                                         imageVector = Icons.Filled.LocationOn,
                                         contentDescription = null,
-                                        tint = Color(0xFF642223),
+                                        tint = BrandRedDark,
                                         modifier = Modifier.size(15.dp)
                                     )
                                     Text(
@@ -456,7 +458,7 @@ fun DishDetailScreen(
                             )
                         }
 
-                        items(uiState.reviews) { review ->
+                        items(uiState.reviews, key = { it.id }) { review ->
                             ReviewItem(review = review)
                             HorizontalDivider(
                                 color = appColors().Surface,
@@ -487,7 +489,7 @@ fun DishDetailScreen(
                             )
                         }
 
-                        items(uiState.relatedDishes) { relatedDish ->
+                        items(uiState.relatedDishes, key = { it.id }) { relatedDish ->
                             RelatedDishItem(
                                 dish = relatedDish,
                                 onClick = { onRelatedDishClick(relatedDish.id) }
@@ -607,7 +609,6 @@ private fun RelatedDishItem(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Dish image placeholder
         Box(
             modifier = Modifier
                 .size(56.dp)
@@ -615,12 +616,22 @@ private fun RelatedDishItem(
                 .background(appColors().SurfaceVariant),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Filled.Restaurant,
-                contentDescription = null,
-                modifier = Modifier.size(28.dp),
-                tint = appColors().TextTertiary
-            )
+            val imageUrl = ImageDelivery.thumbnail(dish.imageUrl)
+            if (!imageUrl.isNullOrBlank()) {
+                NetworkImage(
+                    imageUrl = imageUrl,
+                    contentDescription = dish.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Filled.Restaurant,
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                    tint = appColors().TextTertiary
+                )
+            }
         }
 
         Column(modifier = Modifier.weight(1f)) {

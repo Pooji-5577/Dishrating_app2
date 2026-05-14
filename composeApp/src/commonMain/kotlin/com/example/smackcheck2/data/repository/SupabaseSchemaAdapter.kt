@@ -4,6 +4,26 @@ import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.dto.DishDto
 import com.example.smackcheck2.data.dto.RestaurantDto
 import io.github.jan.supabase.postgrest.postgrest
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+@Serializable
+internal data class DishInsertRow(
+    val id: String? = null,
+    val name: String,
+    @SerialName("restaurant_id")
+    val restaurantId: String,
+    @SerialName("image_url")
+    val imageUrl: String? = null
+)
+
+internal fun DishDto.toDishInsertRow(): DishInsertRow =
+    DishInsertRow(
+        id = id,
+        name = name,
+        restaurantId = restaurantId,
+        imageUrl = imageUrl
+    )
 
 /**
  * Supabase schema adapter that owns all schema compatibility and migration logic.
@@ -21,70 +41,45 @@ class SupabaseSchemaAdapter(
     private val client: io.github.jan.supabase.SupabaseClient = SupabaseClientProvider.client
 ) {
 
-    private val postgrest = client.postgrest
+    private val postgrest
+        get() = client.postgrest
 
     /**
-     * Insert a dish with schema-safe fallback.
+     * Insert a dish using the stable live schema.
      *
-     * If the `restaurant_name` column is missing on the server, retries
-     * without it. Callers always receive a complete DishDto back.
+     * Restaurant names are resolved through the restaurants table. Sending
+     * denormalized dish columns from older schemas causes PostgREST PGRST204
+     * errors before the real insert can run.
      */
     suspend fun insertDish(dto: DishDto): Result<DishDto> {
         return try {
-            val created = postgrest["dishes"].insert(dto) { select() }.decodeSingle<DishDto>()
+            val created = postgrest["dishes"].insert(dto.toDishInsertRow()) { select() }.decodeSingle<DishDto>()
             Result.success(created)
         } catch (e: Exception) {
-            if (isMissingColumnError(e, "restaurant_name")) {
-                try {
-                    val minimalDto = DishDto(
-                        id = dto.id,
-                        name = dto.name,
-                        restaurantId = dto.restaurantId,
-                        imageUrl = dto.imageUrl,
-                        restaurantName = null
-                    )
-                    val created = postgrest["dishes"].insert(minimalDto) { select() }.decodeSingle<DishDto>()
-                    Result.success(created)
-                } catch (e2: Exception) {
-                    Result.failure(e2)
-                }
-            } else {
-                Result.failure(e)
-            }
+            Result.failure(e)
         }
     }
 
     /**
      * Back-fill optional fields on an existing dish row.
      *
-     * Attempts to update both image_url and restaurant_name together.
-     * If restaurant_name column is missing, falls back to image_url only.
-     * All failures are silently swallowed — these are non-critical denormalization hints.
+     * Updates the dish image when a later submission supplies one.
+     * Restaurant names are intentionally not written to dishes; they belong
+     * to the referenced restaurant row.
      */
     suspend fun backfillDishFields(
         dishId: String,
         imageUrl: String? = null,
         restaurantName: String? = null
     ) {
-        if (imageUrl == null && restaurantName == null) return
+        if (imageUrl == null) return
         try {
             postgrest["dishes"].update({
-                imageUrl?.let { set("image_url", it) }
-                restaurantName?.let { set("restaurant_name", it) }
+                set("image_url", imageUrl)
             }) {
                 filter { eq("id", dishId) }
             }
-        } catch (_: Exception) {
-            if (restaurantName != null) {
-                imageUrl?.let {
-                    try {
-                        postgrest["dishes"].update({ set("image_url", it) }) {
-                            filter { eq("id", dishId) }
-                        }
-                    } catch (_: Exception) { /* swallow */ }
-                }
-            }
-        }
+        } catch (_: Exception) { /* swallow - this is a non-critical denormalization hint */ }
     }
 
     /**

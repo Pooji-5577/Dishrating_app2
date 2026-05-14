@@ -36,6 +36,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 
 enum class NavItem { HOME, MAP, CAMERA, EXPLORE, PROFILE }
@@ -86,7 +87,7 @@ fun BottomNavBar(
                         icon = Icons.Filled.Home,
                         label = "HOME",
                         isSelected = selectedItem == NavItem.HOME,
-                        selectedColor = Color(0xFF9B2335),
+                        selectedColor = BrandRed,
                         onClick = onHomeClick,
                         fontFamily = jakartaSans
                     )
@@ -98,7 +99,7 @@ fun BottomNavBar(
                         icon = Icons.Filled.Map,
                         label = "MAP",
                         isSelected = selectedItem == NavItem.MAP,
-                        selectedColor = Color(0xFF9B2335),
+                        selectedColor = BrandRed,
                         onClick = onMapClick,
                         fontFamily = jakartaSans
                     )
@@ -113,7 +114,7 @@ fun BottomNavBar(
                         icon = Icons.Filled.Explore,
                         label = "EXPLORE",
                         isSelected = selectedItem == NavItem.EXPLORE,
-                        selectedColor = Color(0xFF9B2335),
+                        selectedColor = BrandRed,
                         onClick = onExploreClick,
                         fontFamily = jakartaSans
                     )
@@ -125,7 +126,7 @@ fun BottomNavBar(
                         icon = Icons.Filled.Person,
                         label = "PROFILE",
                         isSelected = selectedItem == NavItem.PROFILE,
-                        selectedColor = Color(0xFF9B2335),
+                        selectedColor = BrandRed,
                         onClick = onProfileClick,
                         fontFamily = jakartaSans
                     )
@@ -142,15 +143,15 @@ fun BottomNavBar(
                 .shadow(
                     elevation = 10.dp,
                     shape = CircleShape,
-                    ambientColor = Color(0xFF9B2335).copy(alpha = 0.3f),
-                    spotColor = Color(0xFF9B2335).copy(alpha = 0.3f)
+                    ambientColor = BrandRed.copy(alpha = 0.3f),
+                    spotColor = BrandRed.copy(alpha = 0.3f)
                 )
                 .clip(CircleShape)
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            Color(0xFF9B2335),
-                            Color(0xFFBE3A50)
+                            BrandRed,
+                            BrandRed.copy(alpha = 0.8f)
                         )
                     )
                 )

@@ -5,6 +5,7 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.example.smackcheck2.util.Logger
 
 /**
  * Supabase response model for restaurant search
@@ -54,7 +55,9 @@ class SearchRepository {
         cuisines: Set<String> = emptySet(),
         minRating: Float? = null,
         city: String? = null,
-        restaurantsAndCafesOnly: Boolean = false
+        restaurantsAndCafesOnly: Boolean = false,
+        limit: Int = 50,
+        offset: Int = 0
     ): List<Restaurant> {
         return try {
             val results = client.from("restaurants")
@@ -101,6 +104,10 @@ class SearchRepository {
                             }
                         }
                     }
+
+                    // Bounded query: order by rating desc, limit results
+                    order("average_rating", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
+                    range(offset.toLong(), (offset + limit - 1).toLong())
                 }
                 .decodeList<SupabaseRestaurantRow>()
 
@@ -128,7 +135,7 @@ class SearchRepository {
                 )
             }
         } catch (e: Exception) {
-            println("SearchRepository.searchRestaurants error: ${e.message}")
+            Logger.e("SearchRepository", "SearchRepository.searchRestaurants error: ${e.message}", e)
             emptyList()
         }
     }

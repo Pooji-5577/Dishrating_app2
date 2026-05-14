@@ -77,14 +77,16 @@ import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.platform.RequestCameraPermission
 import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishCaptureViewModel
 import kotlinx.coroutines.launch
 
 private val DeepMaroon = Color(0xFF3B1011)
-private val WarmMaroon = Color(0xFF642223)
-private val CrimsonRed = Color(0xFF9B2335)
+private val WarmMaroon = BrandRedDark
+private val CrimsonRed = BrandRed
 private val RosePink = Color(0xFFBB5B5C)
 private val CreamWhite = Color(0xFFFFF8F0)
 private val WarmBeige = Color(0xFFF5EDE3)
@@ -343,7 +345,7 @@ private fun _unused_CameraCaptureView(
                             val stroke = 4.dp.toPx()
                             val cornerLen = 40.dp.toPx()
                             val radius = 24.dp.toPx()
-                            val color = androidx.compose.ui.graphics.Color(0xFF9B2335).copy(alpha = pulseAlpha)
+                            val color = BrandRed.copy(alpha = pulseAlpha)
                             val w = size.width
                             val h = size.height
                             // Top-left bracket

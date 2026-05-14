@@ -40,6 +40,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FeedItem
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
@@ -133,7 +135,7 @@ fun ReviewPostCard(
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = jakartaSans,
-                                color = Color(0xFF642223)
+                                color = BrandRedDark
                             )
                         }
                     }
@@ -145,7 +147,7 @@ fun ReviewPostCard(
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     fontFamily = jakartaSans,
-                    color = Color(0xFF642223)
+                    color = BrandRedDark
                 )
             }
 
@@ -235,7 +237,7 @@ fun ReviewPostCard(
                         fontWeight = FontWeight.Normal,
                         fontStyle = FontStyle.Italic,
                         fontFamily = newsreader,
-                        color = Color(0xFF642223),
+                        color = BrandRedDark,
                         lineHeight = 30.sp,
                         modifier = Modifier.clickable { onDishClick() }
                     )
@@ -247,7 +249,7 @@ fun ReviewPostCard(
                             fontSize = 11.sp,
                             fontWeight = FontWeight.ExtraBold,
                             fontFamily = jakartaSans,
-                            color = Color(0xFF9B2335),
+                            color = BrandRed,
                             letterSpacing = 0.8.sp
                         )
                     }

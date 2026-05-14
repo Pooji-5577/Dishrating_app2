@@ -8,6 +8,7 @@ import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.datetime.Instant
 import kotlinx.datetime.Clock
+import com.example.smackcheck2.util.Logger
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -19,8 +20,8 @@ class DatabaseRepository(
     private val feedAssembler: FeedAssembler = FeedAssembler()
 ) {
 
-    private val client = SupabaseClientProvider.client
-    private val postgrest = client.postgrest
+    private val client get() = SupabaseClientProvider.client
+    private val postgrest get() = client.postgrest
 
     // ==================== RESTAURANTS ====================
 
@@ -51,7 +52,7 @@ class DatabaseRepository(
         restaurantsAndCafesOnly: Boolean = false
     ): Result<List<Restaurant>> {
         return try {
-            println("DatabaseRepository: Searching with query='$query', cuisines=$cuisines, city=$city, minRating=$minRating, restaurantsAndCafesOnly=$restaurantsAndCafesOnly")
+            Logger.d("DatabaseRepository", "Searching with query='$query', cuisines=$cuisines, city=$city, minRating=$minRating, restaurantsAndCafesOnly=$restaurantsAndCafesOnly")
             val restaurants = postgrest["restaurants"]
                 .select {
                     filter {
@@ -85,10 +86,10 @@ class DatabaseRepository(
                 }
                 .decodeList<RestaurantDto>()
                 .map { it.toRestaurant() }
-            println("DatabaseRepository: Found ${restaurants.size} restaurants")
+            Logger.d("DatabaseRepository", "Found ${restaurants.size} restaurants")
             Result.success(restaurants)
         } catch (e: Exception) {
-            println("DatabaseRepository: Search error: ${e.message}")
+            Logger.e("DatabaseRepository", "Search error: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -137,33 +138,66 @@ class DatabaseRepository(
      */
     suspend fun ensureRestaurantExists(restaurant: Restaurant, dishImageUrl: String? = null): Result<Restaurant> {
         return try {
-            val existing = postgrest["restaurants"]
-                .select { filter { eq("id", restaurant.id) } }
-                .decodeSingleOrNull<RestaurantDto>()
+            val existing = findExistingRestaurant(restaurant)
 
             if (existing != null) {
                 if (existing.imageUrls.isNullOrEmpty() && dishImageUrl != null) {
-                    schemaAdapter.ensureRestaurantImage(restaurant.id, dishImageUrl)
-                    println("DatabaseRepository: Updated restaurant ${restaurant.id} with dish image")
+                    schemaAdapter.ensureRestaurantImage(existing.id ?: restaurant.id, dishImageUrl)
+                    Logger.d("DatabaseRepository", "Updated restaurant ${restaurant.id} with dish image")
                 }
                 Result.success(existing.toRestaurant())
             } else {
-                val imageUrls = if (dishImageUrl != null) listOf(dishImageUrl) else restaurant.imageUrls
+                val imageUrls = when {
+                    dishImageUrl != null -> listOf(dishImageUrl)
+                    restaurant.imageUrls.isNotEmpty() -> restaurant.imageUrls
+                    restaurant.photoUrl != null -> listOf(restaurant.photoUrl)
+                    else -> emptyList()
+                }
                 val dto = RestaurantDto(
+                    id = restaurant.id.takeIf { it.isNotBlank() },
                     name = restaurant.name,
                     city = restaurant.city,
                     cuisine = restaurant.cuisine,
                     imageUrls = imageUrls,
                     latitude = restaurant.latitude,
-                    longitude = restaurant.longitude
+                    longitude = restaurant.longitude,
+                    googlePlaceId = restaurant.googlePlaceId,
+                    photoUrls = restaurant.photoUrl?.let { listOf(it) }
                 )
                 val created = schemaAdapter.insertRestaurant(dto).getOrThrow()
-                println("DatabaseRepository: Created new restaurant from Places: ${created.id} — ${created.name}")
+                Logger.d("DatabaseRepository", "Created new restaurant from Places: ${created.id} — ${created.name}")
                 Result.success(created.toRestaurant())
             }
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private suspend fun findExistingRestaurant(restaurant: Restaurant): RestaurantDto? {
+        if (restaurant.id.isNotBlank()) {
+            val byId = postgrest["restaurants"]
+                .select {
+                    filter { eq("id", restaurant.id) }
+                    limit(1)
+                }
+                .decodeList<RestaurantDto>()
+                .firstOrNull()
+            if (byId != null) return byId
+        }
+
+        val placeId = restaurant.googlePlaceId
+        if (!placeId.isNullOrBlank()) {
+            val byPlaceId = postgrest["restaurants"]
+                .select {
+                    filter { eq("google_place_id", placeId) }
+                    limit(1)
+                }
+                .decodeList<RestaurantDto>()
+                .firstOrNull()
+            if (byPlaceId != null) return byPlaceId
+        }
+
+        return null
     }
 
     /**
@@ -225,7 +259,7 @@ class DatabaseRepository(
 
     suspend fun getRestaurantsByCity(city: String): Result<List<Restaurant>> {
         return try {
-            println("DatabaseRepository: Searching for restaurants in city: $city")
+            Logger.d("DatabaseRepository", "Searching for restaurants in city: $city")
             var restaurants = postgrest["restaurants"]
                 .select {
                     filter {
@@ -237,11 +271,11 @@ class DatabaseRepository(
                 }
                 .decodeList<RestaurantDto>()
                 .map { it.toRestaurant() }
-            println("DatabaseRepository: Found ${restaurants.size} restaurants for city: $city")
+            Logger.d("DatabaseRepository", "Found ${restaurants.size} restaurants for city: $city")
 
             // If no results for the specific city, fetch all restaurants as fallback
             if (restaurants.isEmpty()) {
-                println("DatabaseRepository: No restaurants for '$city', fetching all restaurants")
+                Logger.d("DatabaseRepository", "No restaurants for '$city', fetching all restaurants")
                 restaurants = postgrest["restaurants"]
                     .select {
                         order("average_rating", Order.DESCENDING)
@@ -249,12 +283,69 @@ class DatabaseRepository(
                     }
                     .decodeList<RestaurantDto>()
                     .map { it.toRestaurant() }
-                println("DatabaseRepository: Fallback returned ${restaurants.size} restaurants")
+                Logger.d("DatabaseRepository", "Fallback returned ${restaurants.size} restaurants")
             }
 
             Result.success(restaurants)
         } catch (e: Exception) {
-            println("DatabaseRepository: Error searching restaurants: ${e.message}")
+            Logger.e("DatabaseRepository", "Error searching restaurants: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get restaurant IDs saved by a user.
+     */
+    suspend fun getSavedRestaurantIds(userId: String): Result<Set<String>> {
+        return try {
+            val rows = postgrest["restaurant_saves"]
+                .select {
+                    filter { eq("user_id", userId) }
+                }
+                .decodeList<Map<String, String>>()
+            val ids = rows.mapNotNull { it["restaurant_id"] }.toSet()
+            Result.success(ids)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Toggle save/unsave for a restaurant.
+     *
+     * @return true if restaurant is now saved, false if it was removed.
+     */
+    suspend fun toggleRestaurantSave(userId: String, restaurantId: String): Result<Boolean> {
+        return try {
+            val existing = postgrest["restaurant_saves"]
+                .select {
+                    filter {
+                        eq("user_id", userId)
+                        eq("restaurant_id", restaurantId)
+                    }
+                    limit(1)
+                }
+                .decodeList<Map<String, String>>()
+                .firstOrNull()
+
+            if (existing != null) {
+                postgrest["restaurant_saves"].delete {
+                    filter {
+                        eq("user_id", userId)
+                        eq("restaurant_id", restaurantId)
+                    }
+                }
+                Result.success(false)
+            } else {
+                postgrest["restaurant_saves"].insert(
+                    mapOf(
+                        "user_id" to userId,
+                        "restaurant_id" to restaurantId
+                    )
+                )
+                Result.success(true)
+            }
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -314,7 +405,7 @@ class DatabaseRepository(
             )
             Result.success(dish)
         } catch (e: Exception) {
-            println("DatabaseRepository: Error fetching dish $dishId: ${e.message}")
+            Logger.e("DatabaseRepository", "Error fetching dish $dishId: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -389,7 +480,7 @@ class DatabaseRepository(
 
             Result.success(reviews)
         } catch (e: Exception) {
-            println("DatabaseRepository: Error fetching ratings for dish $dishId: ${e.message}")
+            Logger.e("DatabaseRepository", "Error fetching ratings for dish $dishId: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -407,7 +498,7 @@ class DatabaseRepository(
                 }
                 .decodeList<RatingDto>()
 
-            println("DatabaseRepository: getTopRatedDishes - found ${ratings.size} ratings globally")
+            Logger.d("DatabaseRepository", "getTopRatedDishes - found ${ratings.size} ratings globally")
 
             if (ratings.isNotEmpty()) {
                 // Ratings exist — build dish list from them
@@ -448,15 +539,15 @@ class DatabaseRepository(
                             )
                         } else null
                     } catch (e: Exception) {
-                        println("DatabaseRepository: Error fetching dish $dishId: ${e.message}")
+                        Logger.e("DatabaseRepository", "Error fetching dish $dishId: ${e.message}", e)
                         null
                     }
                 }
-                println("DatabaseRepository: getTopRatedDishes → ${topDishes.size} rated dishes")
+                Logger.d("DatabaseRepository", "getTopRatedDishes → ${topDishes.size} rated dishes")
                 Result.success(topDishes)
             } else {
                 // No ratings yet — fall back to most recently added dishes
-                println("DatabaseRepository: No ratings found, falling back to dishes table")
+                Logger.d("DatabaseRepository", "No ratings found, falling back to dishes table")
                 val dishes = postgrest["dishes"]
                     .select { order("created_at", Order.DESCENDING); limit(limit.toLong()) }
                     .decodeList<DishDto>()
@@ -481,12 +572,11 @@ class DatabaseRepository(
                         )
                     } catch (_: Exception) { null }
                 }
-                println("DatabaseRepository: getTopRatedDishes fallback → ${fallbackDishes.size} dishes")
+                Logger.d("DatabaseRepository", "getTopRatedDishes fallback → ${fallbackDishes.size} dishes")
                 Result.success(fallbackDishes)
             }
         } catch (e: Exception) {
-            println("DatabaseRepository: Error fetching top rated dishes: ${e.message}")
-            e.printStackTrace()
+            Logger.e("DatabaseRepository", "Error fetching top rated dishes: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -506,7 +596,7 @@ class DatabaseRepository(
                 }
                 .decodeList<RatingDto>()
 
-            println("DatabaseRepository: getTopRatedDishesForRestaurants - ${restaurantIds.size} restaurants, ${ratings.size} ratings")
+            Logger.d("DatabaseRepository", "getTopRatedDishesForRestaurants - ${restaurantIds.size} restaurants, ${ratings.size} ratings")
 
             if (ratings.isNotEmpty()) {
                 // Ratings exist for this location — use them
@@ -545,11 +635,11 @@ class DatabaseRepository(
                         } else null
                     } catch (e: Exception) { null }
                 }
-                println("DatabaseRepository: getTopRatedDishesForRestaurants → ${topDishes.size} rated dishes")
+                Logger.d("DatabaseRepository", "getTopRatedDishesForRestaurants → ${topDishes.size} rated dishes")
                 Result.success(topDishes)
             } else {
                 // No ratings for this location yet — query dishes table directly for these restaurants
-                println("DatabaseRepository: No local ratings, falling back to dishes table for ${restaurantIds.size} restaurants")
+                Logger.d("DatabaseRepository", "No local ratings, falling back to dishes table for ${restaurantIds.size} restaurants")
                 val dishes = postgrest["dishes"]
                     .select {
                         filter { isIn("restaurant_id", restaurantIds) }
@@ -558,7 +648,7 @@ class DatabaseRepository(
                     }
                     .decodeList<DishDto>()
 
-                println("DatabaseRepository: Found ${dishes.size} dishes in dishes table for these restaurants")
+                Logger.d("DatabaseRepository", "Found ${dishes.size} dishes in dishes table for these restaurants")
 
                 // Batch-fetch restaurants
                 val restIds = dishes.map { it.restaurantId }.distinct()
@@ -583,15 +673,15 @@ class DatabaseRepository(
 
                 // If still empty (no dishes in DB for these restaurants), fall back globally
                 if (fallbackDishes.isEmpty()) {
-                    println("DatabaseRepository: Location dishes table also empty, falling back to global")
+                    Logger.d("DatabaseRepository", "Location dishes table also empty, falling back to global")
                     return getTopRatedDishes(limit)
                 }
 
-                println("DatabaseRepository: getTopRatedDishesForRestaurants fallback → ${fallbackDishes.size} dishes")
+                Logger.d("DatabaseRepository", "getTopRatedDishesForRestaurants fallback → ${fallbackDishes.size} dishes")
                 Result.success(fallbackDishes)
             }
         } catch (e: Exception) {
-            println("DatabaseRepository: Error fetching location top dishes: ${e.message}")
+            Logger.e("DatabaseRepository", "Error fetching location top dishes: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -659,16 +749,14 @@ class DatabaseRepository(
 
             if (existing != null) {
                 val needsImageUpdate = existing.imageUrl == null && imageUrl != null
-                val needsNameUpdate = existing.restaurantName == null && restaurantName != null
-                if (needsImageUpdate || needsNameUpdate) {
+                if (needsImageUpdate) {
                     schemaAdapter.backfillDishFields(
                         dishId = existing.id!!,
-                        imageUrl = if (needsImageUpdate) imageUrl else null,
-                        restaurantName = if (needsNameUpdate) restaurantName else null
+                        imageUrl = imageUrl
                     )
                     return Result.success(
                         existing.toDish().copy(
-                            imageUrl = if (needsImageUpdate) imageUrl else existing.imageUrl,
+                            imageUrl = imageUrl,
                             restaurantName = restaurantName ?: existing.restaurantName ?: ""
                         )
                     )
@@ -741,9 +829,6 @@ class DatabaseRepository(
                 price = price
             )
             postgrest["ratings"].insert(dto)
-
-            // Update restaurant average rating
-            updateRestaurantRating(restaurantId)
 
             Result.success(ratingId)
         } catch (e: Exception) {
@@ -992,8 +1077,7 @@ class DatabaseRepository(
 
             Result.success(newStreak)
         } catch (e: Exception) {
-            println("DatabaseRepository: Error updating streak: ${e.message}")
-            e.printStackTrace()
+            Logger.e("DatabaseRepository", "Error updating streak: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -1010,7 +1094,7 @@ class DatabaseRepository(
             val instant = Instant.parse(timestamp)
             instant.toEpochMilliseconds()
         } catch (e: Exception) {
-            println("DatabaseRepository: Failed to parse timestamp '$timestamp': ${e.message}")
+            Logger.e("DatabaseRepository", "Failed to parse timestamp '$timestamp': ${e.message}", e)
             // Return 0 on parse failure (will be treated as very old timestamp)
             0L
         }
@@ -1254,6 +1338,15 @@ class DatabaseRepository(
         }
     }
 
+    suspend fun refreshRestaurantRating(restaurantId: String): Result<Unit> {
+        return try {
+            updateRestaurantRating(restaurantId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     private suspend fun updateLikesCount(ratingId: String, delta: Int) {
         try {
             val rating = postgrest["ratings"]
@@ -1323,7 +1416,7 @@ class DatabaseRepository(
                 .decodeList<RatingDto>()
             ratings.size
         } catch (e: Exception) {
-            println("DatabaseRepository: Failed to get user rating count: ${e.message}")
+            Logger.e("DatabaseRepository", "Failed to get user rating count: ${e.message}", e)
             0
         }
     }

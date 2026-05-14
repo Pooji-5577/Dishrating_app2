@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.UserProfileUiState
+import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.theme.appColors
 
 /**
@@ -67,7 +68,9 @@ fun UserProfileScreen(
     onFollowingClick: () -> Unit,
     onLikeClick: (FeedItem) -> Unit,
     onCommentClick: (FeedItem) -> Unit,
-    onShareClick: (FeedItem) -> Unit
+    onShareClick: (FeedItem) -> Unit,
+    onDishClick: (FeedItem) -> Unit,
+    onBookmarkClick: (FeedItem) -> Unit
 ) {
     val colors = appColors()
 
@@ -126,6 +129,8 @@ fun UserProfileScreen(
         }
 
         val user = uiState.user ?: return@Scaffold
+        val headerAvatarUrl = user.profilePhotoUrl
+            ?: uiState.ratings.firstOrNull()?.userProfileImageUrl
 
         LazyColumn(
             modifier = Modifier
@@ -149,12 +154,22 @@ fun UserProfileScreen(
                             .background(colors.Primary.copy(alpha = 0.15f)),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = user.name.firstOrNull()?.uppercase() ?: "",
-                            fontSize = 40.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = colors.Primary
-                        )
+                        if (!headerAvatarUrl.isNullOrBlank()) {
+                            NetworkImage(
+                                imageUrl = headerAvatarUrl,
+                                contentDescription = "${user.name} profile photo",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape)
+                            )
+                        } else {
+                            Text(
+                                text = user.name.firstOrNull()?.uppercase() ?: "",
+                                fontSize = 40.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.Primary
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -312,7 +327,8 @@ fun UserProfileScreen(
                         onLikeClick = { onLikeClick(feedItem) },
                         onCommentClick = { onCommentClick(feedItem) },
                         onShareClick = { onShareClick(feedItem) },
-                        onBookmarkClick = { },
+                        onDishClick = { onDishClick(feedItem) },
+                        onBookmarkClick = { onBookmarkClick(feedItem) },
                         onUserClick = { },
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )

@@ -12,6 +12,7 @@ import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.example.smackcheck2.util.Logger
 import kotlinx.coroutines.launch
 
 /**
@@ -36,7 +37,7 @@ class AuthViewModel : ViewModel() {
                         try {
                             val user = authRepository.getCurrentUser()
                             if (user != null) {
-                                println("AuthViewModel: Session authenticated, user: ${user.email}")
+                                Logger.d("AuthViewModel", "Session authenticated, user: ${user.email}")
                                 Analytics.identify(user.id)
                                 Analytics.track("app_opened", mapOf("email" to user.email))
                                 _authState.value = AuthState.Authenticated(user)
@@ -44,21 +45,21 @@ class AuthViewModel : ViewModel() {
                                 _authState.value = AuthState.Unauthenticated
                             }
                         } catch (e: Exception) {
-                            println("AuthViewModel: Error getting user after auth: ${e.message}")
+                            Logger.e("AuthViewModel", "Error getting user after auth: ${e.message}", e)
                             _authState.value = AuthState.Unauthenticated
                         }
                     }
                     is SessionStatus.NotAuthenticated -> {
-                        println("AuthViewModel: Not authenticated")
+                        Logger.d("AuthViewModel", "Not authenticated")
                         Analytics.reset()
                         _authState.value = AuthState.Unauthenticated
                     }
                     SessionStatus.Initializing -> {
-                        println("AuthViewModel: Loading session from storage")
+                        Logger.d("AuthViewModel", "Loading session from storage")
                         // Keep Unknown state while loading
                     }
                     is SessionStatus.RefreshFailure -> {
-                        println("AuthViewModel: Network error loading session: ${status.cause}")
+                        Logger.w("AuthViewModel", "Network error loading session: ${status.cause}")
                         _authState.value = AuthState.Unauthenticated
                     }
                 }

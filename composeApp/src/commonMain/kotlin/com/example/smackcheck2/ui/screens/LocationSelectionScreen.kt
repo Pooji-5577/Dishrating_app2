@@ -246,7 +246,7 @@ fun LocationSelectionScreen(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                items(displayedLocations) { city ->
+                items(displayedLocations, key = { it }) { city ->
                     CityItem(
                         city = city,
                         isSelected = city == currentLocation,

@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FeedItem
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
@@ -76,7 +77,7 @@ fun TopDishesCarousel(
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 fontFamily = jakartaSans,
-                color = Color(0xFF642223),
+                color = BrandRedDark,
                 modifier = Modifier.clickable { onSeeAllClick() }
             )
         }
@@ -180,14 +181,14 @@ private fun TopDishCard(
                             imageVector = Icons.Filled.Star,
                             contentDescription = null,
                             modifier = Modifier.size(13.dp),
-                            tint = Color(0xFF642223)
+                            tint = BrandRedDark
                         )
                         Text(
                             text = formatOneDecimal(dish.rating.toDouble()),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = jakartaSans,
-                            color = Color(0xFF642223)
+                            color = BrandRedDark
                         )
                     }
                 }
@@ -204,7 +205,7 @@ private fun TopDishCard(
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     fontFamily = newsreader,
-                    color = Color(0xFF642223),
+                    color = BrandRedDark,
                     maxLines = 1
                 )
 
@@ -226,7 +227,7 @@ private fun TopDishCard(
                             imageVector = Icons.Filled.LocationOn,
                             contentDescription = null,
                             modifier = Modifier.size(11.dp),
-                            tint = Color(0xFF642223)
+                            tint = BrandRedDark
                         )
                         Text(
                             text = dish.restaurantCity,
@@ -254,14 +255,14 @@ private fun TopDishCard(
                             imageVector = Icons.Filled.FavoriteBorder,
                             contentDescription = null,
                             modifier = Modifier.size(12.dp),
-                            tint = Color(0xFF642223)
+                            tint = BrandRedDark
                         )
                         Text(
                             text = formatLikeCount(dish.likesCount),
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = jakartaSans,
-                            color = Color(0xFF642223)
+                            color = BrandRedDark
                         )
                     }
                     Row(
@@ -272,14 +273,14 @@ private fun TopDishCard(
                             imageVector = Icons.Filled.ChatBubbleOutline,
                             contentDescription = null,
                             modifier = Modifier.size(12.dp),
-                            tint = Color(0xFF642223)
+                            tint = BrandRedDark
                         )
                         Text(
                             text = "${dish.commentsCount}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
                             fontFamily = jakartaSans,
-                            color = Color(0xFF642223)
+                            color = BrandRedDark
                         )
                     }
                 }

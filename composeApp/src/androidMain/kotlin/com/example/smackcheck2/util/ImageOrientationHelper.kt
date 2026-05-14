@@ -198,6 +198,27 @@ object ImageOrientationHelper {
         }
     }
 
+    /**
+     * Camera captures sometimes arrive as a landscape bitmap with normal EXIF.
+     * For in-app dish capture we want a portrait image surface, so rotate wide
+     * captures clockwise after EXIF normalization.
+     */
+    fun forcePortrait(bitmap: Bitmap): Bitmap {
+        if (bitmap.height >= bitmap.width) return bitmap
+
+        val matrix = Matrix().apply { setRotate(90f) }
+        return try {
+            Bitmap.createBitmap(
+                bitmap, 0, 0,
+                bitmap.width, bitmap.height,
+                matrix, true
+            )
+        } catch (e: OutOfMemoryError) {
+            println("ImageOrientationHelper: OOM forcing portrait, returning original")
+            bitmap
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // BITMAP DECODING
     // ═══════════════════════════════════════════════════════════════════════

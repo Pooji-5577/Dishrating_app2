@@ -8,6 +8,11 @@ import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.data.repository.NotificationService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 /**
  * Request object for submitting a dish rating.
@@ -66,6 +71,11 @@ data class DishRatingSubmissionResult(
     val imageUrl: String? = null
 )
 
+internal data class SubmissionRestaurant(
+    val id: String,
+    val name: String
+)
+
 /**
  * Deep module that owns the dish rating submission workflow end-to-end.
  *
@@ -91,7 +101,8 @@ class DishRatingSubmissionService(
     private val authRepository: AuthRepository = AuthRepository(),
     private val achievementService: AchievementService = AchievementService(),
     private val notificationService: NotificationService = NotificationService(),
-    private val socialRepository: SocialRepository = SocialRepository()
+    private val socialRepository: SocialRepository = SocialRepository(),
+    private val sideEffectScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 ) {
 
     /**
@@ -112,42 +123,31 @@ class DishRatingSubmissionService(
 
         val imageUrl = uploadImageIfPresent(request, userId)
 
-        ensureRestaurantExists(request, imageUrl)
-
-        val dish = createOrGetDish(request, imageUrl)
+        val restaurant = resolveRestaurant(request, imageUrl)
             .getOrElse { return Result.failure(it) }
 
-        val ratingId = insertRating(request, dish.id, userId, imageUrl)
+        val dish = createOrGetDish(request, restaurant, imageUrl)
             .getOrElse { return Result.failure(it) }
 
-        // Auto-publish the review photo to Stories (24h visibility)
-        if (imageUrl != null) {
-            socialRepository.uploadStory(userId, imageUrl)
-                .onSuccess { println("DishRatingSubmissionService: Auto-published story for rating $ratingId") }
-                .onFailure { println("DishRatingSubmissionService: Failed to auto-publish story: ${it.message}") }
-        }
+        val ratingId = insertRating(request, dish.id, restaurant.id, userId, imageUrl)
+            .getOrElse { return Result.failure(it) }
 
         val xpEarned = calculateXp(request, imageUrl)
-        awardXp(userId, xpEarned)
-
-        val streakResult = updateUserStreak(userId)
-        val achievements = checkAchievements(userId)
-
         trackAnalytics(request, imageUrl, xpEarned)
-
-        sendPostSubmissionNotifications(
+        runPostSubmissionSideEffects(
             userId = userId,
             userEmail = user.email ?: "",
             request = request,
             ratingId = ratingId,
-            achievements = achievements
+            restaurant = restaurant,
+            imageUrl = imageUrl,
+            xpEarned = xpEarned
         )
 
         return Result.success(
             DishRatingSubmissionResult(
                 ratingId = ratingId,
                 xpEarned = xpEarned,
-                newlyUnlockedAchievements = achievements,
                 imageUrl = imageUrl
             )
         )
@@ -156,7 +156,7 @@ class DishRatingSubmissionService(
     private fun validate(request: DishRatingSubmissionRequest): String? {
         if (request.dishName.isBlank()) return "Dish name cannot be empty"
         if (request.rating == 0f) return "Please provide a rating"
-        if (request.restaurantId.isBlank()) return "Please select a restaurant"
+        if (request.restaurantId.isBlank() && request.selectedRestaurant == null) return "Please select a restaurant"
         return null
     }
 
@@ -173,37 +173,56 @@ class DishRatingSubmissionService(
         return uploadResult.getOrNull()
     }
 
-    private suspend fun ensureRestaurantExists(
+    private suspend fun resolveRestaurant(
         request: DishRatingSubmissionRequest,
         imageUrl: String?
-    ) {
-        val restaurant = request.selectedRestaurant ?: return
-        val result = databaseRepository.ensureRestaurantExists(restaurant, dishImageUrl = imageUrl)
-        result.getOrThrow()
+    ): Result<SubmissionRestaurant> {
+        val selected = request.selectedRestaurant
+        if (selected != null) {
+            return databaseRepository.ensureRestaurantExists(selected, dishImageUrl = imageUrl)
+                .map { restaurant ->
+                    SubmissionRestaurant(
+                        id = restaurant.id,
+                        name = restaurant.name
+                    )
+                }
+        }
+
+        return databaseRepository.getRestaurantById(request.restaurantId)
+            .mapCatching { restaurant ->
+                val existing = restaurant
+                    ?: throw IllegalArgumentException("Selected restaurant no longer exists")
+                SubmissionRestaurant(
+                    id = existing.id,
+                    name = existing.name
+                )
+            }
     }
 
     private suspend fun createOrGetDish(
         request: DishRatingSubmissionRequest,
+        restaurant: SubmissionRestaurant,
         imageUrl: String?
     ): Result<Dish> {
         return databaseRepository.createOrGetDish(
             name = request.dishName,
-            restaurantId = request.restaurantId,
+            restaurantId = restaurant.id,
             imageUrl = imageUrl,
-            restaurantName = request.selectedRestaurant?.name
+            restaurantName = restaurant.name
         )
     }
 
     private suspend fun insertRating(
         request: DishRatingSubmissionRequest,
         dishId: String,
+        restaurantId: String,
         userId: String,
         imageUrl: String?
     ): Result<String> {
         return databaseRepository.submitRating(
             userId = userId,
             dishId = dishId,
-            restaurantId = request.restaurantId,
+            restaurantId = restaurantId,
             rating = request.rating,
             comment = request.comment,
             imageUrl = imageUrl,
@@ -226,12 +245,12 @@ class DishRatingSubmissionService(
 
     private suspend fun awardXp(userId: String, xpAmount: Int) {
         databaseRepository.addXpToUser(userId, xpAmount)
-            .onFailure { println("DishRatingSubmissionService: Failed to award XP: ${it.message}") }
+            .onFailure { Logger.e("DishRatingSubmissionService", "Failed to award XP: ${it.message}", it) }
     }
 
     private suspend fun updateUserStreak(userId: String) {
         databaseRepository.updateUserStreak(userId)
-            .onFailure { println("DishRatingSubmissionService: Failed to update streak: ${it.message}") }
+            .onFailure { Logger.e("DishRatingSubmissionService", "Failed to update streak: ${it.message}", it) }
     }
 
     private suspend fun checkAchievements(userId: String): List<String> {
@@ -253,11 +272,46 @@ class DishRatingSubmissionService(
         ))
     }
 
+    private fun runPostSubmissionSideEffects(
+        userId: String,
+        userEmail: String,
+        request: DishRatingSubmissionRequest,
+        ratingId: String,
+        restaurant: SubmissionRestaurant,
+        imageUrl: String?,
+        xpEarned: Int
+    ) {
+        sideEffectScope.launch {
+            databaseRepository.refreshRestaurantRating(restaurant.id)
+                .onFailure { Logger.e("DishRatingSubmissionService", "Failed to refresh restaurant rating: ${it.message}", it) }
+
+            if (imageUrl != null) {
+                socialRepository.uploadStory(userId, imageUrl)
+                    .onSuccess { Logger.d("DishRatingSubmissionService", "Auto-published story for rating $ratingId") }
+                    .onFailure { Logger.e("DishRatingSubmissionService", "Failed to auto-publish story: ${it.message}", it) }
+            }
+
+            awardXp(userId, xpEarned)
+            updateUserStreak(userId)
+            val achievements = checkAchievements(userId)
+
+            sendPostSubmissionNotifications(
+                userId = userId,
+                userEmail = userEmail,
+                request = request,
+                ratingId = ratingId,
+                restaurant = restaurant,
+                achievements = achievements
+            )
+        }
+    }
+
     private suspend fun sendPostSubmissionNotifications(
         userId: String,
         userEmail: String,
         request: DishRatingSubmissionRequest,
         ratingId: String,
+        restaurant: SubmissionRestaurant,
         achievements: List<String>
     ) {
         notificationService.notifyRatingSubmitted(
@@ -270,7 +324,7 @@ class DishRatingSubmissionService(
             posterId = userId,
             posterName = userEmail,
             dishName = request.dishName,
-            restaurantName = request.selectedRestaurant?.name ?: "",
+            restaurantName = restaurant.name,
             ratingId = ratingId
         )
 

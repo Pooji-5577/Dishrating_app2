@@ -13,6 +13,7 @@ import io.github.jan.supabase.auth.FlowType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 /**
  * Singleton Supabase client instance with session persistence
@@ -56,27 +57,27 @@ object SupabaseClientProvider {
                 // The session will be automatically loaded due to autoLoadFromStorage = true
                 // This call ensures the client is initialized
                 val currentAuthUser = client.auth.currentUserOrNull()
-                println("SupabaseClient: Session initialized, user: ${currentAuthUser?.id ?: "none"}")
+                Logger.d("SupabaseClient", "SupabaseClient: Session initialized, user: ${currentAuthUser?.id ?: "none"}")
                 
                 // If user is logged in, ensure their profile exists in the database
                 // This handles users who signed up but profile creation failed or was skipped
                 if (currentAuthUser != null) {
-                    println("SupabaseClient: Ensuring profile exists for user ${currentAuthUser.id}...")
+                    Logger.d("SupabaseClient", "SupabaseClient: Ensuring profile exists for user ${currentAuthUser.id}...")
                     try {
                         val authRepository = AuthRepository()
                         val user = authRepository.getCurrentUser()
                         if (user != null) {
-                            println("SupabaseClient: ✓ Profile verified/created for ${user.name} (${user.id})")
+                            Logger.d("SupabaseClient", "SupabaseClient: ✓ Profile verified/created for ${user.name} (${user.id})")
                         } else {
-                            println("SupabaseClient: ⚠ Could not verify/create profile")
+                            Logger.w("SupabaseClient", "SupabaseClient: ⚠ Could not verify/create profile")
                         }
                     } catch (e: Exception) {
-                        println("SupabaseClient: ⚠ Profile verification failed: ${e.message}")
+                        Logger.e("SupabaseClient", "SupabaseClient: ⚠ Profile verification failed: ${e.message}", e)
                         // Don't throw - user can still use the app, profile will be created on next action
                     }
                 }
             } catch (e: Exception) {
-                println("SupabaseClient: Failed to initialize session: ${e.message}")
+                Logger.e("SupabaseClient", "SupabaseClient: Failed to initialize session: ${e.message}", e)
             }
         }
     }

@@ -352,7 +352,7 @@ private fun DarkChallengesTab(
             )
         }
         
-        items(dailyChallenges) { challenge ->
+        items(dailyChallenges, key = { it.id }) { challenge ->
             DarkChallengeCard(challenge = challenge)
         }
         
@@ -367,7 +367,7 @@ private fun DarkChallengesTab(
             )
         }
         
-        items(weeklyChallenges) { challenge ->
+        items(weeklyChallenges, key = { it.id }) { challenge ->
             DarkChallengeCard(challenge = challenge)
         }
     }
@@ -601,7 +601,7 @@ private fun DarkAchievementsTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(achievements) { achievement ->
+        items(achievements, key = { it.id }) { achievement ->
             DarkAchievementCard(achievement = achievement)
         }
     }

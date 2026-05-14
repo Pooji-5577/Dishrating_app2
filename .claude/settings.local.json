@@ -26,7 +26,16 @@
       "Bash(adb devices *)",
       "Skill(gsd:debug)",
       "Skill(gsd-debug)",
-      "Bash(ls .planning/debug/*.md)"
+      "Bash(ls .planning/debug/*.md)",
+      "mcp__supabase__list_projects",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__execute_sql",
+      "mcp__supabase__apply_migration",
+      "Bash(ls -lh /Users/teja/smackcheck/Dishrating_app2/composeApp/build/outputs/apk/release/*.apk)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import com.example.smackcheck2.util.Logger
 
 /**
  * ViewModel for the Social Map screen (Snapchat-style map with user avatars)
@@ -128,6 +129,11 @@ class SocialMapViewModel(
         // Update user's location in database
         updateUserLocationInDb(latitude, longitude)
 
+        // Refresh NEARBY markers using the latest GPS location
+        if (_uiState.value.mapMode == MapMode.NEARBY) {
+            loadNearbyUsers(force = true)
+        }
+
         // Start auto-refresh (posts were already loaded in init)
         startAutoRefresh()
     }
@@ -187,7 +193,7 @@ class SocialMapViewModel(
                     _uiState.update { it.copy(currentUserProfile = profile) }
                 }
                 .onFailure { error ->
-                    println("SocialMapViewModel: Failed to load user profile: ${error.message}")
+                    Logger.e("SocialMapViewModel", "SocialMapViewModel: Failed to load user profile: ${error.message}", error)
                 }
         }
     }
@@ -198,10 +204,14 @@ class SocialMapViewModel(
     fun loadNearbyUsers(force: Boolean = false) {
         val now = Clock.System.now().toEpochMilliseconds()
         val state = _uiState.value
+        val userLat = state.currentLatitude
+        val userLng = state.currentLongitude
+        val hasLocation = userLat != null && userLng != null
         val cacheValid = cachedWorldPosts.isNotEmpty() &&
             (now - cachedWorldPostsAtMs) <= WORLD_POSTS_CACHE_TTL_MS
 
-        if (!force && cacheValid && state.nearbyUsers.isEmpty()) {
+        // Only use world cache when location is unavailable.
+        if (!hasLocation && !force && cacheValid && state.nearbyUsers.isEmpty()) {
             _uiState.update {
                 it.copy(
                     nearbyUsers = cachedWorldPosts,
@@ -220,18 +230,30 @@ class SocialMapViewModel(
         nearbyUsersJob?.cancel()
         nearbyUsersJob = viewModelScope.launch {
             _uiState.update { it.copy(isRefreshing = true, isLoading = it.nearbyUsers.isEmpty()) }
+            val nearbyResult = if (hasLocation) {
+                repository.getNearbyDishPostsPostGIS(
+                    userLat = userLat!!,
+                    userLng = userLng!!,
+                    radiusMeters = state.radiusMeters
+                )
+            } else {
+                // Fallback for first load before GPS resolves.
+                repository.getAllDishPosts(limit = WORLD_POSTS_LIMIT)
+            }
 
-            // Load all posts worldwide, each placed at the restaurant's coordinates
-            repository.getAllDishPosts(limit = WORLD_POSTS_LIMIT)
+            nearbyResult
                 .onSuccess { posts ->
                     lastNearbyFetchAtMs = Clock.System.now().toEpochMilliseconds()
-                    cachedWorldPosts = posts
-                    cachedWorldPostsAtMs = lastNearbyFetchAtMs
+                    val filteredPosts = posts.filterNot { it.isCurrentUser }
+                    if (!hasLocation) {
+                        cachedWorldPosts = filteredPosts
+                        cachedWorldPostsAtMs = lastNearbyFetchAtMs
+                    }
                     _uiState.update { currentState ->
                         currentState.copy(
                             isLoading = false,
                             isRefreshing = false,
-                            nearbyUsers = posts,
+                            nearbyUsers = filteredPosts,
                             lastRefreshTime = Clock.System.now().toEpochMilliseconds(),
                             errorMessage = null
                         )
@@ -241,7 +263,7 @@ class SocialMapViewModel(
                     _uiState.update { it.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        errorMessage = "Failed to load dish posts: ${error.message}"
+                        errorMessage = "Failed to load nearby posts: ${error.message}"
                     ) }
                 }
         }
@@ -252,7 +274,12 @@ class SocialMapViewModel(
      */
     fun setRadius(radiusMeters: Int) {
         _uiState.update { it.copy(radiusMeters = radiusMeters) }
-        loadNearbyUsers(force = true)
+        if (_uiState.value.mapMode == MapMode.MY_RATINGS) {
+            hasLoadedMyRatings = false
+            loadMyRatings(force = true)
+        } else {
+            loadNearbyUsers(force = true)
+        }
     }
 
     /**
@@ -282,17 +309,31 @@ class SocialMapViewModel(
             repository.getMyRatingPosts()
                 .onSuccess { markers ->
                     hasLoadedMyRatings = true
-                    val validMarkers = markers.filter { it.latitude != 0.0 || it.longitude != 0.0 }
-                    println("SocialMapViewModel: loadMyRatings success - ${markers.size} total, ${validMarkers.size} valid markers")
+                    val state = _uiState.value
+                    val userLat = state.currentLatitude
+                    val userLng = state.currentLongitude
+                    val nearbyMine = if (userLat != null && userLng != null) {
+                        markers.filter { marker ->
+                            (marker.latitude != 0.0 || marker.longitude != 0.0) &&
+                                distanceMeters(userLat, userLng, marker.latitude, marker.longitude) <= state.radiusMeters
+                        }
+                    } else {
+                        markers
+                    }
+                    val validMarkers = nearbyMine.filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                    Logger.d(
+                        "SocialMapViewModel",
+                        "SocialMapViewModel: loadMyRatings success - ${markers.size} total, ${nearbyMine.size} nearby, ${validMarkers.size} valid markers"
+                    )
                     _uiState.update {
                         it.copy(
-                            myRatingMarkers = markers,
+                            myRatingMarkers = nearbyMine,
                             fitBoundsTrigger = if (validMarkers.isNotEmpty()) it.fitBoundsTrigger + 1 else it.fitBoundsTrigger
                         )
                     }
                 }
                 .onFailure { error ->
-                    println("SocialMapViewModel: loadMyRatings failed: ${error.message}")
+                    Logger.e("SocialMapViewModel", "SocialMapViewModel: loadMyRatings failed: ${error.message}", error)
                 }
         }
     }
@@ -305,7 +346,10 @@ class SocialMapViewModel(
         if (mode == MapMode.MY_RATINGS) {
             loadMyRatings(force = true)
         } else {
-            loadNearbyUsers(force = _uiState.value.nearbyUsers.isEmpty())
+            if (_uiState.value.currentLatitude == null || _uiState.value.currentLongitude == null) {
+                requestCurrentLocation()
+            }
+            loadNearbyUsers(force = true)
         }
     }
 
@@ -325,7 +369,7 @@ class SocialMapViewModel(
     fun refresh() {
         if (_uiState.value.mapMode == MapMode.MY_RATINGS) {
             hasLoadedMyRatings = false
-            loadMyRatings()
+            loadMyRatings(force = true)
         } else {
             loadNearbyUsers(force = true)
         }
@@ -355,7 +399,7 @@ class SocialMapViewModel(
         viewModelScope.launch {
             repository.updateUserLocation(latitude, longitude)
                 .onFailure { error ->
-                    println("SocialMapViewModel: Failed to update location: ${error.message}")
+                    Logger.e("SocialMapViewModel", "SocialMapViewModel: Failed to update location: ${error.message}", error)
                 }
         }
     }
@@ -393,5 +437,23 @@ class SocialMapViewModel(
     override fun onCleared() {
         super.onCleared()
         stopAutoRefresh()
+    }
+
+    private fun distanceMeters(
+        lat1: Double,
+        lon1: Double,
+        lat2: Double,
+        lon2: Double
+    ): Double {
+        val earthRadiusM = 6_371_000.0
+        val toRad = kotlin.math.PI / 180.0
+        val dLat = (lat2 - lat1) * toRad
+        val dLon = (lon2 - lon1) * toRad
+        val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+            kotlin.math.cos(lat1 * toRad) *
+            kotlin.math.cos(lat2 * toRad) *
+            kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        return earthRadiusM * c
     }
 }

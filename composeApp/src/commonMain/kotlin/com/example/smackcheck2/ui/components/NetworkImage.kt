@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.Logger
 
 /**
  * Food image URLs for dishes - using Unsplash for free high-quality food images
@@ -95,7 +96,7 @@ fun NetworkImage(
 
     // Validate URL before attempting to load
     if (imageUrl.isBlank()) {
-        println("[DEBUG][NetworkImage] Empty URL for '$contentDescription'")
+        Logger.d("NetworkImage", "[DEBUG][NetworkImage] Empty URL for '$contentDescription'")
         Box(
             modifier = modifier
                 .background(
@@ -130,9 +131,9 @@ fun NetworkImage(
             ShimmerBox(modifier = Modifier.fillMaxSize())
         },
         onFailure = { exception ->
-            println("[DEBUG][NetworkImage] FAILED to load '$urlToLoad' for '$contentDescription'")
-            println("[DEBUG][NetworkImage] Error: ${exception::class.simpleName} - ${exception.message}")
-            println("[DEBUG][NetworkImage] Cause: ${exception.cause?.message}")
+            Logger.e("NetworkImage", "[DEBUG][NetworkImage] FAILED to load '$urlToLoad' for '$contentDescription'")
+            Logger.e("NetworkImage", "[DEBUG][NetworkImage] Error: ${exception::class.simpleName} - ${exception.message}", exception)
+            Logger.e("NetworkImage", "[DEBUG][NetworkImage] Cause: ${exception.cause?.message}")
             if (!useFallback && fallbackUrl != null) {
                 // Primary URL failed — retry once with the fallback
                 useFallback = true

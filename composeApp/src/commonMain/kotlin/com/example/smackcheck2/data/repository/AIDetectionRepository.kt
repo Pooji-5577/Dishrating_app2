@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import com.example.smackcheck2.util.Logger
 
 /**
  * Result of AI dish detection
@@ -49,7 +50,7 @@ class AIDetectionRepository {
     suspend fun detectDish(imageBytes: ByteArray, mimeType: String = "image/jpeg"): DishDetectionResult {
         // Validate image bytes
         if (imageBytes.isEmpty()) {
-            println("AIDetection: Image bytes are empty!")
+            Logger.d("AIDetectionRepository", "AIDetection: Image bytes are empty!")
             return createFallbackResult("Unknown").copy(
                 debugInfo = "ERROR: Image bytes empty"
             )
@@ -64,12 +65,12 @@ class AIDetectionRepository {
             else -> "image/jpeg" // Default to JPEG
         }
 
-        println("AIDetection: Starting detection with ${imageBytes.size} bytes, mimeType: $actualMimeType")
+        Logger.d("AIDetectionRepository", "AIDetection: Starting detection with ${imageBytes.size} bytes, mimeType: $actualMimeType")
 
         return try {
             // Encode image to base64
             val base64Image = Base64.encode(imageBytes)
-            println("AIDetection: Base64 encoded successfully, length: ${base64Image.length}")
+            Logger.d("AIDetectionRepository", "AIDetection: Base64 encoded successfully, length: ${base64Image.length}")
 
             // Build the request body
             val requestBody = EdgeFunctionRequest(
@@ -77,7 +78,7 @@ class AIDetectionRepository {
                 mimeType = actualMimeType
             )
 
-            println("AIDetection: Calling Supabase Edge Function 'analyze-dish'...")
+            Logger.d("AIDetectionRepository", "AIDetection: Calling Supabase Edge Function 'analyze-dish'...")
 
             // Call the Supabase Edge Function
             val response = supabase.functions.invoke(
@@ -85,11 +86,11 @@ class AIDetectionRepository {
                 body = requestBody
             )
 
-            println("AIDetection: Response status: ${response.status.value}")
+            Logger.d("AIDetectionRepository", "AIDetection: Response status: ${response.status.value}")
 
             if (response.status.value != 200) {
                 val errorText = response.body<String>()
-                println("AIDetection: Edge Function error: $errorText")
+                Logger.e("AIDetectionRepository", "AIDetection: Edge Function error: $errorText")
 
                 // Handle specific HTTP errors
                 val isServerOutage = response.status.value in listOf(500, 502, 503, 504, 429)
@@ -110,13 +111,13 @@ class AIDetectionRepository {
 
             // Parse the response
             val responseText = response.body<String>()
-            println("AIDetection: Response (first 500 chars): ${responseText.take(500)}")
+            Logger.d("AIDetectionRepository", "AIDetection: Response (first 500 chars): ${responseText.take(500)}")
 
             // Robust deserialization: if full JSON parsing fails, fall back to regex extraction
             val edgeResponse = try {
                 json.decodeFromString<EdgeFunctionResponse>(responseText)
             } catch (parseException: Exception) {
-                println("AIDetection: JSON parse failed (${parseException.message}), using regex fallback...")
+                Logger.e("AIDetectionRepository", "AIDetection: JSON parse failed (${parseException.message}), using regex fallback...", parseException)
                 val dishNameMatch = Regex("\"dishName\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
                 val confidenceMatch = Regex("\"confidence\"\\s*:\\s*([\\d.]+)").find(responseText)
                 val cuisineMatch = Regex("\"cuisine\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
@@ -126,7 +127,7 @@ class AIDetectionRepository {
                 val errorMatch = Regex("\"error\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
                 val extracted = dishNameMatch?.groupValues?.getOrNull(1) ?: ""
                 val extractedConf = confidenceMatch?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: 0f
-                println("AIDetection: Regex extracted -> dishName='$extracted', confidence=$extractedConf")
+                Logger.d("AIDetectionRepository", "AIDetection: Regex extracted -> dishName='$extracted', confidence=$extractedConf")
                 EdgeFunctionResponse(
                     dishName = extracted,
                     cuisine = cuisineMatch?.groupValues?.getOrNull(1) ?: "",
@@ -140,7 +141,7 @@ class AIDetectionRepository {
 
             // Check for error in response
             if (!edgeResponse.error.isNullOrBlank()) {
-                println("AIDetection: Edge Function returned error: ${edgeResponse.error}")
+                Logger.e("AIDetectionRepository", "AIDetection: Edge Function returned error: ${edgeResponse.error}")
                 return createFallbackResult("Unknown").copy(
                     alternatives = listOf(edgeResponse.error!!),
                     debugInfo = "Edge Function error: ${edgeResponse.error}"
@@ -163,7 +164,7 @@ class AIDetectionRepository {
                 else -> if (dishName != "Unknown") inferItemTypeFromName(dishName) else "unknown"
             }
 
-            println("AIDetection: Final dishName='$dishName', itemType='$itemType', confidence=${edgeResponse.confidence}")
+            Logger.d("AIDetectionRepository", "AIDetection: Final dishName='$dishName', itemType='$itemType', confidence=${edgeResponse.confidence}")
 
             DishDetectionResult(
                 dishName = dishName,
@@ -179,8 +180,7 @@ class AIDetectionRepository {
             )
 
         } catch (e: Exception) {
-            println("AIDetection: Exception: ${e::class.simpleName} - ${e.message}")
-            e.printStackTrace()
+            Logger.e("AIDetectionRepository", "AIDetection: Exception: ${e::class.simpleName} - ${e.message}", e)
             createFallbackResult("Unknown").copy(
                 alternatives = listOf("AI service unavailable. Please enter dish name manually."),
                 debugInfo = "Exception: ${e::class.simpleName} - ${e.message?.take(80)}",

@@ -23,11 +23,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 
 private val ConfirmDeepMaroon  = Color(0xFF3B1011)
-private val ConfirmWarmMaroon  = Color(0xFF642223)
-private val ConfirmCrimsonRed  = Color(0xFF9B2335)
+private val ConfirmWarmMaroon  = BrandRedDark
+private val ConfirmCrimsonRed  = BrandRed
 private val ConfirmCreamWhite  = Color(0xFFFFF8F0)
 private val ConfirmPageBg      = Color(0xFFFFF8F0)
 

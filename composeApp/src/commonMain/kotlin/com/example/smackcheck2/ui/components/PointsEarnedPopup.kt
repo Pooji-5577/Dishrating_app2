@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.gamification.PointsEarnedEvent
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.appColors
 import kotlinx.coroutines.delay
 
@@ -122,7 +123,7 @@ private fun PointsCard(event: PointsEarnedEvent) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0xFF642223))
+            .background(BrandRedDark)
             .padding(16.dp)
     ) {
         Row(

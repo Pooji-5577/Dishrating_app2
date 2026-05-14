@@ -8,6 +8,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
+import com.example.smackcheck2.util.Logger
 
 /**
  * Manages daily activity streaks and streak milestone rewards.
@@ -107,7 +108,7 @@ object StreakManager {
                 totalPoints = updatedTotal
             )
         } catch (e: Exception) {
-            println("StreakManager.updateStreak error: ${e.message}")
+            Logger.e("StreakManager", "StreakManager.updateStreak error: ${e.message}", e)
             StreakResult(newStreak = 0, milestoneBonus = 0, milestonesReached = emptyList(), totalPoints = 0)
         }
     }
@@ -145,7 +146,7 @@ object StreakManager {
                 )
             )
         } catch (e: Exception) {
-            println("StreakManager.recordStreakReward error: ${e.message}")
+            Logger.e("StreakManager", "StreakManager.recordStreakReward error: ${e.message}", e)
         }
     }
 }

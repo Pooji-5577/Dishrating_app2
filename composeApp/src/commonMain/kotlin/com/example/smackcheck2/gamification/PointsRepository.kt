@@ -11,6 +11,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import com.example.smackcheck2.util.Logger
 
 /**
  * Repository that handles all point-earning operations against Supabase.
@@ -90,7 +91,7 @@ object PointsRepository {
 
             points
         } catch (e: Exception) {
-            println("PointsRepository.recordAction error: ${e.message}")
+            Logger.e("PointsRepository", "PointsRepository.recordAction error: ${e.message}", e)
             0
         }
     }
@@ -129,7 +130,7 @@ object PointsRepository {
 
             pts
         } catch (e: Exception) {
-            println("PointsRepository.awardFirstProfilePicBonus error: ${e.message}")
+            Logger.e("PointsRepository", "PointsRepository.awardFirstProfilePicBonus error: ${e.message}", e)
             0
         }
     }
@@ -148,7 +149,7 @@ object PointsRepository {
                 }
                 .decodeList<LeaderboardProfileRow>()
         } catch (e: Exception) {
-            println("PointsRepository.fetchLeaderboard error: ${e.message}")
+            Logger.e("PointsRepository", "PointsRepository.fetchLeaderboard error: ${e.message}", e)
             emptyList()
         }
     }
@@ -177,7 +178,7 @@ object PointsRepository {
                 .select { filter { eq("id", userId) } }
                 .decodeSingleOrNull<LeaderboardProfileRow>()
         } catch (e: Exception) {
-            println("PointsRepository.fetchCurrentUserProfile error: ${e.message}")
+            Logger.e("PointsRepository", "PointsRepository.fetchCurrentUserProfile error: ${e.message}", e)
             null
         }
     }
@@ -202,7 +203,7 @@ object PointsRepository {
                 .decodeList<UserActionRow>()
             rows.size
         } catch (e: Exception) {
-            println("PointsRepository.countActionsSince error: ${e.message}")
+            Logger.e("PointsRepository", "PointsRepository.countActionsSince error: ${e.message}", e)
             0
         }
     }

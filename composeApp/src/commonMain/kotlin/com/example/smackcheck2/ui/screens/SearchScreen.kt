@@ -289,7 +289,7 @@ fun SearchScreen(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(uiState.results) { restaurant ->
+                            items(uiState.results, key = { it.id }) { restaurant ->
                                 RestaurantSearchCard(
                                     restaurant = restaurant,
                                     onClick = { onRestaurantClick(restaurant.id) }

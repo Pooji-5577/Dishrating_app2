@@ -83,7 +83,7 @@ actual class ImagePicker(
                 captureResultCallback = { resultUri ->
                     if (resultUri != null) {
                         try {
-                            val normalized = normalizeImageResult(resultUri)
+                            val normalized = normalizeImageResult(resultUri, forcePortrait = true)
                             val bytes = normalized.bytes
                             val mimeType = normalized.mimeType
                             Log.d(TAG, "Image captured+normalized: ${bytes.size} bytes, mimeType=$mimeType")
@@ -114,7 +114,7 @@ actual class ImagePicker(
                 galleryResultCallback = { uri ->
                     if (uri != null) {
                         try {
-                            val normalized = normalizeImageResult(uri)
+                            val normalized = normalizeImageResult(uri, forcePortrait = false)
                             val bytes = normalized.bytes
                             val mimeType = normalized.mimeType
                             Log.d(TAG, "Image picked+normalized: ${bytes.size} bytes, mimeType=$mimeType")
@@ -209,11 +209,16 @@ actual class ImagePicker(
      * Normalize image orientation and return a JPEG-backed ImageResult.
      * Falls back to original bytes when EXIF/bitmap decode fails.
      */
-    private fun normalizeImageResult(uri: Uri): ImageResult {
+    private fun normalizeImageResult(uri: Uri, forcePortrait: Boolean): ImageResult {
         val rotatedBitmap = ImageOrientationHelper.rotateImageIfRequired(context, uri)
         if (rotatedBitmap != null) {
+            val normalizedBitmap = if (forcePortrait) {
+                ImageOrientationHelper.forcePortrait(rotatedBitmap)
+            } else {
+                rotatedBitmap
+            }
             try {
-                val bytes = ImageOrientationHelper.bitmapToJpegBytes(rotatedBitmap)
+                val bytes = ImageOrientationHelper.bitmapToJpegBytes(normalizedBitmap)
                 val normalizedFile = File(context.cacheDir, "images/normalized_${System.currentTimeMillis()}.jpg")
                 normalizedFile.parentFile?.mkdirs()
                 normalizedFile.writeBytes(bytes)
@@ -223,6 +228,9 @@ actual class ImagePicker(
                     mimeType = "image/jpeg"
                 )
             } finally {
+                if (normalizedBitmap !== rotatedBitmap && !normalizedBitmap.isRecycled) {
+                    normalizedBitmap.recycle()
+                }
                 if (!rotatedBitmap.isRecycled) rotatedBitmap.recycle()
             }
         }

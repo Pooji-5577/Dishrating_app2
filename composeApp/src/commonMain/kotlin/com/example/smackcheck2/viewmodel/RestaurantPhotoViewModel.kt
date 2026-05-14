@@ -7,6 +7,7 @@ import com.example.smackcheck2.model.Restaurant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.example.smackcheck2.util.Logger
 import kotlinx.coroutines.launch
 
 /**
@@ -49,12 +50,12 @@ class RestaurantPhotoViewModel : ViewModel() {
 
         // Check cache first
         thumbnailUrlCache[restaurantId]?.let { url ->
-            println("[DEBUG][PhotoVM] Cache hit for '$name' (id=$restaurantId)")
+            Logger.d("RestaurantPhotoViewModel", "Cache hit for '$name' (id=$restaurantId)")
             updateState(restaurantId, PhotoState.ThumbnailLoaded(url))
             return
         }
 
-        println("[DEBUG][PhotoVM] Loading thumbnail for '$name' (id=$restaurantId, placeId=$placeId, city=$city)")
+        Logger.d("RestaurantPhotoViewModel", "Loading thumbnail for '$name' (id=$restaurantId, placeId=$placeId, city=$city)")
 
         viewModelScope.launch {
             updateState(restaurantId, PhotoState.Loading)
@@ -68,15 +69,15 @@ class RestaurantPhotoViewModel : ViewModel() {
                 )
 
                 if (url != null) {
-                    println("[DEBUG][PhotoVM] Got thumbnail for '$name': $url")
+                    Logger.d("RestaurantPhotoViewModel", "Got thumbnail for '$name': $url")
                     thumbnailUrlCache[restaurantId] = url
                     updateState(restaurantId, PhotoState.ThumbnailLoaded(url))
                 } else {
-                    println("[DEBUG][PhotoVM] No photos found for '$name' (id=$restaurantId, placeId=$placeId)")
+                    Logger.d("RestaurantPhotoViewModel", "No photos found for '$name' (id=$restaurantId, placeId=$placeId)")
                     updateState(restaurantId, PhotoState.NoPhotos)
                 }
             } catch (e: Exception) {
-                println("[DEBUG][PhotoVM] ERROR loading thumbnail for '$name': ${e::class.simpleName} - ${e.message}")
+                Logger.e("RestaurantPhotoViewModel", "Error loading thumbnail for '$name': ${e::class.simpleName} - ${e.message}", e)
                 updateState(restaurantId, PhotoState.Error(e.message ?: "Failed"))
             }
         }
@@ -150,15 +151,15 @@ class RestaurantPhotoViewModel : ViewModel() {
                 )
 
                 if (urls.isNotEmpty()) {
-                    println("[DEBUG][PhotoVM] Got ${urls.size} full photos for '$name'")
+                    Logger.d("RestaurantPhotoViewModel", "Got ${urls.size} full photos for '$name'")
                     fullUrlCache[restaurantId] = urls
                     updateState(restaurantId, PhotoState.FullPhotosLoaded(urls))
                 } else {
-                    println("[DEBUG][PhotoVM] No full photos found for '$name' (id=$restaurantId)")
+                    Logger.d("RestaurantPhotoViewModel", "No full photos found for '$name' (id=$restaurantId)")
                     updateState(restaurantId, PhotoState.NoPhotos)
                 }
             } catch (e: Exception) {
-                println("[DEBUG][PhotoVM] ERROR loading full photos for '$name': ${e::class.simpleName} - ${e.message}")
+                Logger.e("RestaurantPhotoViewModel", "Error loading full photos for '$name': ${e::class.simpleName} - ${e.message}", e)
                 updateState(restaurantId, PhotoState.Error(e.message ?: "Failed"))
             }
         }
