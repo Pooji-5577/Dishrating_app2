@@ -89,6 +89,19 @@ class DishCaptureViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 additionalImages = it.additionalImages + capturedImages,
+                selectedImageIndex = totalCurrentImages,
+                isAnalyzing = true,
+                detectedDishName = null,
+                detectedCuisine = null,
+                detectionConfidence = 0f,
+                alternatives = emptyList(),
+                isAIDetected = false,
+                itemType = "unknown",
+                detectedRestaurantChain = null,
+                detectedRestaurantType = null,
+                editedName = "",
+                isEditingName = false,
+                showConfirmation = false,
                 perImageDetections = it.perImageDetections + newDetections,
                 errorMessage = null
             )
@@ -123,6 +136,19 @@ class DishCaptureViewModel : ViewModel() {
         _uiState.update {
             it.copy(
                 additionalImages = it.additionalImages + newImage,
+                selectedImageIndex = totalCurrentImages,
+                isAnalyzing = true,
+                detectedDishName = null,
+                detectedCuisine = null,
+                detectionConfidence = 0f,
+                alternatives = emptyList(),
+                isAIDetected = false,
+                itemType = "unknown",
+                detectedRestaurantChain = null,
+                detectedRestaurantType = null,
+                editedName = "",
+                isEditingName = false,
+                showConfirmation = false,
                 perImageDetections = it.perImageDetections + (imageResult.uri to ImageDetectionResult(isAnalyzing = true)),
                 errorMessage = null
             )

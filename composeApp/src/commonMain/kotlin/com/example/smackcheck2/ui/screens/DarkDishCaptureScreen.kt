@@ -103,6 +103,7 @@ fun DarkDishCaptureScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+    var pendingAdditionalCameraCapture by remember { mutableStateOf(false) }
 
     if (uiState.showNotDishError) {
         AlertDialog(
@@ -162,12 +163,18 @@ fun DarkDishCaptureScreen(
                 coroutineScope.launch {
                     val result = imagePicker?.captureImage()
                     if (result != null) {
-                        viewModel.onImageCaptured(result)
+                        if (pendingAdditionalCameraCapture && uiState.imageUri != null) {
+                            viewModel.onAdditionalImageCaptured(result)
+                        } else {
+                            viewModel.onImageCaptured(result)
+                        }
                     } else {
                         showPickerSheet = true
                     }
+                    pendingAdditionalCameraCapture = false
                 }
             } else {
+                pendingAdditionalCameraCapture = false
                 showPickerSheet = true
             }
         }
@@ -192,6 +199,10 @@ fun DarkDishCaptureScreen(
                     canAddMoreImages = viewModel.canAddMoreImages(),
                     onSelectImage = { viewModel.selectImage(it) },
                     onRemoveImage = { viewModel.removeImage(it) },
+                    onAddMoreFromCamera = {
+                        pendingAdditionalCameraCapture = true
+                        requestCameraPermission()
+                    },
                     onAddMoreFromGallery = {
                         coroutineScope.launch {
                             val remaining = viewModel.remainingImageSlots()
@@ -249,6 +260,7 @@ fun DarkDishCaptureScreen(
                                 .background(Color(0xFFF6F6F6))
                                 .clickable {
                                     showPickerSheet = false
+                                    pendingAdditionalCameraCapture = false
                                     requestCameraPermission()
                                 }
                                 .padding(16.dp),
@@ -490,6 +502,7 @@ private fun ImagePreviewWithAI(
     canAddMoreImages: Boolean,
     onSelectImage: (Int) -> Unit,
     onRemoveImage: (Int) -> Unit,
+    onAddMoreFromCamera: () -> Unit,
     onAddMoreFromGallery: () -> Unit,
     onEditedNameChange: (String) -> Unit,
     onEditClick: () -> Unit,
@@ -717,9 +730,9 @@ private fun ImagePreviewWithAI(
                 }
             }
 
-            // Thumbnail strip for multiple images
-            if (allImages.size > 1) {
-                ImageThumbnailStrip(
+            // Selected photos with remove controls
+            if (allImages.isNotEmpty()) {
+                SelectedPhotosStrip(
                     images = allImages,
                     selectedIndex = selectedImageIndex,
                     canAddMore = canAddMoreImages,
@@ -738,13 +751,15 @@ private fun ImagePreviewWithAI(
                 CaptureActionButton(
                     icon = { Icon(Icons.Default.CameraAlt, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(28.dp)) },
                     label = "TAKE ANOTHER",
-                    onClick = onRetake,
+                    onClick = onAddMoreFromCamera,
+                    enabled = canAddMoreImages && imagePicker != null,
                     modifier = Modifier.weight(1f)
                 )
                 CaptureActionButton(
                     icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(28.dp)) },
                     label = "FROM GALLERY",
                     onClick = onAddMoreFromGallery,
+                    enabled = canAddMoreImages && imagePicker != null,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -786,12 +801,15 @@ private fun CaptureActionButton(
     icon: @Composable () -> Unit,
     label: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.clickable { onClick() },
+        modifier = modifier.clickable(enabled = enabled) { onClick() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) Color.White else Color.White.copy(alpha = 0.55f)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -805,7 +823,7 @@ private fun CaptureActionButton(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = label,
-                color = WarmMaroon,
+                color = WarmMaroon.copy(alpha = if (enabled) 1f else 0.45f),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp
@@ -815,7 +833,7 @@ private fun CaptureActionButton(
 }
 
 @Composable
-private fun ImageThumbnailStrip(
+private fun SelectedPhotosStrip(
     images: List<CapturedImage>,
     selectedIndex: Int,
     canAddMore: Boolean,
@@ -826,23 +844,46 @@ private fun ImageThumbnailStrip(
 ) {
     val scrollState = rememberScrollState()
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .horizontalScroll(scrollState),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        images.forEachIndexed { index, image ->
-            ImageThumbnail(
-                image = image,
-                isSelected = index == selectedIndex,
-                onSelect = { onSelectImage(index) },
-                onRemove = { onRemoveImage(index) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Selected photos",
+                color = WarmMaroon,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.4.sp
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${images.size}/5",
+                color = WarmMaroon.copy(alpha = 0.75f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
-        if (canAddMore && imagePicker != null) {
-            AddMoreImageButton(onClick = onAddMoreFromGallery)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            images.forEachIndexed { index, image ->
+                ImageThumbnail(
+                    image = image,
+                    isSelected = index == selectedIndex,
+                    onSelect = { onSelectImage(index) },
+                    onRemove = { onRemoveImage(index) }
+                )
+            }
+            if (canAddMore && imagePicker != null) {
+                AddMoreImageButton(onClick = onAddMoreFromGallery)
+            }
         }
     }
 }

@@ -144,6 +144,10 @@ data class RatingDto(
     val imageUrl: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("group_id")
+    val groupId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
     val latitude: Double? = null,
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
@@ -342,4 +346,50 @@ data class RatingImageDto(
     val createdAt: String? = null
 )
 
+@Serializable
+data class ReviewGroupDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val id: String? = null,
+    @SerialName("user_id")
+    val userId: String,
+    @SerialName("restaurant_id")
+    val restaurantId: String,
+    val rating: Float,
+    val comment: String = "",
+    val tags: List<String> = emptyList(),
+    @SerialName("receipt_image_url")
+    val receiptImageUrl: String? = null,
+    @SerialName("receipt_extracted_data")
+    val receiptExtractedData: String? = null,
+    @SerialName("primary_rating_id")
+    val primaryRatingId: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
 
+@Serializable
+data class ReviewGroupItemDto(
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    val id: String? = null,
+    @SerialName("group_id")
+    val groupId: String,
+    @SerialName("rating_id")
+    val ratingId: String,
+    @SerialName("dish_id")
+    val dishId: String,
+    @SerialName("dish_name")
+    val dishName: String,
+    @SerialName("image_url")
+    val imageUrl: String? = null,
+    val price: Double? = null,
+    @SerialName("sort_order")
+    val sortOrder: Int = 0,
+    @SerialName("ai_confidence")
+    val aiConfidence: Float? = null
+)

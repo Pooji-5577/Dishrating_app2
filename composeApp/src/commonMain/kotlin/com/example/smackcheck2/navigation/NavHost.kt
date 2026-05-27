@@ -28,7 +28,10 @@ import androidx.compose.ui.zIndex
 import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.StorageRepository
+import com.example.smackcheck2.service.GroupedDishReviewSubmissionRequest
+import com.example.smackcheck2.service.GroupedDishReviewSubmissionService
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.model.CapturedDishDraft
 import com.example.smackcheck2.model.CapturedImage
 import com.example.smackcheck2.model.Restaurant
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -37,6 +40,7 @@ import com.example.smackcheck2.ui.screens.AllRestaurantsScreen
 import com.example.smackcheck2.ui.screens.BadgesScreen
 import com.example.smackcheck2.ui.screens.DarkDishCaptureScreen
 import com.example.smackcheck2.ui.screens.DarkDishConfirmScreen
+import com.example.smackcheck2.ui.screens.DarkGroupedDishReviewScreen
 import com.example.smackcheck2.ui.screens.DarkDishRatingScreen
 import com.example.smackcheck2.ui.screens.DarkGameScreen
 import com.example.smackcheck2.ui.screens.DarkHomeScreen
@@ -176,6 +180,9 @@ class NavigationState(initialScreen: Screen = Screen.Splash) {
     var allCapturedImages by mutableStateOf<List<CapturedImage>>(emptyList())
         private set
 
+    var capturedDishDrafts by mutableStateOf<List<CapturedDishDraft>>(emptyList())
+        private set
+
     var dishCuisine by mutableStateOf<String?>(null)
         private set
 
@@ -260,11 +267,16 @@ class NavigationState(initialScreen: Screen = Screen.Splash) {
         allCapturedImages = images
     }
 
+    fun updateCapturedDishDrafts(drafts: List<CapturedDishDraft>) {
+        capturedDishDrafts = drafts
+    }
+
     fun clearCaptureData() {
         imageUri = ""
         dishName = ""
         imageBytes = null
         allCapturedImages = emptyList()
+        capturedDishDrafts = emptyList()
         dishCuisine = null
         dishConfidence = 0f
         detectedChain = null
@@ -539,7 +551,11 @@ private fun NavHostContent(
             ProfileSetupScreen(
                 viewModel = profileSetupViewModel,
                 currentUser = authViewModel.getCurrentUser(),
-                onComplete = { navigationState.replaceWith(Screen.Splash) }
+                onComplete = {
+                    authViewModel.refreshCurrentUser {
+                        navigationState.replaceWith(Screen.DarkHome)
+                    }
+                }
             )
         }
 
@@ -1330,8 +1346,20 @@ private fun NavHostContent(
                         actionLabel = "Photo Uploaded"
                     )
                     // Store all images and dish meta for confirm screen
+                    val detections = dishCaptureViewModel.getAllDetectionResults()
+                    val drafts = allImages.map { image ->
+                        val detection = detections[image.uri]
+                        CapturedDishDraft(
+                            image = image,
+                            dishName = detection?.editedName?.takeIf { it.isNotBlank() }
+                                ?: detection?.dishName?.takeIf { it.isNotBlank() && it != "Unknown" }
+                                ?: dishName,
+                            confidence = detection?.confidence ?: confidence
+                        )
+                    }
                     navigationState.updateImageBytes(imageBytes)
                     navigationState.updateAllCapturedImages(allImages)
+                    navigationState.updateCapturedDishDrafts(drafts)
                     navigationState.updateDishMeta(cuisine, confidence, chain, type)
                     navigationState.navigateToWithArgs(
                         Screen.DarkDishConfirm,
@@ -1390,6 +1418,7 @@ private fun NavHostContent(
             DarkDishConfirmScreen(
                 dishName = navigationState.dishName,
                 imageBytes = navigationState.imageBytes,
+                dishDrafts = navigationState.capturedDishDrafts,
                 cuisine = navigationState.dishCuisine,
                 confidence = navigationState.dishConfidence,
                 onNavigateBack = { navigationState.navigateBack() },
@@ -1424,6 +1453,8 @@ private fun NavHostContent(
         is Screen.DarkDishRating -> {
             val dishRatingViewModel: DishRatingViewModel = viewModel { DishRatingViewModel() }
             val ratingUiState by dishRatingViewModel.uiState.collectAsState()
+            val groupedSubmissionService = remember { GroupedDishReviewSubmissionService() }
+            val imagePicker = LocalImagePicker.current
             val databaseRepository = remember { DatabaseRepository() }
             val locationUiState by locationHomeViewModel.uiState.collectAsState()
             val placesService = LocalPlacesService.current
@@ -1437,6 +1468,10 @@ private fun NavHostContent(
             var searchedRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
             var isSearchingRestaurants by remember { mutableStateOf(false) }
             var searchQuery by remember { mutableStateOf("") }
+            var isGroupedSubmitting by remember { mutableStateOf(false) }
+            var groupedSuccess by remember { mutableStateOf(false) }
+            var groupedXpEarned by remember { mutableStateOf<Int?>(null) }
+            var groupedErrorMessage by remember { mutableStateOf<String?>(null) }
 
             // Convert Google Places nearby restaurants to Restaurant format
             val placesNearbyAsRestaurants = locationUiState.nearbyRestaurants.map { nearby ->
@@ -1628,10 +1663,13 @@ private fun NavHostContent(
                 }
             }
 
-            DarkDishRatingScreen(
-                dishName = navigationState.dishName,
-                imageUri = navigationState.imageUri,
-                imageBytes = ratingUiState.imageBytes,
+            DarkGroupedDishReviewScreen(
+                dishDrafts = navigationState.capturedDishDrafts.ifEmpty {
+                    navigationState.allCapturedImages.map {
+                        CapturedDishDraft(it, navigationState.dishName.ifBlank { "Dish" }, navigationState.dishConfidence)
+                    }
+                },
+                imagePicker = imagePicker,
                 restaurants = run {
                     val selectedCity = locationUiState.selectedLocation
                     val cityFiltered = if (!selectedCity.isNullOrBlank()) {
@@ -1645,41 +1683,61 @@ private fun NavHostContent(
                 searchedRestaurants = searchedRestaurants,
                 isLoadingRestaurants = isLoadingRestaurants,
                 isSearchingRestaurants = isSearchingRestaurants,
-                isSubmitting = ratingUiState.isSubmitting,
-                showSuccess = ratingUiState.isSuccess,
-                xpEarned = ratingUiState.xpEarned,
-                errorMessage = ratingUiState.errorMessage,
+                isSubmitting = isGroupedSubmitting,
+                showSuccess = groupedSuccess,
+                xpEarned = groupedXpEarned,
+                errorMessage = groupedErrorMessage,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRatingComplete = {
                     dishRatingViewModel.resetForm()
                     navigationState.clearCaptureData()
                     navigationState.popToRoot()
                 },
-                onSubmitRating = { rating, comment, tags, restaurant ->
+                onSubmit = { rating, comment, tags, restaurant, items, receiptBytes, receiptSummary, receiptItems ->
                     // Award points for rating a dish (from main)
                     gamificationViewModel.recordAction(
                         actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
                         actionLabel = "Dish Rated"
                     )
-                    dishRatingViewModel.onRatingChange(rating)
-                    dishRatingViewModel.onCommentChange(comment)
-                    dishRatingViewModel.onTagsChange(tags)
-                    if (restaurant != null) {
-                        dishRatingViewModel.setRestaurant(restaurant)
-                        dishRatingViewModel.submitRating { _ ->
-                            // Refresh stories so the auto-published story appears immediately
-                            socialFeedViewModel.refreshHomeData()
+                    kotlinx.coroutines.MainScope().launch {
+                        if (restaurant == null) {
+                            groupedErrorMessage = "Please select a restaurant"
+                            return@launch
                         }
+                        isGroupedSubmitting = true
+                        groupedErrorMessage = null
+                        val location = locationService?.getCurrentLocation()
+                        val result = groupedSubmissionService.submit(
+                            GroupedDishReviewSubmissionRequest(
+                                items = items,
+                                rating = rating,
+                                comment = comment,
+                                tags = tags,
+                                restaurantId = restaurant.id,
+                                selectedRestaurant = restaurant,
+                                receiptImageBytes = receiptBytes,
+                                receiptAnalysisSummary = receiptSummary,
+                                receiptRawItems = receiptItems,
+                                latitude = location?.latitude,
+                                longitude = location?.longitude
+                            )
+                        )
+                        result.fold(
+                            onSuccess = {
+                                isGroupedSubmitting = false
+                                groupedSuccess = true
+                                groupedXpEarned = it.xpEarned
+                                socialFeedViewModel.refreshHomeData()
+                            },
+                            onFailure = {
+                                isGroupedSubmitting = false
+                                groupedErrorMessage = it.message ?: "Failed to submit grouped review"
+                            }
+                        )
                     }
                 },
-                onPriceChange = { dishRatingViewModel.onPriceChange(it) },
-                onDismissError = { dishRatingViewModel.clearError() },
-                onAddRestaurantManually = { navigationState.navigateTo(Screen.ManualRestaurantEntry) },
+                onDismissError = { groupedErrorMessage = null },
                 onSearchRestaurants = { query -> searchQuery = query },
-                currentLatitude = locationUiState.userLatitude ?: locationUiState.currentLatitude,
-                currentLongitude = locationUiState.userLongitude ?: locationUiState.currentLongitude,
-                detectedChain = navigationState.detectedChain,
-                detectedType = navigationState.detectedType,
                 currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol
             )
         }

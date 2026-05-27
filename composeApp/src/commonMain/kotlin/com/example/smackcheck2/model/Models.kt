@@ -114,7 +114,18 @@ data class FeedItem(
     val timestamp: Long,
     val comment: String = "",
     val imageUrls: List<String> = emptyList(),
-    val price: Double? = null
+    val price: Double? = null,
+    val isGrouped: Boolean = false,
+    val groupId: String? = null,
+    val groupedDishes: List<GroupedFeedDish> = emptyList()
+)
+
+data class GroupedFeedDish(
+    val dishId: String,
+    val dishName: String,
+    val imageUrl: String?,
+    val price: Double? = null,
+    val ratingId: String? = null
 )
 
 /**
@@ -248,5 +259,4 @@ data class SocialMapUiState(
     val recenterTrigger: Int = 0,
     val fitBoundsTrigger: Int = 0
 )
-
 

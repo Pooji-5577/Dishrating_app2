@@ -4,6 +4,7 @@ import com.example.smackcheck2.data.ImageDelivery
 import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
+import com.example.smackcheck2.model.GroupedFeedDish
 import io.github.jan.supabase.postgrest.postgrest
 import io.github.jan.supabase.postgrest.rpc
 import kotlinx.datetime.Instant
@@ -56,6 +57,15 @@ class FeedReadRepository {
         val images = imageUrls
             .filter { it.isNotBlank() }
             .distinct()
+        val grouped = groupedDishes.map {
+            GroupedFeedDish(
+                dishId = it.dishId,
+                dishName = it.dishName,
+                imageUrl = ImageDelivery.feed(it.imageUrl),
+                price = it.price,
+                ratingId = it.ratingId
+            )
+        }
 
         return FeedItem(
             id = id,
@@ -74,7 +84,10 @@ class FeedReadRepository {
             timestamp = parseTimestamp(createdAt),
             comment = comment,
             imageUrls = images.mapNotNull { ImageDelivery.feed(it) },
-            price = price
+            price = price,
+            isGrouped = isGrouped,
+            groupId = groupId,
+            groupedDishes = grouped
         )
     }
 
@@ -133,5 +146,24 @@ private data class FeedPageRow(
     val comment: String = "",
     @SerialName("image_urls")
     val imageUrls: List<String> = emptyList(),
-    val price: Double? = null
+    val price: Double? = null,
+    @SerialName("is_grouped")
+    val isGrouped: Boolean = false,
+    @SerialName("group_id")
+    val groupId: String? = null,
+    @SerialName("grouped_dishes")
+    val groupedDishes: List<GroupedFeedDishRow> = emptyList()
+)
+
+@Serializable
+private data class GroupedFeedDishRow(
+    @SerialName("dish_id")
+    val dishId: String,
+    @SerialName("dish_name")
+    val dishName: String,
+    @SerialName("image_url")
+    val imageUrl: String? = null,
+    val price: Double? = null,
+    @SerialName("rating_id")
+    val ratingId: String? = null
 )

@@ -808,7 +808,8 @@ class DatabaseRepository(
         imageUrl: String? = null,
         latitude: Double? = null,
         longitude: Double? = null,
-        price: Double? = null
+        price: Double? = null,
+        groupId: String? = null
     ): Result<String> {
         if (rating <= 0f) {
             return Result.failure(IllegalArgumentException("Star rating is required"))
@@ -824,6 +825,7 @@ class DatabaseRepository(
                 rating = rating,
                 comment = comment,
                 imageUrl = imageUrl,
+                groupId = groupId,
                 latitude = latitude,
                 longitude = longitude,
                 price = price
@@ -831,6 +833,82 @@ class DatabaseRepository(
             postgrest["ratings"].insert(dto)
 
             Result.success(ratingId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createReviewGroup(
+        userId: String,
+        restaurantId: String,
+        rating: Float,
+        comment: String,
+        tags: List<String>,
+        receiptImageUrl: String?,
+        receiptExtractedData: String?,
+        latitude: Double?,
+        longitude: Double?
+    ): Result<String> {
+        return try {
+            @OptIn(ExperimentalUuidApi::class)
+            val groupId = Uuid.random().toString()
+            postgrest["review_groups"].insert(
+                ReviewGroupDto(
+                    id = groupId,
+                    userId = userId,
+                    restaurantId = restaurantId,
+                    rating = rating,
+                    comment = comment,
+                    tags = tags,
+                    receiptImageUrl = receiptImageUrl,
+                    receiptExtractedData = receiptExtractedData,
+                    latitude = latitude,
+                    longitude = longitude
+                )
+            )
+            Result.success(groupId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun setReviewGroupPrimaryRating(groupId: String, ratingId: String): Result<Unit> {
+        return try {
+            postgrest["review_groups"].update({
+                set("primary_rating_id", ratingId)
+            }) {
+                filter { eq("id", groupId) }
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addReviewGroupItem(
+        groupId: String,
+        ratingId: String,
+        dishId: String,
+        dishName: String,
+        imageUrl: String?,
+        price: Double?,
+        sortOrder: Int,
+        aiConfidence: Float?
+    ): Result<Unit> {
+        return try {
+            postgrest["review_group_items"].insert(
+                ReviewGroupItemDto(
+                    groupId = groupId,
+                    ratingId = ratingId,
+                    dishId = dishId,
+                    dishName = dishName,
+                    imageUrl = imageUrl,
+                    price = price,
+                    sortOrder = sortOrder,
+                    aiConfidence = aiConfidence
+                )
+            )
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
