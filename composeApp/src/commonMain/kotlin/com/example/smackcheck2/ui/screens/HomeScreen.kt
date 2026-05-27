@@ -146,7 +146,7 @@ fun HomeScreen(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    items(uiState.feedItems) { item ->
+                    items(uiState.feedItems, key = { it.id }) { item ->
                         FeedCard(
                             item = item,
                             onLikeClick = { viewModel.toggleLike(item.id) },

@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import com.example.smackcheck2.model.UserSummary
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import io.kamel.image.KamelImage
@@ -87,7 +88,7 @@ fun FollowingStoriesRow(
                             .size(64.dp)
                             .drawBehind {
                                 drawCircle(
-                                    color = Color(0xFF642223),
+                                    color = BrandRedDark,
                                     style = Stroke(
                                         width = 2.dp.toPx(),
                                         pathEffect = PathEffect.dashPathEffect(
@@ -138,7 +139,7 @@ fun FollowingStoriesRow(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = jakartaSans,
-                        color = Color(0xFF642223),
+                        color = BrandRedDark,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -155,7 +156,7 @@ fun FollowingStoriesRow(
                         contentAlignment = Alignment.Center,
                         modifier = Modifier
                             .size(64.dp)
-                            .border(2.dp, Color(0xFF642223), CircleShape)
+                            .border(2.dp, BrandRedDark, CircleShape)
                     ) {
                         Box(
                             modifier = Modifier

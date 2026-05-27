@@ -4,6 +4,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import com.example.smackcheck2.util.Logger
 
 /**
  * Data class for updating user location in the profiles table.
@@ -105,10 +106,10 @@ class LocationRepository {
                         eq("id", userId)
                     }
                 }
-            println("✅ Location updated in Supabase: $city ($latitude, $longitude)")
+            Logger.d("LocationRepository", "✅ Location updated in Supabase: $city ($latitude, $longitude)")
             true
         } catch (e: Exception) {
-            println("❌ Failed to update location in Supabase: ${e.message}")
+            Logger.e("LocationRepository", "❌ Failed to update location in Supabase: ${e.message}", e)
             false
         }
     }
@@ -121,7 +122,7 @@ class LocationRepository {
         return try {
             client.auth.currentUserOrNull()?.id
         } catch (e: Exception) {
-            println("❌ Failed to get current user: ${e.message}")
+            Logger.e("LocationRepository", "❌ Failed to get current user: ${e.message}", e)
             null
         }
     }
@@ -139,7 +140,7 @@ class LocationRepository {
                 }
                 .decodeSingleOrNull<UserProfile>()
         } catch (e: Exception) {
-            println("❌ Failed to get user profile: ${e.message}")
+            Logger.e("LocationRepository", "❌ Failed to get user profile: ${e.message}", e)
             null
         }
     }
@@ -157,7 +158,7 @@ class LocationRepository {
                 }
                 .decodeList<SupabaseRestaurant>()
         } catch (e: Exception) {
-            println("❌ Failed to get restaurants: ${e.message}")
+            Logger.e("LocationRepository", "❌ Failed to get restaurants: ${e.message}", e)
             emptyList()
         }
     }
@@ -181,7 +182,7 @@ class LocationRepository {
                     .decodeList<SupabaseDish>()
             }
         } catch (e: Exception) {
-            println("❌ Failed to get dishes: ${e.message}")
+            Logger.e("LocationRepository", "❌ Failed to get dishes: ${e.message}", e)
             emptyList()
         }
     }

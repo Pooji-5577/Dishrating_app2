@@ -72,6 +72,9 @@ import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.RestaurantHeroSection
 import com.example.smackcheck2.ui.components.TopRatedDishCard
 import com.example.smackcheck2.ui.components.LoadingState
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
+import com.example.smackcheck2.ui.theme.BrandRedLight
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.util.formatRelativeTime
@@ -82,12 +85,9 @@ import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 import kotlinx.coroutines.launch
 
-// Figma design maroon accent
-private val FigmaMaroon = Color(0xFF642223)
-private val FigmaMaroonDot = Color(0xFFBB5B5C)
+// Use centralized brand colors from Color.kt
 private val DetailBackground = Color(0xFFF6F6F6)
 private val DetailText = Color(0xFF333333)
-private val DetailPrimary = FigmaMaroon
 
 @Composable
 fun RestaurantDetailScreen(
@@ -105,6 +105,7 @@ fun RestaurantDetailScreen(
     onNavCamera: () -> Unit = {},
     onNavExplore: () -> Unit = {},
     onNavProfile: () -> Unit = {},
+    onDishClick: (String) -> Unit = {},
     currencySymbol: String = "$"
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -113,7 +114,7 @@ fun RestaurantDetailScreen(
     val colors = appColors()
     val errorBackground = colors.SurfaceVariant
     val errorText = colors.TextSecondary
-    val errorButtonColor = FigmaMaroon
+    val errorButtonColor = BrandRedDark
 
     var bookmarkedDishIds by remember { mutableStateOf(emptySet<String>()) }
     val coroutineScope = rememberCoroutineScope()
@@ -222,12 +223,12 @@ fun RestaurantDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (restaurant.cuisine.isNotBlank()) {
-                                StatusPill(text = restaurant.cuisine, background = FigmaMaroon)
+                                StatusPill(text = restaurant.cuisine, background = BrandRedDark)
                             }
                             if (restaurant.isOpenNow == true) {
                                 StatusPill(
                                     text = "Open Now",
-                                    background = FigmaMaroonDot,
+                                    background = BrandRedLight,
                                     dot = true
                                 )
                             }
@@ -257,7 +258,7 @@ fun RestaurantDetailScreen(
                                 text = "VIEW ALL",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = FigmaMaroon,
+                                color = BrandRedDark,
                                 letterSpacing = 1.4.sp
                             )
                         }
@@ -298,7 +299,7 @@ fun RestaurantDetailScreen(
                                                 }
                                             }
                                         },
-                                        onClick = {},
+                                        onClick = { onDishClick(dish.id) },
                                         currencySymbol = currencySymbol
                                     )
                                 }
@@ -420,7 +421,7 @@ fun RestaurantDetailScreen(
                                 .padding(end = 8.dp)
                                 .size(36.dp)
                                 .clip(CircleShape)
-                                .background(FigmaMaroon),
+                                .background(BrandRedDark),
                             contentAlignment = Alignment.Center
                         ) {
                             if (!userAvatarUrl.isNullOrBlank()) {
@@ -494,7 +495,7 @@ private fun StatusPill(
 private fun LocationPill(city: String) {
     Box(
         modifier = Modifier
-            .background(FigmaMaroonDot, RoundedCornerShape(999.dp))
+            .background(BrandRedLight, RoundedCornerShape(999.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Row(
@@ -572,7 +573,7 @@ private fun FigmaReviewItem(
                 Text(
                     text = formatRelativeTime(review.createdAt),
                     fontSize = 12.sp,
-                    color = FigmaMaroon
+                    color = BrandRedDark
                 )
             }
 
@@ -619,7 +620,7 @@ private fun StarRow(rating: Float) {
                 imageVector = Icons.Filled.Star,
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
-                tint = FigmaMaroon
+                tint = BrandRedDark
             )
         }
         repeat((5 - full).coerceAtLeast(0)) {
@@ -627,7 +628,7 @@ private fun StarRow(rating: Float) {
                 imageVector = Icons.Filled.Star,
                 contentDescription = null,
                 modifier = Modifier.size(12.dp),
-                tint = FigmaMaroon.copy(alpha = 0.25f)
+                tint = BrandRedDark.copy(alpha = 0.25f)
             )
         }
     }

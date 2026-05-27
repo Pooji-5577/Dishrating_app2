@@ -41,10 +41,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.theme.BrandRedDark
 
 private val HelpBackground = Color(0xFFF6F6F6)
 private val HelpCard = Color.White
-private val HelpPrimary = Color(0xFF642223)
+private val HelpPrimary = BrandRedDark
 
 private data class FaqItem(
     val question: String,

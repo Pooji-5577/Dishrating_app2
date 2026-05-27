@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -89,7 +90,10 @@ import com.example.smackcheck2.platform.PlatformMapView
 import com.example.smackcheck2.ui.components.BottomNavBar
 import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.components.StarRatingDisplay
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.CardShape
 import com.example.smackcheck2.ui.theme.BottomSheetShape
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
@@ -180,7 +184,7 @@ fun SocialMapScreen(
                                     fontFamily = jakartaSans,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 22.sp,
-                                    color = Color(0xFF642223)
+                                    color = BrandRedDark
                                 )
                             ) { append("Discover") }
                             append(" ")
@@ -486,7 +490,7 @@ fun SocialMapScreen(
                         Surface(
                             onClick = { viewModel.recenter() },
                             shape = RoundedCornerShape(20.dp),
-                            color = Color(0xFF9B2335),
+                            color = BrandRed,
                             shadowElevation = 4.dp
                         ) {
                             Row(
@@ -518,7 +522,7 @@ fun SocialMapScreen(
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(26.dp))
-                                    .background(if (isActive) Color(0xFF9B2335) else Color.Transparent)
+                                    .background(if (isActive) BrandRed else Color.Transparent)
                                     .clickable { viewModel.setMapMode(mode) }
                                     .padding(horizontal = 22.dp, vertical = 10.dp),
                                 contentAlignment = Alignment.Center
@@ -624,11 +628,12 @@ fun SocialMapScreen(
                                     .fillMaxWidth()
                                     .padding(32.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Restaurant,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(64.dp),
-                                    tint = themeColors.Primary.copy(alpha = 0.7f)
+                                SmackCheckWordmark(
+                                    fontFamily = jakartaSans,
+                                    fontSize = 40.sp,
+                                    smackColor = BrandRedDark,
+                                    checkColor = BrandRed,
+                                    letterSpacing = (-1.2).sp
                                 )
                                 Spacer(Modifier.height(16.dp))
                                 Text(
@@ -650,7 +655,11 @@ fun SocialMapScreen(
                                 if (uiState.mapMode != com.example.smackcheck2.model.MapMode.MY_RATINGS) {
                                     Button(
                                         onClick = onRateDishClick,
-                                        shape = RoundedCornerShape(12.dp)
+                                        shape = RoundedCornerShape(12.dp),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = BrandRed,
+                                            contentColor = Color.White
+                                        )
                                     ) {
                                         Text("Rate a Dish")
                                     }
@@ -1088,7 +1097,7 @@ private fun MapListItem(
                 Icon(
                     Icons.Filled.Restaurant,
                     contentDescription = null,
-                    tint = Color(0xFF9B2335).copy(alpha = 0.5f),
+                    tint = BrandRed.copy(alpha = 0.5f),
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -1123,7 +1132,7 @@ private fun MapListItem(
         if (post.latestRating != null && post.latestRating > 0) {
             Box(
                 modifier = Modifier
-                    .background(Color(0xFF9B2335), RoundedCornerShape(20.dp))
+                    .background(BrandRed, RoundedCornerShape(20.dp))
                     .padding(horizontal = 10.dp, vertical = 4.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

@@ -277,7 +277,7 @@ fun ChallengesTab(
             Spacer(modifier = Modifier.height(8.dp))
         }
         
-        items(dailyChallenges) { challenge ->
+        items(dailyChallenges, key = { it.id }) { challenge ->
             ChallengeCard(
                 challenge = challenge,
                 onClick = { onChallengeClick(challenge) }
@@ -294,7 +294,7 @@ fun ChallengesTab(
             Spacer(modifier = Modifier.height(8.dp))
         }
         
-        items(weeklyChallenges) { challenge ->
+        items(weeklyChallenges, key = { it.id }) { challenge ->
             ChallengeCard(
                 challenge = challenge,
                 onClick = { onChallengeClick(challenge) }
@@ -639,7 +639,7 @@ fun AchievementsTab(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(achievements) { achievement ->
+        items(achievements, key = { it.id }) { achievement ->
             AchievementCard(achievement = achievement)
         }
     }

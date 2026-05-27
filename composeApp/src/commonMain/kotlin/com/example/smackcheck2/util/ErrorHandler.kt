@@ -108,9 +108,9 @@ object ErrorHandler {
     fun handleError(throwable: Throwable?, context: String = ""): String {
         // Print to console for debugging
         if (context.isNotEmpty()) {
-            println("Error in $context: ${throwable?.message}")
+            Logger.e("ErrorHandler", "Error in $context: ${throwable?.message}")
         } else {
-            println("Error: ${throwable?.message}")
+            Logger.e("ErrorHandler", "Error: ${throwable?.message}")
         }
 
         // Print stack trace in debug mode

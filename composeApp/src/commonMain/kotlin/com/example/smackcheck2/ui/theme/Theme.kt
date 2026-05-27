@@ -65,10 +65,11 @@ fun SmackCheckTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val typography = SmackCheckBrandTypography()
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = SmackCheckTypography,
+        typography = typography,
         shapes = SmackCheckShapes,
         content = content
     )

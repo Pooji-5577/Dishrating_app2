@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Dish
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.util.formatOneDecimal
 import io.kamel.image.KamelImage
@@ -48,7 +49,7 @@ fun TopRatedDishCard(
 ) {
     val colors = appColors()
     // Dark maroon matching Figma #642223
-    val maroon = Color(0xFF642223)
+    val maroon = BrandRedDark
     // Blurred badge background matching Figma rgba(228,226,223,0.9)
     val badgeBg = Color(0xE6E4E2DF)
 

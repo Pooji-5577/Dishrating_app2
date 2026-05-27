@@ -43,8 +43,8 @@ object LightThemeColors {
     // Divider
     val Divider = Color(0xFFE0E0E0)
 
-    // Feed-specific Figma colors
-    val PrimaryDark = Color(0xFF642223)
-    val PrimaryRed = Color(0xFF9B2335)
-    val MaroonAccent = Color(0xFFBB5B5C)
+    // Feed-specific brand colors (centralized from Color.kt)
+    val PrimaryDark = BrandRedDark
+    val PrimaryRed = BrandRed
+    val MaroonAccent = BrandRedLight
 }

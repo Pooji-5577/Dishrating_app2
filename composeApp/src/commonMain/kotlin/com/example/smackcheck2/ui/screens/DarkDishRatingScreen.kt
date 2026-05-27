@@ -85,18 +85,21 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.PI
 import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
 private val DeepMaroon = Color(0xFF3B1011)
-private val WarmMaroon = Color(0xFF642223)
-private val CrimsonRed = Color(0xFF9B2335)
+private val WarmMaroon = BrandRedDark
+private val CrimsonRed = BrandRed
 private val RosePink = Color(0xFFBB5B5C)
 private val CreamWhite = Color(0xFFFFF8F0)
 private val WarmBeige = Color(0xFFF5EDE3)
@@ -852,7 +855,7 @@ fun DarkDishRatingScreen(
                                         )
                                     }
                                 }
-                                items(allFilteredNearby) { restaurant ->
+                                items(allFilteredNearby, key = { it.id }) { restaurant ->
                                     RestaurantPickerItem(
                                         restaurant = restaurant,
                                         isSelected = selectedRestaurant?.id == restaurant.id,
@@ -874,7 +877,7 @@ fun DarkDishRatingScreen(
                                         modifier = Modifier.padding(vertical = 8.dp)
                                     )
                                 }
-                                items(filteredOthers) { restaurant ->
+                                items(filteredOthers, key = { it.id }) { restaurant ->
                                     RestaurantPickerItem(
                                         restaurant = restaurant,
                                         isSelected = selectedRestaurant?.id == restaurant.id,
@@ -1046,10 +1049,10 @@ private fun restaurantDistanceMeters(
 
 private fun haversineKm(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
     val r = 6371.0
-    val dLat = Math.toRadians(lat2 - lat1)
-    val dLon = Math.toRadians(lon2 - lon1)
+    val dLat = (lat2 - lat1) * PI / 180.0
+    val dLon = (lon2 - lon1) * PI / 180.0
     val a = sin(dLat / 2).pow(2.0) +
-        cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLon / 2).pow(2.0)
+        cos(lat1 * PI / 180.0) * cos(lat2 * PI / 180.0) * sin(dLon / 2).pow(2.0)
     val c = 2 * atan2(sqrt(a), sqrt(1 - a))
     return r * c
 }

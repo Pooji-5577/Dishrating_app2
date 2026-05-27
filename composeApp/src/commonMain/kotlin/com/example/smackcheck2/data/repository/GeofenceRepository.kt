@@ -6,6 +6,7 @@ import com.example.smackcheck2.platform.NearbyRestaurant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.example.smackcheck2.util.Logger
 
 /**
  * Event triggered when user enters or exits a geofenced restaurant area
@@ -45,7 +46,7 @@ class GeofenceRepository(
         radiusMeters: Float = DEFAULT_RADIUS_METERS
     ) {
         if (geofencingService == null) {
-            println("GeofenceRepository: GeofencingService not available")
+            Logger.d("GeofenceRepository", "GeofenceRepository: GeofencingService not available")
             return
         }
         
@@ -72,7 +73,7 @@ class GeofenceRepository(
         // Start monitoring
         geofencingService.startMonitoring(regions)
         
-        println("GeofenceRepository: Started monitoring ${regions.size} restaurant geofences")
+        Logger.d("GeofenceRepository", "GeofenceRepository: Started monitoring ${regions.size} restaurant geofences")
     }
     
     /**
@@ -82,7 +83,7 @@ class GeofenceRepository(
         geofencingService?.stopMonitoring()
         _monitoredRestaurants.value = emptySet()
         restaurantNameMap.clear()
-        println("GeofenceRepository: Stopped all geofence monitoring")
+        Logger.d("GeofenceRepository", "GeofenceRepository: Stopped all geofence monitoring")
     }
     
     /**
@@ -101,7 +102,7 @@ class GeofenceRepository(
     fun onGeofenceEntered(regionId: String) {
         val restaurantName = restaurantNameMap[regionId] ?: "Restaurant"
         _lastEvent.value = GeofenceEvent.Entered(regionId, restaurantName)
-        println("GeofenceRepository: User entered geofence for $restaurantName")
+        Logger.d("GeofenceRepository", "GeofenceRepository: User entered geofence for $restaurantName")
     }
     
     /**
@@ -111,7 +112,7 @@ class GeofenceRepository(
     fun onGeofenceExited(regionId: String) {
         val restaurantName = restaurantNameMap[regionId] ?: "Restaurant"
         _lastEvent.value = GeofenceEvent.Exited(regionId, restaurantName)
-        println("GeofenceRepository: User exited geofence for $restaurantName")
+        Logger.d("GeofenceRepository", "GeofenceRepository: User exited geofence for $restaurantName")
     }
     
     /**

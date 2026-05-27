@@ -2,6 +2,7 @@ package com.example.smackcheck2.ui.screens
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,9 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +25,9 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.painterResource
+import smackcheck.composeapp.generated.resources.Res
+import smackcheck.composeapp.generated.resources.smackcheck_logo_image_transparent
 
 /**
  * Splash Screen composable
@@ -77,13 +78,12 @@ fun SplashScreen(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = Icons.Filled.Restaurant,
+            Image(
+                painter = painterResource(Res.drawable.smackcheck_logo_image_transparent),
                 contentDescription = "SmackCheck Logo",
                 modifier = Modifier
                     .size(120.dp)
-                    .scale(scale.value),
-                tint = MaterialTheme.colorScheme.onPrimary
+                    .scale(scale.value)
             )
             
             Spacer(modifier = Modifier.height(24.dp))

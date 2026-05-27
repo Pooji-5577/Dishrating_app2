@@ -1,5 +1,6 @@
 // Supabase Edge Function for AI Dish Analysis using Gemini
 import "@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,39 +17,22 @@ interface DishAnalysisResponse {
   cuisine: string
   confidence: number
   alternatives: string[]
-  description: string
-  ingredients: string[]
   itemType: string  // "food", "beverage", or "unknown"
   restaurantChain: string  // e.g. "Starbucks" when branded packaging/logo visible, "" otherwise
   restaurantType: string   // e.g. "cafe", "fast food", "pizzeria", "sushi bar", "" if unclear
   error?: string
 }
 
-const DETECTION_PROMPT = `You are a food and beverage identification expert. Look at this image and identify what is shown — it could be a food dish OR a beverage (drink).
-
-IMPORTANT: You MUST respond with ONLY a JSON object, no other text before or after.
-
-Response format for FOOD (JSON only):
-{"dish_name":"Pizza Margherita","cuisine":"Italian","confidence":0.9,"item_type":"food","alternatives":["Cheese Pizza","Flatbread"],"description":"Classic Italian pizza with tomato sauce, mozzarella, and basil","ingredients":["tomato sauce","mozzarella","basil","olive oil"],"restaurant_chain":"","restaurant_type":"pizzeria"}
-
-Response format for BEVERAGE (JSON only):
-{"dish_name":"Cappuccino","cuisine":"Italian","confidence":0.95,"item_type":"beverage","alternatives":["Latte","Coffee"],"description":"Italian espresso-based coffee drink with steamed milk foam","ingredients":["espresso","steamed milk","milk foam"],"restaurant_chain":"Starbucks","restaurant_type":"cafe"}
-
-Guidelines:
-1. dish_name: The most common English name for the item (be specific, e.g., "Chicken Tikka Masala" not just "Curry", "Mango Lassi" not just "Drink")
-2. cuisine: The type of cuisine or origin (Italian, Indian, Mexican, Chinese, American, Japanese, Thai, etc.)
-3. confidence: A number between 0.0 and 1.0 indicating how certain you are
-4. item_type: Use "food" for solid food dishes/snacks/desserts, "beverage" for any drink (coffee, tea, juice, cocktail, milkshake, wine, beer, smoothie, soda, water, etc.), or "unknown" only if the image clearly shows neither food nor a drink
-5. alternatives: 1-3 other possible names if you're not 100% sure
-6. description: A brief 1-2 sentence description
-7. ingredients: List of visible or likely ingredients
-8. restaurant_chain: If the image clearly shows branded packaging, a logo, a cup/wrapper, or a recognizable product style from a known chain, return that chain's name (e.g., "Starbucks", "McDonald's", "Domino's", "Costa Coffee", "KFC", "Subway"). If no chain branding is visible, return "".
-9. restaurant_type: The most likely venue type for this item, regardless of chain. Use a short lowercase label: "cafe", "fast food", "pizzeria", "sushi bar", "bakery", "bar", "bistro", "diner", "steakhouse", "ice cream shop", "food truck", "fine dining", "casual dining", "restaurant". Return "" only if truly unclear.
-
-If the image clearly shows neither food nor a beverage, respond with:
-{"dish_name":"Unknown","cuisine":"Unknown","confidence":0.0,"item_type":"unknown","alternatives":[],"description":"Unable to identify food or beverage","ingredients":[],"restaurant_chain":"","restaurant_type":""}
-
-Remember: Output ONLY the JSON, nothing else.`
+const DETECTION_PROMPT = `Identify the main visible food dish or beverage.
+Return ONLY compact JSON with these exact keys:
+{"dish_name":"","cuisine":"","confidence":0,"item_type":"","alternatives":[],"restaurant_chain":"","restaurant_type":""}
+Rules:
+- item_type is "food", "beverage", or "unknown".
+- Use "Unknown" and confidence 0 only when no food or drink is visible.
+- alternatives: max 2 short names.
+- restaurant_chain only when clear branding/logo is visible, else "".
+- restaurant_type: short lowercase venue type like "restaurant", "cafe", "pizzeria", "fast food", or "".
+- No markdown, prose, description, or ingredients.`
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -57,6 +41,26 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Verify the caller is authenticated
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header', dishName: 'Unknown', cuisine: '', confidence: 0, alternatives: [], itemType: 'unknown', restaurantChain: '', restaurantType: '' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!
+    )
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid or expired token', dishName: 'Unknown', cuisine: '', confidence: 0, alternatives: [], itemType: 'unknown', restaurantChain: '', restaurantType: '' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     // Get the Gemini API key from environment (stored as secret)
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY')
     if (!GEMINI_API_KEY) {
@@ -72,7 +76,7 @@ Deno.serve(async (req) => {
 
     console.log(`Analyzing dish image: ${imageBase64.length} chars, mimeType: ${mimeType}`)
 
-    // Call Gemini API with vision capabilities (using gemini-3.1-flash-lite-preview for best results)
+    // Call Gemini API with vision capabilities.
     const geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -95,10 +99,11 @@ Deno.serve(async (req) => {
             ]
           }],
           generationConfig: {
-            temperature: 0.4,
-            topK: 32,
-            topP: 1,
-            maxOutputTokens: 1024,
+            temperature: 0.1,
+            topK: 16,
+            topP: 0.8,
+            maxOutputTokens: 192,
+            responseMimeType: "application/json",
           }
         })
       }
@@ -168,8 +173,6 @@ Deno.serve(async (req) => {
       cuisine: parsedResponse.cuisine || 'Unknown',
       confidence: parsedResponse.confidence || 0,
       alternatives: parsedResponse.alternatives || [],
-      description: parsedResponse.description || '',
-      ingredients: parsedResponse.ingredients || [],
       itemType,
       restaurantChain: (parsedResponse.restaurant_chain || parsedResponse.restaurantChain || '').toString().trim(),
       restaurantType: (parsedResponse.restaurant_type || parsedResponse.restaurantType || '').toString().trim().toLowerCase()
@@ -198,8 +201,6 @@ Deno.serve(async (req) => {
         cuisine: '',
         confidence: 0,
         alternatives: [],
-        description: '',
-        ingredients: [],
         itemType: 'unknown',
         restaurantChain: '',
         restaurantType: ''

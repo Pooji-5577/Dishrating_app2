@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 /**
  * SmackCheck - Notification ViewModel
@@ -72,15 +73,15 @@ class NotificationViewModel : ViewModel() {
                     // 4. Save token to Supabase
                     val saveResult = notificationService.savePushToken(result.token)
                     if (saveResult.isFailure) {
-                        println("Token generated but failed to save: ${saveResult.exceptionOrNull()?.message}")
+                        Logger.e("NotificationViewModel", "Token generated but failed to save: ${saveResult.exceptionOrNull()?.message}")
                     }
                 } else if (result.error != null) {
                     _error.value = result.error
-                    println("Push notification init failed: ${result.error}")
+                    Logger.e("NotificationViewModel", "Push notification init failed: ${result.error}")
                 }
             } catch (e: Exception) {
                 _error.value = e.message
-                println("Push notification init error: ${e.message}")
+                Logger.e("NotificationViewModel", "Push notification init error: ${e.message}", e)
             }
         }
     }
@@ -112,7 +113,7 @@ class NotificationViewModel : ViewModel() {
                 _unreadCount.value = count
             } catch (e: Exception) {
                 _error.value = e.message
-                println("Failed to refresh notifications: ${e.message}")
+                Logger.e("NotificationViewModel", "Failed to refresh notifications: ${e.message}", e)
             } finally {
                 _isLoading.value = false
             }

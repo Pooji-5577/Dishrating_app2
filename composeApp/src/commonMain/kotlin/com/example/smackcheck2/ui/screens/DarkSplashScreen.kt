@@ -2,6 +2,7 @@ package com.example.smackcheck2.ui.screens
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,9 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -30,8 +28,10 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
-import com.example.smackcheck2.ui.theme.appColors
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.painterResource
+import smackcheck.composeapp.generated.resources.Res
+import smackcheck.composeapp.generated.resources.smackcheck_logo_image_transparent
 
 /**
  * Splash Screen – shown only after first-time login / registration.
@@ -100,24 +100,13 @@ fun DarkSplashScreen(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Soft pink circle with fork+knife icon
-            Box(
+            Image(
+                painter = painterResource(Res.drawable.smackcheck_logo_image_transparent),
+                contentDescription = "SmackCheck Logo",
                 modifier = Modifier
-                    .size(140.dp)
+                    .size(94.dp)
                     .scale(scale.value)
-                    .background(
-                        color = Color(0xFFF5D5D5),
-                        shape = androidx.compose.foundation.shape.CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = "SmackCheck Logo",
-                    modifier = Modifier.size(64.dp),
-                    tint = Color(0xFF9B2335)
-                )
-            }
+            )
 
             Spacer(modifier = Modifier.height(24.dp))
 

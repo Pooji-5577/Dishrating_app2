@@ -18,6 +18,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import com.example.smackcheck2.util.Logger
 
 // Custom OAuth Providers for Facebook and Apple
 private object Facebook : OAuthProvider() {
@@ -137,14 +138,14 @@ class AuthRepository(
                     upsertProfile(profile)
                 } catch (e: Exception) {
                     // Profile might already exist from trigger, ignore error
-                    println("AuthRepository: Profile upsert note: ${e.message}")
+                    Logger.e("AuthRepository", "AuthRepository: Profile upsert note: ${e.message}", e)
                 }
 
                 // Send welcome notification
                 try {
                     notificationService.notifyWelcome(userId, name)
                 } catch (e: Exception) {
-                    println("AuthRepository: Welcome notification failed: ${e.message}")
+                    Logger.e("AuthRepository", "AuthRepository: Welcome notification failed: ${e.message}", e)
                 }
 
                 Result.success(
@@ -256,7 +257,7 @@ class AuthRepository(
 
             Result.success(profile.toUser())
         } catch (e: Exception) {
-            println("AuthRepository: Google sign-in error: ${e.message}")
+            Logger.e("AuthRepository", "AuthRepository: Google sign-in error: ${e.message}", e)
             val message = when {
                 e.message?.contains("OAuth", ignoreCase = true) == true ->
                     "Google Sign-In is not configured. Please set up Google OAuth in Supabase dashboard."
@@ -309,7 +310,7 @@ class AuthRepository(
 
             Result.success(profile.toUser())
         } catch (e: Exception) {
-            println("AuthRepository: Facebook sign-in error: ${e.message}")
+            Logger.e("AuthRepository", "AuthRepository: Facebook sign-in error: ${e.message}", e)
             val message = when {
                 e.message?.contains("OAuth", ignoreCase = true) == true ->
                     "Facebook Sign-In is not configured. Please set up Facebook OAuth in Supabase dashboard."
@@ -362,7 +363,7 @@ class AuthRepository(
 
             Result.success(profile.toUser())
         } catch (e: Exception) {
-            println("AuthRepository: Apple sign-in error: ${e.message}")
+            Logger.e("AuthRepository", "AuthRepository: Apple sign-in error: ${e.message}", e)
             val message = when {
                 e.message?.contains("OAuth", ignoreCase = true) == true ->
                     "Apple Sign-In is not configured. Please set up Apple OAuth in Supabase dashboard."
@@ -415,7 +416,7 @@ class AuthRepository(
                     upsertProfile(newProfile)
                     newProfile.toUser()
                 } catch (e: Exception) {
-                    println("AuthRepository: auto-profile creation failed: ${e.message}")
+                    Logger.e("AuthRepository", "AuthRepository: auto-profile creation failed: ${e.message}", e)
                     // Return null to indicate profile could not be created
                     // This forces the caller to handle the error rather than proceeding
                     // with a user that doesn't exist in the database
@@ -450,6 +451,18 @@ class AuthRepository(
         val profilePhotoUrl: String? = null
     )
 
+    @Serializable
+    private data class ProfileUpdateDto(
+        val name: String,
+        val username: String? = null,
+        val email: String,
+        @kotlinx.serialization.SerialName("profile_photo_url")
+        val profilePhotoUrl: String? = null,
+        @kotlinx.serialization.SerialName("last_location")
+        val lastLocation: String? = null,
+        val bio: String? = null
+    )
+
     /**
      * Save username and optional profile photo during onboarding setup.
      */
@@ -473,20 +486,17 @@ class AuthRepository(
      */
     suspend fun updateProfile(user: User): Result<User> {
         return try {
-            val profile = ProfileDto(
-                id = user.id,
+            val profileUpdate = ProfileUpdateDto(
                 name = user.name,
+                username = user.username.ifBlank { null },
                 email = user.email,
                 profilePhotoUrl = user.profilePhotoUrl,
-                level = user.level,
-                xp = user.xp,
-                streakCount = user.streakCount,
                 lastLocation = user.lastLocation,
                 bio = user.bio
             )
 
             client.postgrest["profiles"]
-                .update(profile) {
+                .update(profileUpdate) {
                     filter {
                         eq("id", user.id)
                     }
@@ -498,14 +508,11 @@ class AuthRepository(
             if (e.message?.contains("bio", ignoreCase = true) == true) {
                 // Try updating without bio field
                 try {
-                    val profileWithoutBio = ProfileDto(
-                        id = user.id,
+                    val profileWithoutBio = ProfileUpdateDto(
                         name = user.name,
+                        username = user.username.ifBlank { null },
                         email = user.email,
                         profilePhotoUrl = user.profilePhotoUrl,
-                        level = user.level,
-                        xp = user.xp,
-                        streakCount = user.streakCount,
                         lastLocation = user.lastLocation,
                         bio = null
                     )

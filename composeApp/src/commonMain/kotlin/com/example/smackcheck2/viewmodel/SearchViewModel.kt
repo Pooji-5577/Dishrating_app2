@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 /**
  * ViewModel for Search screen
@@ -77,7 +78,7 @@ class SearchViewModel(
                     )
                 }
             } catch (e: Exception) {
-                println("SearchViewModel: Failed to load filter options: ${e.message}")
+                Logger.e("SearchViewModel", "SearchViewModel: Failed to load filter options: ${e.message}", e)
             }
         }
     }
@@ -126,7 +127,7 @@ class SearchViewModel(
 
             try {
                 val currentState = _uiState.value
-                println("SearchViewModel: Starting search with query='${currentState.query}'")
+                Logger.d("SearchViewModel", "SearchViewModel: Starting search with query='${currentState.query}'")
 
                 // Fetch restaurants from database
                 val result = databaseRepository.searchRestaurants(
@@ -142,13 +143,13 @@ class SearchViewModel(
                     try {
                         // If user typed a query, use text search (doesn't require location)
                         if (currentState.query.isNotBlank()) {
-                            println("SearchViewModel: Using text search for query: ${currentState.query} (lat=${currentState.currentLatitude}, lng=${currentState.currentLongitude})")
+                            Logger.d("SearchViewModel", "SearchViewModel: Using text search for query: ${currentState.query} (lat=${currentState.currentLatitude}, lng=${currentState.currentLongitude})")
                             val textResults = placesService.searchRestaurantsByText(
                                 query = currentState.query,
                                 latitude = currentState.currentLatitude,
                                 longitude = currentState.currentLongitude
                             )
-                            println("SearchViewModel: Text search returned ${textResults.size} results")
+                            Logger.d("SearchViewModel", "SearchViewModel: Text search returned ${textResults.size} results")
                             
                             // Convert NearbyRestaurant to Restaurant and apply filters
                             textResults.mapNotNull { nearbyRestaurant ->
@@ -198,7 +199,7 @@ class SearchViewModel(
                                                 minRating = currentState.selectedRating?.toDouble()
                                             )
                                         } catch (e: Exception) {
-                                            println("SearchViewModel: Failed to load $cuisine restaurants: ${e.message}")
+                                            Logger.e("SearchViewModel", "SearchViewModel: Failed to load $cuisine restaurants: ${e.message}", e)
                                             emptyList()
                                         }
                                     }.distinctBy { it.id }
@@ -233,7 +234,7 @@ class SearchViewModel(
                             emptyList()
                         }
                     } catch (e: Exception) {
-                        println("SearchViewModel: Failed to load Places restaurants: ${e.message}")
+                        Logger.e("SearchViewModel", "SearchViewModel: Failed to load Places restaurants: ${e.message}", e)
                         emptyList()
                     }
                 } else {
@@ -242,11 +243,11 @@ class SearchViewModel(
 
                 result.fold(
                     onSuccess = { databaseRestaurants ->
-                        println("SearchViewModel: Database returned ${databaseRestaurants.size} results")
+                        Logger.d("SearchViewModel", "SearchViewModel: Database returned ${databaseRestaurants.size} results")
                         // Combine database and Places restaurants
                         val combinedRestaurants = (databaseRestaurants + placesRestaurants)
                             .distinctBy { it.id }
-                        println("SearchViewModel: Combined total: ${combinedRestaurants.size} results")
+                        Logger.d("SearchViewModel", "SearchViewModel: Combined total: ${combinedRestaurants.size} results")
 
                         _uiState.update {
                             it.copy(
@@ -256,7 +257,7 @@ class SearchViewModel(
                         }
                     },
                     onFailure = { error ->
-                        println("SearchViewModel: Database search failed: ${error.message}")
+                        Logger.e("SearchViewModel", "SearchViewModel: Database search failed: ${error.message}", error)
                         // Even if database fails, show Places restaurants if available
                         _uiState.update {
                             it.copy(
@@ -270,7 +271,7 @@ class SearchViewModel(
                     }
                 )
             } catch (e: Exception) {
-                println("SearchViewModel: Search exception: ${e.message}")
+                Logger.e("SearchViewModel", "SearchViewModel: Search exception: ${e.message}", e)
                 _uiState.update {
                     it.copy(
                         isLoading = false,

@@ -43,6 +43,7 @@ import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.platform.RequestCameraPermission
 import com.example.smackcheck2.platform.RequestLocationPermission
 import com.example.smackcheck2.platform.RequestNotificationPermission
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.ThemeColors
 import com.example.smackcheck2.ui.theme.appColors
 
@@ -63,7 +64,7 @@ fun PermissionsOnboardingScreen(
 
     val colors = appColors()
     val bg = Color(0xFFF6F6F6)
-    val accent = Color(0xFF642223)
+    val accent = BrandRedDark
     val iconBg = accent.copy(alpha = 0.12f)
     val textPrimary = Color(0xFF1E1E1E)
     val textSecondary = Color(0xFF6F6F6F)

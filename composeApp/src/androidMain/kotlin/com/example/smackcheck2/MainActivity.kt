@@ -50,6 +50,9 @@ class MainActivity : ComponentActivity() {
         // Force-enable collection so crashes are reported in all build types.
         // Remove enableCollection() once you switch to a release build workflow
         // where Crashlytics is enabled by default.
+        // Initialize KMP Logger — suppresses all debug logs in release builds
+        com.example.smackcheck2.util.Logger.init(isDebug = BuildConfig.DEBUG)
+
         CrashlyticsHelper.enableCollection()
         CrashlyticsHelper.log("MainActivity.onCreate")
 

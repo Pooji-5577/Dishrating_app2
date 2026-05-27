@@ -70,7 +70,7 @@ fun App(
             fileFetcher()
             fileUrlFetcher()
             httpUrlFetcher {
-                httpCache(10 * 1024 * 1024)
+                httpCache(64 * 1024 * 1024)
             }
             imageBitmapDecoder()
         }

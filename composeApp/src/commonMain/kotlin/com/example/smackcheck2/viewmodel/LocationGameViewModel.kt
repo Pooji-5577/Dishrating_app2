@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import com.example.smackcheck2.util.Logger
 import kotlinx.coroutines.launch
 
 /**
@@ -51,6 +52,7 @@ data class LocationHomeUiState(
     val allRestaurants: List<Restaurant> = emptyList(),
     val nearbyRestaurants: List<NearbyRestaurant> = emptyList(),
     val searchResults: List<LocationResult> = emptyList(),
+    val savedRestaurantIds: Set<String> = emptySet(),
     val error: String? = null,
     val locationError: String? = null,
     val noRestaurantsFound: Boolean = false,
@@ -60,6 +62,27 @@ data class LocationHomeUiState(
     // Set to true once the first batch of DB data is loaded so Splash can navigate
     val isInitialDataLoaded: Boolean = false
 )
+
+private fun Restaurant.uniqueRestaurantKey(): String {
+    val normalizedName = name.trim().lowercase()
+    val normalizedCity = city.trim().lowercase()
+    val placeKey = googlePlaceId?.trim()?.takeIf { it.isNotBlank() }
+    return when {
+        normalizedName.isNotBlank() -> "$normalizedName|$normalizedCity"
+        placeKey != null -> "place|$placeKey"
+        else -> "id|$id"
+    }
+}
+
+private fun List<Restaurant>.distinctRestaurants(): List<Restaurant> =
+    distinctBy { it.uniqueRestaurantKey() }
+
+private fun List<Restaurant>.distinctRestaurantNames(): List<Restaurant> =
+    distinctBy {
+        it.name.trim().lowercase().ifBlank {
+            it.googlePlaceId?.trim()?.takeIf { placeId -> placeId.isNotBlank() } ?: it.id
+        }
+    }
 
 /**
  * ViewModel for Location-based Home Screen
@@ -78,13 +101,49 @@ class LocationHomeViewModel : ViewModel() {
         // For first-time users the Splash screen will trigger this after login.
         if (authRepository.isSignedIn()) {
             preloadHomeFromSplash()
+            loadSavedRestaurants()
+        }
+    }
+
+    private fun loadSavedRestaurants() {
+        viewModelScope.launch {
+            val userId = authRepository.getCurrentUserId() ?: return@launch
+            databaseRepository.getSavedRestaurantIds(userId)
+                .onSuccess { ids ->
+                    _uiState.update { it.copy(savedRestaurantIds = ids) }
+                }
+        }
+    }
+
+    fun toggleRestaurantSaved(restaurantId: String) {
+        val userId = authRepository.getCurrentUserId() ?: return
+        val currentIds = _uiState.value.savedRestaurantIds
+        val wasSaved = currentIds.contains(restaurantId)
+
+        _uiState.update {
+            it.copy(
+                savedRestaurantIds = if (wasSaved) currentIds - restaurantId else currentIds + restaurantId
+            )
+        }
+
+        viewModelScope.launch {
+            databaseRepository.toggleRestaurantSave(userId, restaurantId)
+                .onFailure {
+                    // Rollback optimistic update
+                    _uiState.update { state ->
+                        val now = state.savedRestaurantIds
+                        state.copy(
+                            savedRestaurantIds = if (wasSaved) now + restaurantId else now - restaurantId
+                        )
+                    }
+                }
         }
     }
 
     fun preloadHomeFromSplash() {
         if (hasStartedHomePreload) return
         if (!authRepository.isSignedIn()) {
-            println("LocationHomeViewModel: Skipping preload — user not authenticated yet")
+            Logger.d("LocationHomeViewModel", "Skipping preload — user not authenticated yet")
             return
         }
         hasStartedHomePreload = true
@@ -96,17 +155,16 @@ class LocationHomeViewModel : ViewModel() {
             try {
                 val savedLocation = authRepository.getLastLocation()
                 if (savedLocation != null) {
-                    println("LocationHomeViewModel: Loaded saved location from profile: $savedLocation")
+                    Logger.d("LocationHomeViewModel", "Loaded saved location from profile: $savedLocation")
                     _uiState.update { it.copy(selectedLocation = savedLocation) }
                     loadDataForLocation(savedLocation)
                 } else {
-                    println("LocationHomeViewModel: No saved location found, loading all restaurants")
+                    Logger.d("LocationHomeViewModel", "No saved location found, loading all restaurants")
                     _uiState.update { it.copy(selectedLocation = null) }
                     loadAllRestaurants()
                 }
             } catch (e: Exception) {
-                println("LocationHomeViewModel: Error loading saved location: ${e.message}")
-                e.printStackTrace()
+                Logger.e("LocationHomeViewModel", "Error loading saved location: ${e.message}", e)
                 _uiState.update { it.copy(selectedLocation = null) }
                 loadAllRestaurants()
             }
@@ -130,16 +188,14 @@ class LocationHomeViewModel : ViewModel() {
                 val result = authRepository.updateLastLocation(location)
                 result.fold(
                     onSuccess = {
-                        println("LocationHomeViewModel: ✓ Successfully saved location to profile: $location")
+                        Logger.d("LocationHomeViewModel", "Successfully saved location to profile: $location")
                     },
                     onFailure = { error ->
-                        println("LocationHomeViewModel: ✗ Failed to save location: ${error.message}")
-                        error.printStackTrace()
+                        Logger.e("LocationHomeViewModel", "Failed to save location: ${error.message}", error)
                     }
                 )
             } catch (e: Exception) {
-                println("LocationHomeViewModel: ✗ Exception saving location: ${e.message}")
-                e.printStackTrace()
+                Logger.e("LocationHomeViewModel", "Exception saving location: ${e.message}", e)
             }
         }
 
@@ -168,7 +224,7 @@ class LocationHomeViewModel : ViewModel() {
                 countryCode = countryCode ?: it.countryCode
             )
         }
-        println("LocationHomeViewModel: selectLocationWithCoordinates($city, $latitude, $longitude, isManual=$isManual)")
+        Logger.d("LocationHomeViewModel", "selectLocationWithCoordinates($city, $latitude, $longitude, isManual=$isManual)")
         loadDataForLocation(city, knownLatitude = latitude, knownLongitude = longitude)
     }
 
@@ -190,10 +246,10 @@ class LocationHomeViewModel : ViewModel() {
                             countryCode = loc.countryCode ?: it.countryCode
                         )
                     }
-                    println("LocationHomeViewModel: refreshUserLocation → ${loc.latitude}, ${loc.longitude}, country=${loc.countryCode}")
+                    Logger.d("LocationHomeViewModel", "refreshUserLocation -> ${loc.latitude}, ${loc.longitude}, country=${loc.countryCode}")
                 }
                 is LocationOperationResult.Error -> {
-                    println("LocationHomeViewModel: refreshUserLocation failed: ${result.reason}")
+                    Logger.w("LocationHomeViewModel", "refreshUserLocation failed: ${result.reason}")
                 }
             }
         }
@@ -305,7 +361,7 @@ class LocationHomeViewModel : ViewModel() {
                 ) ?: emptyList()
                 _uiState.update { it.copy(nearbyRestaurants = nearby) }
             } catch (e: Exception) {
-                println("LocationHomeViewModel: fetchNearbyForCuisine failed: ${e.message}")
+                Logger.e("LocationHomeViewModel", "fetchNearbyForCuisine failed: ${e.message}", e)
             }
         }
     }
@@ -343,19 +399,20 @@ class LocationHomeViewModel : ViewModel() {
                 val restaurantsResult = databaseRepository.getRestaurants()
                 val topDishesResult = databaseRepository.getTopRatedDishes(limit = 10)
                 var topDishes = topDishesResult.getOrElse {
-                    println("LocationHomeViewModel: Failed to load top dishes: ${it.message}")
+                    Logger.e("LocationHomeViewModel", "Failed to load top dishes: ${it.message}")
                     emptyList()
                 }
-                println("LocationHomeViewModel: loadAllRestaurants - topDishes=${topDishes.size}")
+                Logger.d("LocationHomeViewModel", "loadAllRestaurants - topDishes=${topDishes.size}")
 
                 restaurantsResult.onSuccess { restaurants ->
+                    val distinctRestaurants = restaurants.distinctRestaurants()
                     _uiState.update {
                         it.copy(
-                            allRestaurants = restaurants,
+                            allRestaurants = distinctRestaurants,
                             topDishes = topDishes,
                             isLoading = false,
                             isInitialDataLoaded = true,
-                            noRestaurantsFound = restaurants.isEmpty()
+                            noRestaurantsFound = distinctRestaurants.isEmpty()
                         )
                     }
                 }.onFailure {
@@ -370,7 +427,7 @@ class LocationHomeViewModel : ViewModel() {
     private fun loadDataForLocation(location: String, knownLatitude: Double? = null, knownLongitude: Double? = null) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, noRestaurantsFound = false) }
-            println("LocationHomeViewModel: Loading data for location: $location")
+            Logger.d("LocationHomeViewModel", "Loading data for location: $location")
 
             // Wait briefly for placesService to be injected if it hasn't been yet
             if (placesService == null) {
@@ -379,39 +436,42 @@ class LocationHomeViewModel : ViewModel() {
 
             try {
                 // Phase 1 (fast paint): DB data first
-                println("LocationHomeViewModel: Fetching restaurants from database for: $location")
+                Logger.d("LocationHomeViewModel", "Fetching restaurants from database for: $location")
                 val restaurantsResult = databaseRepository.getRestaurantsByCity(location)
                 var locationRestaurants: List<Restaurant> = emptyList()
 
                 restaurantsResult.fold(
                     onSuccess = { restaurants ->
-                        locationRestaurants = restaurants
-                        println("LocationHomeViewModel: Database returned ${restaurants.size} restaurants")
-                        val topRestaurants = restaurants
+                        val distinctRestaurants = restaurants.distinctRestaurants()
+                        locationRestaurants = distinctRestaurants
+                        Logger.d("LocationHomeViewModel", "Database returned ${restaurants.size} restaurants (${distinctRestaurants.size} distinct)")
+                        val topRestaurants = distinctRestaurants
+                            .distinctRestaurantNames()
                             .sortedByDescending { it.averageRating }
                             .take(5)
 
-                        val locationRestaurantIds = restaurants.map { it.id }
+                        val locationRestaurantIds = distinctRestaurants.map { it.id }
                         val topDishesResult = databaseRepository.getTopRatedDishesForRestaurants(
                             restaurantIds = locationRestaurantIds,
                             limit = 10
                         )
                         var topDishes = topDishesResult.getOrElse {
-                            println("LocationHomeViewModel: Failed to load top dishes: ${it.message}")
+                            Logger.e("LocationHomeViewModel", "Failed to load top dishes: ${it.message}")
                             emptyList()
                         }
                         // If still empty (DB has no dishes for this city), fall back to global dishes
                         if (topDishes.isEmpty()) {
-                            println("LocationHomeViewModel: Location dishes empty, falling back to global top dishes")
+                            Logger.d("LocationHomeViewModel", "Location dishes empty, falling back to global top dishes")
                             topDishes = databaseRepository.getTopRatedDishes(limit = 10).getOrElse { emptyList() }
                         }
 
                         val existingNearby = _uiState.value.nearbyRestaurants
                         val noResults = restaurants.isEmpty() && existingNearby.isEmpty()
 
-                        println(
-                            "LocationHomeViewModel: Fast phase done - topRestaurants=${topRestaurants.size}, " +
-                                "allRestaurants=${restaurants.size}, topDishes=${topDishes.size}"
+                        Logger.d(
+                            "LocationHomeViewModel",
+                            "Fast phase done - topRestaurants=${topRestaurants.size}, " +
+                                "allRestaurants=${distinctRestaurants.size}, topDishes=${topDishes.size}"
                         )
 
                         _uiState.update {
@@ -420,14 +480,14 @@ class LocationHomeViewModel : ViewModel() {
                                 isInitialDataLoaded = true,
                                 topRestaurants = topRestaurants,
                                 topDishes = topDishes,
-                                allRestaurants = restaurants,
+                                allRestaurants = distinctRestaurants,
                                 error = null,
                                 noRestaurantsFound = noResults
                             )
                         }
                     },
                     onFailure = { error ->
-                        println("LocationHomeViewModel: Database query failed: ${error.message}")
+                        Logger.e("LocationHomeViewModel", "Database query failed: ${error.message}")
                         _uiState.update {
                             it.copy(
                                 isLoading = false,
@@ -445,29 +505,29 @@ class LocationHomeViewModel : ViewModel() {
                 )
 
                 // Phase 2 (background enrich): geocode + nearby lookup
-                println("LocationHomeViewModel: Getting coordinates for: $location")
+                Logger.d("LocationHomeViewModel", "Getting coordinates for: $location")
                 var coordinates: LocationResult? = null
 
                 if (locationService != null) {
                     try {
                         val geocodedLocation = locationService?.getCoordinatesForCity(location)
                         if (geocodedLocation != null) {
-                            println("LocationHomeViewModel: Native geocoder success for $location: ${geocodedLocation.latitude}, ${geocodedLocation.longitude}")
+                            Logger.d("LocationHomeViewModel", "Native geocoder success for $location: ${geocodedLocation.latitude}, ${geocodedLocation.longitude}")
                             coordinates = geocodedLocation
                         } else {
-                            println("LocationHomeViewModel: Native geocoder returned null for $location")
+                            Logger.d("LocationHomeViewModel", "Native geocoder returned null for $location")
                         }
                     } catch (e: Exception) {
-                        println("LocationHomeViewModel: Native geocoder error for $location: ${e.message}")
+                        Logger.e("LocationHomeViewModel", "Native geocoder error for $location: ${e.message}", e)
                     }
                 }
 
                 if (coordinates == null && placesService != null) {
-                    println("LocationHomeViewModel: Trying Google Places geocoding for: $location")
+                    Logger.d("LocationHomeViewModel", "Trying Google Places geocoding for: $location")
                     try {
                         val geocodedCity = placesService?.geocodeCity(location)
                         if (geocodedCity != null) {
-                            println("LocationHomeViewModel: Google Places geocoded $location to: ${geocodedCity.latitude}, ${geocodedCity.longitude}")
+                            Logger.d("LocationHomeViewModel", "Google Places geocoded $location to: ${geocodedCity.latitude}, ${geocodedCity.longitude}")
                             coordinates = LocationResult(
                                 latitude = geocodedCity.latitude,
                                 longitude = geocodedCity.longitude,
@@ -475,30 +535,30 @@ class LocationHomeViewModel : ViewModel() {
                                 fullAddress = geocodedCity.formattedAddress
                             )
                         } else {
-                            println("LocationHomeViewModel: Google Places geocoding returned null for $location")
+                            Logger.d("LocationHomeViewModel", "Google Places geocoding returned null for $location")
                         }
                     } catch (e: Exception) {
-                        println("LocationHomeViewModel: Google Places geocoding error: ${e.message}")
+                        Logger.e("LocationHomeViewModel", "Google Places geocoding error: ${e.message}", e)
                     }
                 }
 
                 if (coordinates == null) {
                     val lat = knownLatitude ?: _uiState.value.currentLatitude
                     val lng = knownLongitude ?: _uiState.value.currentLongitude
-                    println("LocationHomeViewModel: Fallback check - coords: lat=$lat, lng=$lng (known=${knownLatitude != null})")
+                    Logger.d("LocationHomeViewModel", "Fallback check - coords: lat=$lat, lng=$lng (known=${knownLatitude != null})")
                     if (lat != null && lng != null && lat != 0.0 && lng != 0.0) {
-                        println("LocationHomeViewModel: ✓ Using fallback coordinates for $location: $lat, $lng")
+                        Logger.d("LocationHomeViewModel", "Using fallback coordinates for $location: $lat, $lng")
                         coordinates = LocationResult(
                             latitude = lat,
                             longitude = lng,
                             cityName = location
                         )
                     } else {
-                        println("LocationHomeViewModel: ✗ All geocoding methods failed for $location - no coordinates available")
+                        Logger.w("LocationHomeViewModel", "All geocoding methods failed for $location - no coordinates available")
                     }
                 }
 
-                println("LocationHomeViewModel: placesService=${placesService != null}, coordinates=${coordinates != null}")
+                Logger.d("LocationHomeViewModel", "placesService=${placesService != null}, coordinates=${coordinates != null}")
                 val nearbyRestaurants = if (placesService != null && coordinates != null) {
                     try {
                         _uiState.update {
@@ -507,24 +567,23 @@ class LocationHomeViewModel : ViewModel() {
                                 currentLongitude = coordinates.longitude
                             )
                         }
-                        println("LocationHomeViewModel: Calling Google Places API at: ${coordinates.latitude}, ${coordinates.longitude}")
+                        Logger.d("LocationHomeViewModel", "Calling Google Places API at: ${coordinates.latitude}, ${coordinates.longitude}")
                         val nearby = placesService?.findNearbyRestaurants(
                             latitude = coordinates.latitude,
                             longitude = coordinates.longitude,
                             radiusInMeters = 5000
                         ) ?: emptyList()
-                        println("LocationHomeViewModel: Google Places returned ${nearby.size} restaurants")
+                        Logger.d("LocationHomeViewModel", "Google Places returned ${nearby.size} restaurants")
                         nearby
                     } catch (e: Exception) {
-                        println("LocationHomeViewModel: Failed to load nearby restaurants: ${e.message}")
-                        e.printStackTrace()
+                        Logger.e("LocationHomeViewModel", "Failed to load nearby restaurants: ${e.message}", e)
                         emptyList()
                     }
                 } else {
                     if (coordinates == null) {
-                        println("LocationHomeViewModel: Skipping Google Places - geocoding failed for '$location'")
+                        Logger.d("LocationHomeViewModel", "Skipping Google Places - geocoding failed for '$location'")
                     } else {
-                        println("LocationHomeViewModel: Skipping Google Places - placesService is null")
+                        Logger.d("LocationHomeViewModel", "Skipping Google Places - placesService is null")
                     }
                     emptyList()
                 }
@@ -538,8 +597,7 @@ class LocationHomeViewModel : ViewModel() {
                     )
                 }
             } catch (e: Exception) {
-                println("LocationHomeViewModel: Critical error: ${e.message}")
-                e.printStackTrace()
+                Logger.e("LocationHomeViewModel", "Critical error: ${e.message}", e)
                 _uiState.update {
                     it.copy(
                         isLoading = false,
@@ -630,8 +688,7 @@ class GameViewModel : ViewModel() {
                     )
                 }
             } catch (e: Exception) {
-                println("GameViewModel: Error loading game data: ${e.message}")
-                e.printStackTrace()
+                Logger.e("GameViewModel", "Error loading game data: ${e.message}", e)
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
@@ -651,7 +708,7 @@ class GameViewModel : ViewModel() {
                 )
             }
         } catch (e: Exception) {
-            println("GameViewModel: Error loading leaderboard: ${e.message}")
+            Logger.e("GameViewModel", "Error loading leaderboard: ${e.message}", e)
             emptyList()
         }
     }
@@ -683,7 +740,7 @@ class GameViewModel : ViewModel() {
                 )
             }
         } catch (e: Exception) {
-            println("GameViewModel: Error loading achievements: ${e.message}")
+            Logger.e("GameViewModel", "Error loading achievements: ${e.message}", e)
             getDefaultAchievements()
         }
     }
@@ -760,12 +817,12 @@ class GameViewModel : ViewModel() {
             val result = challengeRepository.markChallengeCompleted(userId, challengeId, challenge.xpReward)
             result.fold(
                 onSuccess = {
-                    println("GameViewModel: ✓ Challenge completed: ${challenge.title}")
+                    Logger.d("GameViewModel", "Challenge completed: ${challenge.title}")
                     // Reload game data to refresh challenges and XP
                     loadGameData()
                 },
                 onFailure = { error ->
-                    println("GameViewModel: ✗ Failed to complete challenge: ${error.message}")
+                    Logger.e("GameViewModel", "Failed to complete challenge: ${error.message}")
                 }
             )
         }

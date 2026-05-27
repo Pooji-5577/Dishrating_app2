@@ -78,6 +78,8 @@ import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.User
 import com.example.smackcheck2.ui.components.ReviewPostCard
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.LocalThemeState
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
@@ -90,13 +92,13 @@ import io.kamel.image.asyncPainterResource
 private val ProfileBg       = Color(0xFFF6F6F6)
 private val CardWhite       = Color(0xFFFFFFFF)
 private val DeepMaroon      = Color(0xFF3B1011)
-private val WarmMaroon      = Color(0xFF642223)
-private val CrimsonRed      = Color(0xFF9B2335)
+private val WarmMaroon      = BrandRedDark
+private val CrimsonRed      = BrandRed
 private val LightBlush      = Color(0xFFFDE8E8)
 private val MutedGrey       = Color(0xFF767777)
 private val DividerGrey     = Color(0xFFEAE0D8)
-private val StreakRed       = Color(0xFF9B2335)
-private const val DefaultBioText = "Just getting started on my food journey.\nTrying every dish I can find — one plate at a time."
+private val StreakRed       = BrandRed
+private const val DefaultBioText = "Add your bio from Edit Profile."
 
 // ── Level title mapping ───────────────────────────────────────────────────────
 private fun levelTitle(level: Int): String = when {
@@ -269,7 +271,7 @@ fun DarkProfileScreen(
                 // Title badge
                 Box(
                     modifier = Modifier
-                        .background(Color(0xFF642223).copy(alpha = 0.20f), RoundedCornerShape(20.dp))
+                        .background(BrandRedDark.copy(alpha = 0.20f), RoundedCornerShape(20.dp))
                         .padding(horizontal = 14.dp, vertical = 5.dp)
                 ) {
                     Text(
@@ -281,7 +283,7 @@ fun DarkProfileScreen(
                 Spacer(modifier = Modifier.height(10.dp))
 
                 // Bio
-                val bioText = user?.bio?.takeIf { it.isNotBlank() } ?: DefaultBioText
+                val bioText = user?.bio?.trim().takeIf { !it.isNullOrEmpty() } ?: DefaultBioText
                 Text(
                     text = "\u201C$bioText\u201D",
                     color = Color(0xFF171717), fontSize = 18.sp, textAlign = TextAlign.Center,
@@ -533,7 +535,7 @@ fun DarkProfileScreen(
             } else {
                 // 2-column grid of dish images
                 val chunked = userRatings.chunked(2)
-                items(chunked) { pair ->
+                items(chunked, key = { row -> row.first().id }) { pair ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -600,7 +602,7 @@ fun DarkProfileScreen(
                 }
             } else {
                 val chunked = savedItems.chunked(2)
-                items(chunked) { pair ->
+                items(chunked, key = { row -> row.first().id }) { pair ->
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)

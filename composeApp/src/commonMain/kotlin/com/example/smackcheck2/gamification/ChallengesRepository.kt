@@ -2,6 +2,7 @@ package com.example.smackcheck2.gamification
 
 import com.example.smackcheck2.data.SupabaseClient
 import io.github.jan.supabase.postgrest.from
+import com.example.smackcheck2.util.Logger
 
 /**
  * Repository for managing challenge definitions and per-user challenge progress.
@@ -24,7 +25,7 @@ object ChallengesRepository {
                 .select { filter { eq("is_active", true) } }
                 .decodeList<ChallengeRow>()
         } catch (e: Exception) {
-            println("ChallengesRepository.fetchChallenges error: ${e.message}")
+            Logger.e("ChallengesRepository", "ChallengesRepository.fetchChallenges error: ${e.message}", e)
             emptyList()
         }
     }
@@ -73,7 +74,7 @@ object ChallengesRepository {
                 }
                 .decodeSingleOrNull<UserChallengeRow>()
         } catch (e: Exception) {
-            println("ChallengesRepository.getOrCreateProgress error: ${e.message}")
+            Logger.e("ChallengesRepository", "ChallengesRepository.getOrCreateProgress error: ${e.message}", e)
             null
         }
     }
@@ -166,7 +167,7 @@ object ChallengesRepository {
                 ) { filter { eq("id", userId) } }
             }
         } catch (e: Exception) {
-            println("ChallengesRepository.incrementChallengeProgress error: ${e.message}")
+            Logger.e("ChallengesRepository", "ChallengesRepository.incrementChallengeProgress error: ${e.message}", e)
         }
 
         return bonusXp
@@ -192,7 +193,7 @@ object ChallengesRepository {
                 challenge to progress
             }
         } catch (e: Exception) {
-            println("ChallengesRepository.fetchCurrentProgress error: ${e.message}")
+            Logger.e("ChallengesRepository", "ChallengesRepository.fetchCurrentProgress error: ${e.message}", e)
             emptyList()
         }
     }

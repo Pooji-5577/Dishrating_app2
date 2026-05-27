@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Instant
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -34,19 +38,40 @@ class NotificationService(
     private val client: io.github.jan.supabase.SupabaseClient = SupabaseClientProvider.client
 ) {
 
-    private val postgrest = client.postgrest
+    private val postgrest
+        get() = client.postgrest
     private val realtime = client.realtime
     private var notificationChannel: RealtimeChannel? = null
 
-    // ─── Generic Insert ──────────────────────────────────────────
+    // ─── Generic Insert (via SECURITY DEFINER RPC) ────────────────
 
     private suspend fun insertNotification(payload: NotificationInsert): TriggerResult {
         return try {
-            val result = postgrest["notifications"]
-                .insert(payload) { select() }
-                .decodeSingleOrNull<NotificationRecord>()
+            val dataJsonb = if (payload.data.isNotEmpty()) {
+                kotlinx.serialization.json.Json.parseToJsonElement(
+                    kotlinx.serialization.json.Json.encodeToString(
+                        kotlinx.serialization.serializer<Map<String, String>>(),
+                        payload.data
+                    )
+                )
+            } else {
+                kotlinx.serialization.json.JsonObject(emptyMap())
+            }
 
-            TriggerResult(success = true, notificationId = result?.id)
+            val result = postgrest.rpc(
+                function = "create_notification",
+                parameters = JsonObject(mapOf(
+                    "p_user_id" to JsonPrimitive(payload.userId),
+                    "p_type" to JsonPrimitive(payload.eventType),
+                    "p_title" to JsonPrimitive(payload.title),
+                    "p_body" to JsonPrimitive(payload.body),
+                    "p_data" to dataJsonb
+                ))
+            ).decodeAs<JsonObject>()
+
+            val success = result["success"]?.jsonPrimitive?.boolean ?: false
+            val id = result["id"]?.jsonPrimitive?.contentOrNull
+            TriggerResult(success = success, notificationId = id)
         } catch (e: Exception) {
             val message = e.message ?: "Unknown error"
             if (message.contains("23505") || message.contains("duplicate")) {

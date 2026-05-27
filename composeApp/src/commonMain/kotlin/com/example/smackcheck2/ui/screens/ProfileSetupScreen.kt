@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.User
 import com.example.smackcheck2.platform.LocalImagePicker
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.TextFieldShape
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.ProfileSetupViewModel
@@ -45,7 +46,7 @@ fun ProfileSetupScreen(
     val uiState by viewModel.uiState.collectAsState()
     val colors = appColors()
     val bg = Color(0xFFF6F6F6)
-    val accent = Color(0xFF642223)
+    val accent = BrandRedDark
     val textPrimary = Color(0xFF1E1E1E)
     val textSecondary = Color(0xFF6F6F6F)
     val fieldBorder = Color(0xFFA79A94)

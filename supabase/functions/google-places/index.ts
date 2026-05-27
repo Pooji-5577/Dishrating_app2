@@ -1,6 +1,7 @@
 // Supabase Edge Function for Google Places API proxy
 // Keeps the GOOGLE_PLACES_API_KEY server-side, away from client apps
 import "@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -152,9 +153,7 @@ Deno.serve(async (req) => {
       throw new Error('GOOGLE_PLACES_API_KEY not configured on server')
     }
 
-    // ── GET request: photo proxy ──
-    // Allows image loaders (Kamel, Coil, etc.) to load photos as a simple URL.
-    // Usage: GET /google-places?photo_ref=XXXX&maxwidth=400
+    // ── GET request: photo proxy (no auth — URLs are embedded in UI) ──
     if (req.method === 'GET') {
       const url = new URL(req.url)
       const photoRef = url.searchParams.get('photo_ref')
@@ -170,7 +169,26 @@ Deno.serve(async (req) => {
       )
     }
 
-    // ── POST request: existing JSON API ──
+    // ── POST request: verify caller is authenticated ──
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ results: [], error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!
+    )
+    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ results: [], error: 'Invalid or expired token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const body: PlacesRequest = await req.json()
 
     if (body.action === 'nearby-search') {

@@ -6,6 +6,7 @@ import io.ktor.client.call.*
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import com.example.smackcheck2.util.Logger
 
 /**
  * Data class representing a nearby restaurant
@@ -84,7 +85,7 @@ class PlacesService {
 
             if (response.status.value != 200) {
                 val errorText = response.body<String>()
-                println("PlacesService: Edge Function error (${response.status.value}): $errorText")
+                Logger.e("PlacesService", "PlacesService: Edge Function error (${response.status.value}): $errorText")
                 return emptyList()
             }
 
@@ -92,7 +93,7 @@ class PlacesService {
             val placesResponse = json.decodeFromString<PlacesEdgeResponse>(responseText)
 
             if (!placesResponse.error.isNullOrBlank()) {
-                println("PlacesService: Server error: ${placesResponse.error}")
+                Logger.e("PlacesService", "PlacesService: Server error: ${placesResponse.error}")
                 return emptyList()
             }
 
@@ -107,7 +108,7 @@ class PlacesService {
                 results
             }
         } catch (e: Exception) {
-            println("PlacesService: Exception: ${e::class.simpleName} - ${e.message}")
+            Logger.e("PlacesService", "PlacesService: Exception: ${e::class.simpleName} - ${e.message}", e)
             emptyList()
         }
     }
@@ -130,7 +131,7 @@ class PlacesService {
 
             if (response.status.value != 200) {
                 val errorText = response.body<String>()
-                println("PlacesService: Edge Function error (${response.status.value}): $errorText")
+                Logger.e("PlacesService", "PlacesService: Edge Function error (${response.status.value}): $errorText")
                 return null
             }
 
@@ -138,13 +139,13 @@ class PlacesService {
             val detailsResponse = json.decodeFromString<PlaceDetailsEdgeResponse>(responseText)
 
             if (!detailsResponse.error.isNullOrBlank()) {
-                println("PlacesService: Server error: ${detailsResponse.error}")
+                Logger.e("PlacesService", "PlacesService: Server error: ${detailsResponse.error}")
                 return null
             }
 
             detailsResponse.result?.toNearbyRestaurant()
         } catch (e: Exception) {
-            println("PlacesService: Exception: ${e::class.simpleName} - ${e.message}")
+            Logger.e("PlacesService", "PlacesService: Exception: ${e::class.simpleName} - ${e.message}", e)
             null
         }
     }
@@ -158,7 +159,7 @@ class PlacesService {
      */
     suspend fun geocodeCity(cityName: String): GeocodedCity? {
         return try {
-            println("PlacesService: Geocoding city: $cityName")
+            Logger.d("PlacesService", "PlacesService: Geocoding city: $cityName")
             
             val requestBody = GeocodeCityRequest(
                 action = "geocode-city",
@@ -172,7 +173,7 @@ class PlacesService {
 
             if (response.status.value != 200) {
                 val errorText = response.body<String>()
-                println("PlacesService: Geocode error (${response.status.value}): $errorText")
+                Logger.e("PlacesService", "PlacesService: Geocode error (${response.status.value}): $errorText")
                 return null
             }
 
@@ -180,12 +181,12 @@ class PlacesService {
             val geocodeResponse = json.decodeFromString<GeocodeCityResponse>(responseText)
 
             if (!geocodeResponse.error.isNullOrBlank()) {
-                println("PlacesService: Geocode server error: ${geocodeResponse.error}")
+                Logger.e("PlacesService", "PlacesService: Geocode server error: ${geocodeResponse.error}")
                 return null
             }
 
             if (geocodeResponse.latitude == null || geocodeResponse.longitude == null) {
-                println("PlacesService: No geocode results for: $cityName")
+                Logger.d("PlacesService", "PlacesService: No geocode results for: $cityName")
                 return null
             }
 
@@ -194,10 +195,10 @@ class PlacesService {
                 longitude = geocodeResponse.longitude,
                 formattedAddress = geocodeResponse.formattedAddress
             )
-            println("PlacesService: Geocoded $cityName to: ${result.latitude}, ${result.longitude}")
+            Logger.d("PlacesService", "PlacesService: Geocoded $cityName to: ${result.latitude}, ${result.longitude}")
             result
         } catch (e: Exception) {
-            println("PlacesService: Geocode exception: ${e::class.simpleName} - ${e.message}")
+            Logger.e("PlacesService", "PlacesService: Geocode exception: ${e::class.simpleName} - ${e.message}", e)
             null
         }
     }
@@ -216,7 +217,7 @@ class PlacesService {
         radiusInMeters: Int = 10000
     ): List<NearbyRestaurant> {
         return try {
-            println("PlacesService: Text search for: $query (lat=$latitude, lng=$longitude)")
+            Logger.d("PlacesService", "PlacesService: Text search for: $query (lat=$latitude, lng=$longitude)")
 
             val requestBody = TextSearchRequest(
                 action = "text-search",
@@ -233,7 +234,7 @@ class PlacesService {
 
             if (response.status.value != 200) {
                 val errorText = response.body<String>()
-                println("PlacesService: Text search error (${response.status.value}): $errorText")
+                Logger.e("PlacesService", "PlacesService: Text search error (${response.status.value}): $errorText")
                 return emptyList()
             }
 
@@ -241,15 +242,15 @@ class PlacesService {
             val placesResponse = json.decodeFromString<PlacesEdgeResponse>(responseText)
 
             if (!placesResponse.error.isNullOrBlank()) {
-                println("PlacesService: Text search server error: ${placesResponse.error}")
+                Logger.e("PlacesService", "PlacesService: Text search server error: ${placesResponse.error}")
                 return emptyList()
             }
 
             val results = placesResponse.results.map { it.toNearbyRestaurant() }
-            println("PlacesService: Text search returned ${results.size} results")
+            Logger.d("PlacesService", "PlacesService: Text search returned ${results.size} results")
             results
         } catch (e: Exception) {
-            println("PlacesService: Text search exception: ${e::class.simpleName} - ${e.message}")
+            Logger.e("PlacesService", "PlacesService: Text search exception: ${e::class.simpleName} - ${e.message}", e)
             emptyList()
         }
     }

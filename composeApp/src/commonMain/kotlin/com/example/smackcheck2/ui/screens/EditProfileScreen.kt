@@ -58,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.platform.LocalImagePicker
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.EditProfileViewModel
@@ -70,10 +72,10 @@ private val FieldCardColor = Color.White
 private val SectionLabelColor = Color(0xFF2D2F2F)
 private val FieldTextColor = Color(0xFF333333)
 private val FieldIconColor = Color(0xFF999999)
-private val AccentMaroon = Color(0xFF642223)
-private val CharCountColor = Color(0xFF642223)
-private val CameraBadgeBg = Color(0xFF642223)
-private val GradientStart = Color(0xFF9B2335)
+private val AccentMaroon = BrandRedDark
+private val CharCountColor = BrandRedDark
+private val CameraBadgeBg = BrandRedDark
+private val GradientStart = BrandRed
 private val GradientEnd = Color(0xFFBE3A50)
 
 @Composable

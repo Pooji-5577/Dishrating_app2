@@ -131,6 +131,7 @@ import com.example.smackcheck2.model.UserProfileUiState
 import io.github.jan.supabase.auth.auth
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
+import com.example.smackcheck2.util.Logger
 
 /**
  * Navigation state holder for managing current screen with Compose state
@@ -880,7 +881,23 @@ private fun NavHostContent(
                 onCameraClick = { navigationState.navigateTo(Screen.DarkDishCapture) },
                 onNavExploreClick = { navigationState.navigateToMainTab(Screen.SocialFeed) },
                 onProfileClick = { navigationState.navigateToMainTab(Screen.Profile) },
-                onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) }
+                onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) },
+                onUserSearchChange = { query -> socialFeedViewModel.searchUserSuggestions(query) },
+                onUserSearchSubmit = { raw ->
+                    socialFeedViewModel.submitUserSearch(raw) { userId ->
+                        navigationState.navigateToWithArgs(
+                            Screen.UserProfile,
+                            "userId" to userId
+                        )
+                    }
+                },
+                onUserSuggestionClick = { user ->
+                    socialFeedViewModel.clearUserSearchSuggestions()
+                    navigationState.navigateToWithArgs(
+                        Screen.UserProfile,
+                        "userId" to user.id
+                    )
+                }
             )
         }
 
@@ -942,6 +959,12 @@ private fun NavHostContent(
                 onNavCamera = { navigationState.navigateTo(Screen.DarkDishCapture) },
                 onNavExplore = { navigationState.navigateToMainTab(Screen.SocialFeed) },
                 onNavProfile = { navigationState.navigateToMainTab(Screen.Profile) },
+                onDishClick = { dishId ->
+                    navigationState.navigateToWithArgs(
+                        Screen.DishDetail,
+                        "dishId" to dishId
+                    )
+                },
                 currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol
             )
         }
@@ -985,7 +1008,7 @@ private fun NavHostContent(
 
             RequestLocationPermission(
                 onPermissionResult = { granted ->
-                    println("NavHost: LocationSelection - permission result: $granted")
+                    Logger.d("NavHost", "NavHost: LocationSelection - permission result: $granted")
                     if (granted) {
                         // Permission granted, now get the location
                         locationHomeViewModel.useCurrentLocation()
@@ -998,11 +1021,11 @@ private fun NavHostContent(
                     locationError = uiState.locationError,
                     searchResults = uiState.searchResults,
                     onNavigateBack = { 
-                        println("NavHost: LocationSelection - navigating back")
+                        Logger.d("NavHost", "NavHost: LocationSelection - navigating back")
                         navigationState.navigateBack() 
                     },
                     onLocationSelected = { location, lat, lng ->
-                        println("NavHost: LocationSelection - location selected: $location ($lat, $lng)")
+                        Logger.d("NavHost", "NavHost: LocationSelection - location selected: $location ($lat, $lng)")
                         if (lat != 0.0 && lng != 0.0) {
                             locationHomeViewModel.selectLocationWithCoordinates(location, lat, lng, isManual = true)
                         } else {
@@ -1011,13 +1034,13 @@ private fun NavHostContent(
                         navigationState.navigateBack()
                     },
                     onUseCurrentLocation = {
-                        println("NavHost: LocationSelection - use current location clicked, requesting permission")
+                        Logger.d("NavHost", "NavHost: LocationSelection - use current location clicked, requesting permission")
                         // First request permission - if already granted, callback fires immediately
                         // If not granted, popup shows and callback fires after user responds
                         requestPermission()
                     },
                     onSearchLocation = { query ->
-                        println("NavHost: LocationSelection - searching: $query")
+                        Logger.d("NavHost", "NavHost: LocationSelection - searching: $query")
                         locationHomeViewModel.searchLocations(query)
                     },
                     onClearError = {
@@ -1177,7 +1200,7 @@ private fun NavHostContent(
 
             RequestLocationPermission(
                 onPermissionResult = { granted ->
-                    println("NavHost: DarkHome - permission result: $granted")
+                    Logger.d("NavHost", "NavHost: DarkHome - permission result: $granted")
                     if (granted) {
                         // Permission granted, auto-detect location
                         locationHomeViewModel.useCurrentLocation()
@@ -1189,7 +1212,7 @@ private fun NavHostContent(
                     val manuallySelected = locationHomeViewModel.uiState.value.isManuallySelected
                     if (!hasRequestedPermission && !manuallySelected) {
                         hasRequestedPermission = true
-                        println("NavHost: DarkHome - auto-requesting location permission")
+                        Logger.d("NavHost", "NavHost: DarkHome - auto-requesting location permission")
                         // Small delay to let the UI settle before showing permission dialog
                         kotlinx.coroutines.delay(500)
                         requestPermission()
@@ -1222,8 +1245,9 @@ private fun NavHostContent(
                     currentLatitude = uiState.userLatitude,
                     currentLongitude = uiState.userLongitude,
                     hasUnreadNotifications = notifUnreadCount > 0,
+                    savedRestaurantIds = uiState.savedRestaurantIds,
                     onLocationClick = {
-                        println("NavHost: Location clicked, navigating to LocationSelection")
+                        Logger.d("NavHost", "NavHost: Location clicked, navigating to LocationSelection")
                         navigationState.navigateTo(Screen.LocationSelection)
                     },
                     onDishClick = { dishId ->
@@ -1278,7 +1302,10 @@ private fun NavHostContent(
                     },
                     onSocialFeedClick = { navigationState.navigateToMainTab(Screen.SocialFeed) },
                     onNotificationsClick = { navigationState.navigateTo(Screen.NotificationsList) },
-                    onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) }
+                    onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) },
+                    onToggleRestaurantSaved = { restaurantId ->
+                        locationHomeViewModel.toggleRestaurantSaved(restaurantId)
+                    }
                 )
             }
         }
@@ -1460,40 +1487,40 @@ private fun NavHostContent(
                 if (!needAllFetch && !needNearbyFetch) return@LaunchedEffect
 
                 isLoadingRestaurants = true
-                println("DarkDishRating: Loading restaurants...")
+                Logger.d("NavHost", "DarkDishRating: Loading restaurants...")
 
                 // Load all restaurants from database
                 if (needAllFetch) {
                     val allResult = databaseRepository.getRestaurants()
                     allResult.onSuccess { restaurants ->
                         allRestaurants = restaurants
-                        println("DarkDishRating: Loaded ${restaurants.size} total restaurants from database")
+                        Logger.d("NavHost", "DarkDishRating: Loaded ${restaurants.size} total restaurants from database")
                     }.onFailure { error ->
-                        println("DarkDishRating: Failed to load restaurants: ${error.message}")
+                        Logger.e("NavHost", "DarkDishRating: Failed to load restaurants: ${error.message}", error)
                     }
                 }
 
                 // Load nearby restaurants based on current selected city from database
                 val currentCity = locationUiState.selectedLocation
-                println("DarkDishRating: Current location = $currentCity")
+                Logger.d("NavHost", "DarkDishRating: Current location = $currentCity")
 
                 if (needNearbyFetch && !currentCity.isNullOrBlank()) {
-                    println("DarkDishRating: Loading nearby restaurants for: $currentCity")
+                    Logger.d("NavHost", "DarkDishRating: Loading nearby restaurants for: $currentCity")
                     val nearbyResult = databaseRepository.getRestaurantsByCity(currentCity)
                     nearbyResult.onSuccess { restaurants ->
                         // Combine database restaurants with Google Places restaurants
                         val combinedNearby = (restaurants + placesNearbyAsRestaurants).distinctBy { it.id }
                         nearbyRestaurants = combinedNearby
-                        println("DarkDishRating: Loaded ${restaurants.size} database + ${placesNearbyAsRestaurants.size} Places API = ${combinedNearby.size} total nearby restaurants")
+                        Logger.d("NavHost", "DarkDishRating: Loaded ${restaurants.size} database + ${placesNearbyAsRestaurants.size} Places API = ${combinedNearby.size} total nearby restaurants")
                     }.onFailure { error ->
                         // If database fails, still use Google Places restaurants
                         nearbyRestaurants = placesNearbyAsRestaurants
-                        println("DarkDishRating: Database failed (${error.message}), using ${placesNearbyAsRestaurants.size} Places API restaurants")
+                        Logger.e("NavHost", "DarkDishRating: Database failed (${error.message}), using ${placesNearbyAsRestaurants.size} Places API restaurants", error)
                     }
                 } else if (needNearbyFetch) {
                     // No location selected - use Google Places restaurants if available
                     nearbyRestaurants = placesNearbyAsRestaurants
-                    println("DarkDishRating: No location selected, using ${placesNearbyAsRestaurants.size} Places API restaurants")
+                    Logger.d("NavHost", "DarkDishRating: No location selected, using ${placesNearbyAsRestaurants.size} Places API restaurants")
                 }
 
                 isLoadingRestaurants = false
@@ -1519,12 +1546,12 @@ private fun NavHostContent(
                 }
                 
                 if (!currentCity.isNullOrBlank()) {
-                    println("DarkDishRating: Location/Places data changed to $currentCity, reloading...")
+                    Logger.d("NavHost", "DarkDishRating: Location/Places data changed to $currentCity, reloading...")
                     val nearbyResult = databaseRepository.getRestaurantsByCity(currentCity)
                     nearbyResult.onSuccess { restaurants ->
                         val combinedNearby = (restaurants + updatedPlacesRestaurants).distinctBy { it.id }
                         nearbyRestaurants = combinedNearby
-                        println("DarkDishRating: Updated to ${combinedNearby.size} total nearby restaurants")
+                        Logger.d("NavHost", "DarkDishRating: Updated to ${combinedNearby.size} total nearby restaurants")
                     }.onFailure {
                         nearbyRestaurants = updatedPlacesRestaurants
                     }
@@ -1547,7 +1574,7 @@ private fun NavHostContent(
                         searchQuery
                     }
                     
-                    println("DarkDishRating: Searching for restaurants: $fullQuery")
+                    Logger.d("NavHost", "DarkDishRating: Searching for restaurants: $fullQuery")
                     val searchResults = placesService.searchRestaurantsByText(fullQuery)
                     
                     // Convert NearbyRestaurant to Restaurant
@@ -1564,7 +1591,7 @@ private fun NavHostContent(
                             longitude = nearby.longitude
                         )
                     }
-                    println("DarkDishRating: Found ${searchedRestaurants.size} restaurants from text search")
+                    Logger.d("NavHost", "DarkDishRating: Found ${searchedRestaurants.size} restaurants from text search")
                     isSearchingRestaurants = false
                 } else {
                     searchedRestaurants = emptyList()
@@ -1773,6 +1800,23 @@ private fun NavHostContent(
                         text = "Check out ${item.dishName} at ${item.restaurantName} - rated ${item.rating}/5 on SmackCheck!",
                         title = "Share Dish Rating"
                     )
+                },
+                onDishClick = { item ->
+                    val navDishId = item.dishId.takeIf { it.isNotBlank() } ?: item.id
+                    navigationState.navigateToWithArgs(
+                        Screen.DishDetail,
+                        "dishId" to navDishId
+                    )
+                },
+                onBookmarkClick = { item ->
+                    kotlinx.coroutines.MainScope().launch {
+                        val isNowBookmarked = preferencesRepository.toggleBookmark(item.id)
+                        userProfileState.value = userProfileState.value.copy(
+                            ratings = userProfileState.value.ratings.map { rating ->
+                                if (rating.id == item.id) rating.copy(isBookmarked = isNowBookmarked) else rating
+                            }
+                        )
+                    }
                 }
             )
         }

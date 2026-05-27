@@ -76,6 +76,8 @@ import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.gamification.GamificationViewModel
 import com.example.smackcheck2.model.Badge
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.UserProgressViewModel
 import io.kamel.image.KamelImage
@@ -85,8 +87,8 @@ import io.kamel.image.asyncPainterResource
 private val PBg         = Color(0xFFF6F6F6)
 private val PCardWhite  = Color(0xFFFFFFFF)
 private val PDeepMaroon = Color(0xFF3B1011)
-private val PWarmMaroon = Color(0xFF642223)
-private val PCrimsonRed = Color(0xFF9B2335)
+private val PWarmMaroon = BrandRedDark
+private val PCrimsonRed = BrandRed
 private val PLightBlush = Color(0xFFFDE8E8)
 private val PMutedGrey  = Color(0xFF767777)
 private val PDivider    = Color(0xFFEAE0D8)

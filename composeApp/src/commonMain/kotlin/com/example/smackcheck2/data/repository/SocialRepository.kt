@@ -4,18 +4,33 @@ import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.dto.*
 import com.example.smackcheck2.model.*
 import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.postgrest.query.Order
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
+import com.example.smackcheck2.util.Logger
 
 class SocialRepository(
     private val feedAssembler: FeedAssembler = FeedAssembler()
 ) {
 
-    private val client = SupabaseClientProvider.client
-    private val postgrest = client.postgrest
+    private val client get() = SupabaseClientProvider.client
+    private val postgrest get() = client.postgrest
 
     // ==================== FOLLOW / UNFOLLOW ====================
+
+    @Serializable
+    private data class PublicUserProfileDto(
+        val id: String,
+        val name: String = "",
+        val username: String? = null,
+        @SerialName("profile_photo_url")
+        val profilePhotoUrl: String? = null,
+        val bio: String? = null,
+        val location: String? = null
+    )
 
     suspend fun followUser(currentUserId: String, targetUserId: String): Result<Unit> {
         return try {
@@ -101,6 +116,77 @@ class SocialRepository(
                 }
             }
             Result.success(users)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Find a user id by username/handle (supports input with or without @).
+     */
+    suspend fun findUserIdByUsername(usernameOrHandle: String): Result<String?> {
+        return try {
+            val normalized = usernameOrHandle.trim().removePrefix("@")
+            if (normalized.isBlank()) return Result.success(null)
+
+            val profile = postgrest["profiles"]
+                .select(columns = Columns.list("id")) {
+                    filter { ilike("username", normalized) }
+                    limit(1)
+                }
+                .decodeSingleOrNull<Map<String, String>>()
+
+            Result.success(profile?.get("id"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Suggest public profiles by username prefix. Keeps profile search details
+     * behind this module so UI callers do not need to know Supabase query shape.
+     */
+    suspend fun searchUserSuggestions(
+        usernameOrHandle: String,
+        currentUserId: String? = null,
+        limit: Int = 6
+    ): Result<List<UserSummary>> {
+        return try {
+            val normalized = usernameOrHandle
+                .trim()
+                .removePrefix("@")
+                .lowercase()
+                .filter { it.isLetterOrDigit() || it == '_' }
+                .take(20)
+
+            if (normalized.length < 2) return Result.success(emptyList())
+
+            val profiles = postgrest["profiles"]
+                .select(columns = Columns.list("id", "name", "username", "profile_photo_url", "bio", "location")) {
+                    filter {
+                        ilike("username", "$normalized%")
+                    }
+                    order("username", Order.ASCENDING)
+                    limit(limit.toLong())
+                }
+                .decodeList<PublicUserProfileDto>()
+
+            Result.success(
+                profiles
+                    .asSequence()
+                    .filter { profile -> profile.id != currentUserId }
+                    .map { profile ->
+                        UserSummary(
+                            id = profile.id,
+                            name = profile.name,
+                            username = profile.username,
+                            profilePhotoUrl = profile.profilePhotoUrl,
+                            bio = profile.bio,
+                            location = profile.location
+                        )
+                    }
+                    .toList()
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -276,7 +362,7 @@ class SocialRepository(
                 }
                 .decodeList<RatingDto>()
 
-            println("SocialRepository[Nearby]: user=($userLat,$userLon) city=$userCity radius=${radiusKm}km candidates=${candidateRatings.size}")
+            Logger.d("SocialRepository", "SocialRepository[Nearby]: user=($userLat,$userLon) city=$userCity radius=${radiusKm}km candidates=${candidateRatings.size}")
             if (candidateRatings.isEmpty()) return Result.success(emptyList())
 
             val restaurantIds = candidateRatings
@@ -320,7 +406,7 @@ class SocialRepository(
                 false
             }.take(limit)
 
-            println("SocialRepository[Nearby]: matchedCoords=$matchedByCoords matchedCity=$matchedByCity skipped=$skippedNoData returning=${nearbyRatings.size}")
+            Logger.d("SocialRepository", "SocialRepository[Nearby]: matchedCoords=$matchedByCoords matchedCity=$matchedByCity skipped=$skippedNoData returning=${nearbyRatings.size}")
             if (nearbyRatings.isEmpty()) return Result.success(emptyList())
 
             val feedItems = feedAssembler.mapRatingsToFeedItems(nearbyRatings, currentUserId)
@@ -544,15 +630,17 @@ class SocialRepository(
         data: String = "{}"
     ): Result<Unit> {
         return try {
-            val jsonData = kotlinx.serialization.json.Json.parseToJsonElement(data)
-            val dto = NotificationDto(
-                userId = userId,
-                type = type,
-                title = title,
-                body = body,
-                data = jsonData
+            val dataJsonb = kotlinx.serialization.json.Json.parseToJsonElement(data)
+            postgrest.rpc(
+                function = "create_notification",
+                parameters = kotlinx.serialization.json.JsonObject(mapOf(
+                    "p_user_id" to kotlinx.serialization.json.JsonPrimitive(userId),
+                    "p_type" to kotlinx.serialization.json.JsonPrimitive(type),
+                    "p_title" to kotlinx.serialization.json.JsonPrimitive(title),
+                    "p_body" to kotlinx.serialization.json.JsonPrimitive(body),
+                    "p_data" to dataJsonb
+                ))
             )
-            postgrest["notifications"].insert(dto)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

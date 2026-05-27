@@ -54,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.RegisterViewModel
@@ -75,7 +76,7 @@ fun RegisterScreen(
 
     val pageBackground = Color(0xFF2B1818)
     val topBackground = Color(0xFF732529)
-    val buttonColor = Color(0xFF7A2428)
+    val buttonColor = BrandRed
     val circleColor = Color(0xFFD4D4D4)
     val fieldBackground = Color(0xFF3D1F1F)
 
@@ -405,7 +406,7 @@ private fun darkRegisterFieldColors(containerColor: Color) = TextFieldDefaults.c
     focusedIndicatorColor = Color.Transparent,
     unfocusedIndicatorColor = Color.Transparent,
     errorIndicatorColor = Color.Transparent,
-    cursorColor = Color(0xFF7A2428),
+    cursorColor = BrandRed,
     focusedPlaceholderColor = Color.White.copy(alpha = 0.4f),
     unfocusedPlaceholderColor = Color.White.copy(alpha = 0.4f)
 )

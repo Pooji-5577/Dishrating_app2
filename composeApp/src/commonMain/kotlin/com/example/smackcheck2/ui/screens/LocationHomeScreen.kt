@@ -180,7 +180,7 @@ fun LocationHomeScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.topRestaurants) { restaurant ->
+                        items(uiState.topRestaurants, key = { it.id }) { restaurant ->
                             TopRestaurantCard(
                                 restaurant = restaurant,
                                 photoViewModel = photoViewModel,
@@ -206,7 +206,7 @@ fun LocationHomeScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.topDishes) { dish ->
+                        items(uiState.topDishes, key = { it.id }) { dish ->
                             TopDishCard(dish = dish)
                         }
                     }

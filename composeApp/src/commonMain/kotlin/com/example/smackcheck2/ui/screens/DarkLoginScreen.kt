@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -43,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -59,12 +62,15 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.theme.BrandRed
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.LoginViewModel
 import org.jetbrains.compose.resources.painterResource
 import smackcheck.composeapp.generated.resources.Res
 import smackcheck.composeapp.generated.resources.login_food_pattern
+import smackcheck.composeapp.generated.resources.smackcheck_logo_image_transparent
 
 @Composable
 fun DarkLoginScreen(
@@ -87,8 +93,8 @@ fun DarkLoginScreen(
     }
 
     val pageBackground = Color(0xFF2B1818)
-    val topBackground = Color(0xFF732529)
-    val buttonColor = Color(0xFF7A2428)
+    val topBackground = BrandRedDark
+    val buttonColor = BrandRed
     val circleColor = Color(0xFFD4D4D4)
     val fieldBackground = Color(0xFF3D1F1F)
 
@@ -125,26 +131,31 @@ fun DarkLoginScreen(
             )
         }
 
-        // Gray placeholder circle straddling the curve
+        // Circular app logo straddling the curve
         Box(
             modifier = Modifier
                 .size(150.dp)
                 .align(Alignment.TopCenter)
                 .offset(y = 200.dp)
                 .background(circleColor, CircleShape)
-        )
+        ) {
+            Image(
+                painter = painterResource(Res.drawable.smackcheck_logo_image_transparent),
+                contentDescription = "SmackCheck app logo",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(CircleShape)
+            )
+        }
 
-        // ── Scrollable content column ──
+        // ── Fixed logo + tagline (NOT scrollable) ──
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 28.dp),
+                .align(Alignment.TopCenter)
+                .offset(y = 375.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Space to clear the header + circle
-            Spacer(modifier = Modifier.height(370.dp))
-
             SmackCheckWordmark(
                 fontFamily = PlusJakartaSans(),
                 fontSize = 30.sp,
@@ -161,9 +172,18 @@ fun DarkLoginScreen(
                 textAlign = TextAlign.Center,
                 letterSpacing = 0.4.sp
             )
+        }
 
-            Spacer(modifier = Modifier.height(32.dp))
-
+        // ── Scrollable form fields only ──
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = 28.dp, end = 28.dp, top = 460.dp)
+                .navigationBarsPadding()
+                .imePadding()
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             // ── Email field ──
             Text(
                 text = "Email Address",
@@ -356,7 +376,7 @@ fun DarkLoginScreen(
             ) {
                 Text(
                     text = buildAnnotatedString {
-                        withStyle(SpanStyle(color = Color(0xFF7A2428))) { append("G") }
+                        withStyle(SpanStyle(color = BrandRed)) { append("G") }
                     },
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
@@ -370,8 +390,7 @@ fun DarkLoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // ── Sign Up link ──
             Row(
@@ -407,7 +426,7 @@ private fun darkTextFieldColors(containerColor: Color) = TextFieldDefaults.color
     focusedIndicatorColor = Color.Transparent,
     unfocusedIndicatorColor = Color.Transparent,
     errorIndicatorColor = Color.Transparent,
-    cursorColor = Color(0xFF7A2428),
+    cursorColor = BrandRed,
     focusedPlaceholderColor = Color.White.copy(alpha = 0.4f),
     unfocusedPlaceholderColor = Color.White.copy(alpha = 0.4f)
 )

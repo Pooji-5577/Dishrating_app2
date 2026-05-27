@@ -27,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 
 @Composable
@@ -102,7 +103,7 @@ fun NearbyMapBanner(
                     .background(
                         Brush.linearGradient(
                             colors = listOf(
-                                Color(0xFF642223),
+                                BrandRedDark,
                                 Color(0xFFFF7669)
                             )
                         )

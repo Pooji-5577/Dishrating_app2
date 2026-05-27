@@ -30,6 +30,7 @@ import com.example.smackcheck2.ui.screens.PermissionsOnboardingScreen
 import com.example.smackcheck2.viewmodel.AuthViewModel
 import com.example.smackcheck2.viewmodel.LocationHomeViewModel
 import com.example.smackcheck2.viewmodel.SocialFeedViewModel
+import com.example.smackcheck2.util.Logger
 
 /**
  * App-level coordinator that handles cross-cutting concerns:
@@ -113,7 +114,7 @@ fun AppCoordinator(
             navigationState.currentScreen is Screen.DarkHome -> { /* consume to prevent app exit */ }
             else -> {
                 if (!navigationState.navigateBack()) {
-                    println("AppCoordinator: Cannot navigate back, staying on current screen")
+                    Logger.d("AppCoordinator", "AppCoordinator: Cannot navigate back, staying on current screen")
                 }
             }
         }
@@ -220,7 +221,7 @@ fun AppCoordinator(
                                 repository.updateUserLocation(location.latitude, location.longitude)
                             }
                         } catch (e: Exception) {
-                            println("Auto location detection error: ${e.message}")
+                            Logger.e("AppCoordinator", "Auto location detection error: ${e.message}", e)
                         }
                     }
                 }

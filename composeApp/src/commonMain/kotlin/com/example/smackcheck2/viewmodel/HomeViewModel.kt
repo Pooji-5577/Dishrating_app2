@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.ProfileInvalidationBus
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.gamification.PointsConfig
 import com.example.smackcheck2.model.HomeFeedUiState
@@ -36,23 +37,13 @@ class HomeViewModel : ViewModel() {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
             try {
-                val result = databaseRepository.getFeed()
+                val userId = authRepository.getCurrentUserId()
+                val result = databaseRepository.getFeed(currentUserId = userId)
                 result.fold(
                     onSuccess = { feedItems ->
-                        // Check which items the user has liked
-                        val userId = authRepository.getCurrentUserId()
-                        val itemsWithLikeStatus = if (userId != null) {
-                            feedItems.map { item ->
-                                val isLiked = databaseRepository.hasUserLiked(userId, item.id)
-                                item.copy(isLiked = isLiked)
-                            }
-                        } else {
-                            feedItems
-                        }
-
                         _uiState.update {
                             it.copy(
-                                feedItems = itemsWithLikeStatus,
+                                feedItems = feedItems,
                                 isLoading = false
                             )
                         }
@@ -129,6 +120,11 @@ class ProfileViewModel(private val authViewModel: AuthViewModel) : ViewModel() {
 
     init {
         loadProfile()
+        viewModelScope.launch {
+            ProfileInvalidationBus.events.collect {
+                refresh(forceSpinner = false)
+            }
+        }
     }
 
     fun loadProfile(forceSpinner: Boolean = _uiState.value.user == null) {
