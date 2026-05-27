@@ -12,15 +12,20 @@ interface ReceiptAnalysisRequest {
   dishNames: string[]
 }
 
-const promptFor = (dishNames: string[]) => `Read this restaurant receipt and match prices to these dishes: ${dishNames.join(', ')}.
+const promptFor = (dishNames: string[]) => `You are reading a restaurant, cafe, theater, or food delivery receipt image.
+First OCR every visible purchased food or drink line item with its price, then match line-item prices to these dishes: ${dishNames.join(', ')}.
 Return ONLY compact JSON:
 {"matches":[{"dishName":"","price":0,"confidence":0}],"receiptItems":[],"summary":""}
 Rules:
 - matches must use dishName values from the provided list exactly when possible.
+- receiptItems must include visible purchasable line items like "AVOCADO BURGER 14.99", "SM POPCORN 8.50", or "PESTO PASTA 12.00".
+- Ignore subtotal, tax, tip, service charge, discounts, balance, change, payment, card, approval, and total lines.
 - price is the item price before tax/service when visible.
 - confidence is 0-1.
 - receiptItems is a short list of visible line items like "Paneer Tikka 240".
-- If a dish cannot be matched, omit it from matches.
+- If there is no exact name match, match the closest food category: any burger line can match an uploaded burger dish, pasta can match pasta, biryani can match rice/biryani, fries can match fries.
+- If only one uploaded dish name is provided and exactly one plausible food line item price is visible, return that price for the dish with confidence 0.45 even if the names differ.
+- If a dish cannot be matched and no plausible item price is visible, omit it from matches.
 - No markdown or prose.`
 
 Deno.serve(async (req) => {
@@ -51,16 +56,20 @@ Deno.serve(async (req) => {
     if (!imageBase64) throw new Error('imageBase64 is required')
     if (!Array.isArray(dishNames) || dishNames.length === 0) throw new Error('dishNames are required')
 
+    const geminiModel = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash-lite'
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
             parts: [
-              { inline_data: { mime_type: mimeType, data: imageBase64 } },
               { text: promptFor(dishNames) },
+              {
+                inline_data: { mime_type: mimeType, data: imageBase64 },
+                media_resolution: { level: 'MEDIA_RESOLUTION_HIGH' },
+              },
             ],
           }],
           generationConfig: {

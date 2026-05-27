@@ -21,4 +21,9 @@ actual object SupabaseConfig {
         (NSBundle.mainBundle.objectForInfoDictionaryKey("SUPABASE_ANON_KEY") as? String)
             ?.takeIf { it.isNotBlank() && !it.startsWith("$(") && it.length > 20 }
             ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5b3Btdmh0ZnV3YnNqeGhwZmdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjAyMTksImV4cCI6MjA4NDgzNjIxOX0.2siGUJfE3iLoaEKae5gycw_6mo748KKyi5C7YEHuUlQ"
+
+    actual val BACKEND_URL: String =
+        (NSBundle.mainBundle.objectForInfoDictionaryKey("BACKEND_URL") as? String)
+            ?.takeIf { it.isNotBlank() && !it.startsWith("$(") }
+            ?: "https://api.withcouture.me"
 }

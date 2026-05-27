@@ -1,10 +1,21 @@
 package com.example.smackcheck2.data.repository
 
 import com.example.smackcheck2.data.SupabaseClientProvider
+import com.example.smackcheck2.data.SupabaseConfig
 import com.example.smackcheck2.util.Logger
+import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.functions.functions
+import io.github.jan.supabase.auth.status.SessionStatus
+import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.contentType
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -24,6 +35,7 @@ data class ReceiptAnalysisResult(
 class ReceiptAnalysisRepository {
     private val supabase = SupabaseClientProvider.client
     private val json = Json { ignoreUnknownKeys = true }
+    private val httpClient = HttpClient()
 
     @OptIn(ExperimentalEncodingApi::class)
     suspend fun analyzeReceipt(
@@ -34,35 +46,85 @@ class ReceiptAnalysisRepository {
         if (receiptBytes.isEmpty()) return Result.success(ReceiptAnalysisResult())
 
         return try {
-            val response = supabase.functions.invoke(
-                function = "analyze-receipt",
-                body = ReceiptAnalysisRequest(
+            val accessToken = currentAccessToken()
+                ?: return Result.success(ReceiptAnalysisResult())
+
+            val requestBody = ReceiptAnalysisRequest(
+                imageBase64 = Base64.encode(receiptBytes),
+                mimeType = mimeType,
+                dishNames = dishNames
+            )
+            val response = httpClient.post("${SupabaseConfig.BACKEND_URL.trimEnd('/')}/api/ai/analyze-receipt") {
+                contentType(ContentType.Application.Json)
+                header(HttpHeaders.Authorization, "Bearer $accessToken")
+                setBody(json.encodeToString(requestBody))
+            }
+            val responseText = response.body<String>()
+            if (response.status.value !in 200..299) {
+                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend failed (${response.status.value}): ${responseText.take(300)}")
+                return analyzeReceiptWithEdgeFunction(requestBody)
+            }
+            val parsedResult = parseReceiptAnalysis(responseText)
+            if (parsedResult.suggestions.isEmpty() && parsedResult.rawItems.isEmpty()) {
+                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend returned no prices or line items; trying edge fallback")
+                return analyzeReceiptWithEdgeFunction(requestBody)
+            }
+            Result.success(parsedResult)
+        } catch (e: Exception) {
+            Logger.e("ReceiptAnalysisRepository", "Receipt analysis failed: ${e.message}", e)
+            analyzeReceiptWithEdgeFunction(
+                ReceiptAnalysisRequest(
                     imageBase64 = Base64.encode(receiptBytes),
                     mimeType = mimeType,
                     dishNames = dishNames
                 )
             )
-            val responseText = response.body<String>()
-            val parsed = json.decodeFromString<ReceiptAnalysisResponse>(responseText)
-            Result.success(
-                ReceiptAnalysisResult(
-                    suggestions = parsed.matches.mapNotNull { match ->
-                        val price = match.price ?: return@mapNotNull null
-                        if (match.dishName.isBlank()) return@mapNotNull null
-                        ReceiptPriceSuggestion(
-                            dishName = match.dishName,
-                            price = price,
-                            confidence = match.confidence.coerceIn(0f, 1f)
-                        )
-                    },
-                    rawItems = parsed.receiptItems,
-                    summary = parsed.summary
-                )
+        }
+    }
+
+    private suspend fun analyzeReceiptWithEdgeFunction(
+        requestBody: ReceiptAnalysisRequest
+    ): Result<ReceiptAnalysisResult> {
+        return try {
+            val response = supabase.functions.invoke(
+                function = "analyze-receipt",
+                body = requestBody
             )
+            val responseText = response.body<String>()
+            if (response.status.value !in 200..299) {
+                Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge function failed (${response.status.value}): ${responseText.take(300)}")
+                return Result.success(ReceiptAnalysisResult())
+            }
+            Result.success(parseReceiptAnalysis(responseText))
         } catch (e: Exception) {
-            Logger.e("ReceiptAnalysisRepository", "Receipt analysis failed: ${e.message}", e)
+            Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge fallback failed: ${e.message}", e)
             Result.success(ReceiptAnalysisResult())
         }
+    }
+
+    private fun parseReceiptAnalysis(responseText: String): ReceiptAnalysisResult {
+        val parsed = json.decodeFromString<ReceiptAnalysisResponse>(responseText)
+        val matches = parsed.matches.ifEmpty { parsed.suggestions }
+        val rawItems = parsed.receiptItems.ifEmpty { parsed.rawItems }
+        return ReceiptAnalysisResult(
+            suggestions = matches.mapNotNull { match ->
+                val price = match.price ?: return@mapNotNull null
+                val dishName = match.dishName.ifBlank { match.dish_name }
+                if (dishName.isBlank()) return@mapNotNull null
+                ReceiptPriceSuggestion(
+                    dishName = dishName,
+                    price = price,
+                    confidence = match.confidence.coerceIn(0f, 1f)
+                )
+            },
+            rawItems = rawItems,
+            summary = parsed.summary
+        )
+    }
+
+    private fun currentAccessToken(): String? {
+        val status = supabase.auth.sessionStatus.value
+        return (status as? SessionStatus.Authenticated)?.session?.accessToken
     }
 }
 
@@ -76,13 +138,16 @@ private data class ReceiptAnalysisRequest(
 @Serializable
 private data class ReceiptAnalysisResponse(
     val matches: List<ReceiptMatchResponse> = emptyList(),
+    val suggestions: List<ReceiptMatchResponse> = emptyList(),
     val receiptItems: List<String> = emptyList(),
+    val rawItems: List<String> = emptyList(),
     val summary: String? = null
 )
 
 @Serializable
 private data class ReceiptMatchResponse(
     val dishName: String = "",
+    val dish_name: String = "",
     val price: Double? = null,
     val confidence: Float = 0f
 )

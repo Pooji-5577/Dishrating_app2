@@ -1,10 +1,17 @@
 package com.example.smackcheck2.data.repository
 
 import com.example.smackcheck2.data.SupabaseClientProvider
-import io.github.jan.supabase.functions.functions
+import com.example.smackcheck2.data.SupabaseConfig
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
+import io.ktor.client.HttpClient
 import io.ktor.client.call.*
+import io.ktor.client.request.header
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.http.*
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -27,10 +34,9 @@ data class DishDetectionResult(
 )
 
 /**
- * Repository for AI-powered dish detection using Supabase Edge Function
+ * Repository for AI-powered dish detection using the backend API.
  * 
- * This implementation calls the 'analyze-dish' Edge Function which handles
- * the Gemini API call server-side, keeping the API key secure.
+ * The backend handles the Gemini API call server-side, keeping the API key secure.
  */
 class AIDetectionRepository {
 
@@ -42,9 +48,10 @@ class AIDetectionRepository {
     }
 
     private val supabase = SupabaseClientProvider.client
+    private val httpClient = HttpClient()
 
     /**
-     * Detect dish name from image bytes using Supabase Edge Function
+     * Detect dish name from image bytes using the backend API.
      */
     @OptIn(ExperimentalEncodingApi::class)
     suspend fun detectDish(imageBytes: ByteArray, mimeType: String = "image/jpeg"): DishDetectionResult {
@@ -78,19 +85,28 @@ class AIDetectionRepository {
                 mimeType = actualMimeType
             )
 
-            Logger.d("AIDetectionRepository", "AIDetection: Calling Supabase Edge Function 'analyze-dish'...")
+            val accessToken = currentAccessToken()
+            if (accessToken == null) {
+                Logger.e("AIDetectionRepository", "AIDetection: Missing authenticated session")
+                return createFallbackResult("Unknown").copy(
+                    alternatives = listOf("Authentication required. Please log in."),
+                    debugInfo = "No access token"
+                )
+            }
 
-            // Call the Supabase Edge Function
-            val response = supabase.functions.invoke(
-                function = "analyze-dish",
-                body = requestBody
-            )
+            Logger.d("AIDetectionRepository", "AIDetection: Calling backend /api/ai/detect-dish...")
+
+            val response = httpClient.post("${SupabaseConfig.BACKEND_URL.trimEnd('/')}/api/ai/detect-dish") {
+                contentType(ContentType.Application.Json)
+                header(HttpHeaders.Authorization, "Bearer $accessToken")
+                setBody(json.encodeToString(requestBody))
+            }
 
             Logger.d("AIDetectionRepository", "AIDetection: Response status: ${response.status.value}")
 
             if (response.status.value != 200) {
                 val errorText = response.body<String>()
-                Logger.e("AIDetectionRepository", "AIDetection: Edge Function error: $errorText")
+                Logger.e("AIDetectionRepository", "AIDetection: Backend AI error: $errorText")
 
                 // Handle specific HTTP errors
                 val isServerOutage = response.status.value in listOf(500, 502, 503, 504, 429)
@@ -176,7 +192,7 @@ class AIDetectionRepository {
                 itemType = itemType,
                 restaurantChain = edgeResponse.restaurantChain.takeIf { it.isNotBlank() },
                 restaurantType = edgeResponse.restaurantType.takeIf { it.isNotBlank() },
-                debugInfo = "OK via Edge Function (type=$itemType, conf=${edgeResponse.confidence}, chain=${edgeResponse.restaurantChain})"
+                debugInfo = "OK via backend (type=$itemType, conf=${edgeResponse.confidence}, chain=${edgeResponse.restaurantChain})"
             )
 
         } catch (e: Exception) {
@@ -216,9 +232,14 @@ class AIDetectionRepository {
             itemType = "unknown"
         )
     }
+
+    private fun currentAccessToken(): String? {
+        val status = supabase.auth.sessionStatus.value
+        return (status as? SessionStatus.Authenticated)?.session?.accessToken
+    }
 }
 
-// Edge Function Request/Response DTOs
+// Backend Request/Response DTOs
 
 @Serializable
 private data class EdgeFunctionRequest(

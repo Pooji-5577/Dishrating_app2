@@ -303,10 +303,9 @@ fun ReviewPostCard(
                 // Dish name + restaurant + review
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     // Dish name - Newsreader Italic
-                    Row(
+                    Column(
                         modifier = Modifier.fillMaxWidth().clickable { onDishClick() },
-                        verticalAlignment = Alignment.Top,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
                             text = currentPage.dishName.ifBlank { feedItem.dishName },
@@ -316,12 +315,13 @@ fun ReviewPostCard(
                             fontFamily = newsreader,
                             color = BrandRedDark,
                             lineHeight = 30.sp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
                         currentPage.price?.let { price ->
                             Surface(
                                 shape = RoundedCornerShape(999.dp),
-                                color = Color(0xFFF8EFE8)
+                                color = Color(0xFFF8EFE8),
+                                modifier = Modifier.align(Alignment.Start)
                             ) {
                                 Text(
                                     text = formatDishPrice(price),

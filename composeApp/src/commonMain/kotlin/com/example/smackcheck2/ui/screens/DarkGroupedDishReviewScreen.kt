@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.data.repository.ReceiptAnalysisRepository
+import com.example.smackcheck2.data.repository.ReceiptPriceSuggestion
 import com.example.smackcheck2.model.CapturedDishDraft
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.platform.ImagePicker
@@ -92,9 +93,10 @@ private data class EditableDishDraft(
     val image: com.example.smackcheck2.model.CapturedImage,
     val initialName: String,
     val confidence: Float,
-    var name: String,
-    var price: String = ""
-)
+) {
+    var name by mutableStateOf(initialName)
+    var price by mutableStateOf("")
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -136,8 +138,7 @@ fun DarkGroupedDishReviewScreen(
                 EditableDishDraft(
                     image = it.image,
                     initialName = it.dishName,
-                    confidence = it.confidence,
-                    name = it.dishName
+                    confidence = it.confidence
                 )
             })
         }
@@ -287,19 +288,28 @@ fun DarkGroupedDishReviewScreen(
                         if (receipt != null) {
                             receiptBytes = receipt.bytes
                             isAnalyzingReceipt = true
-                            receiptAnalysisRepository.analyzeReceipt(
-                                receiptBytes = receipt.bytes,
-                                dishNames = editableDishes.map { it.name },
-                                mimeType = receipt.mimeType
-                            ).onSuccess { analysis ->
-                                receiptSummary = analysis.summary
-                                receiptItems = analysis.rawItems
-                                analysis.suggestions.forEach { suggestion ->
-                                    editableDishes.firstOrNull { it.name.equals(suggestion.dishName, ignoreCase = true) }
-                                        ?.let { it.price = formatSuggestedPrice(suggestion.price) }
+                            try {
+                                receiptAnalysisRepository.analyzeReceipt(
+                                    receiptBytes = receipt.bytes,
+                                    dishNames = editableDishes.map { it.name },
+                                    mimeType = receipt.mimeType
+                                ).onSuccess { analysis ->
+                                    receiptSummary = analysis.summary
+                                    receiptItems = analysis.rawItems
+                                    val suggestions = mergeReceiptPriceSuggestions(
+                                        aiSuggestions = analysis.suggestions,
+                                        inferredSuggestions = inferReceiptPriceSuggestions(editableDishes, analysis.rawItems)
+                                    )
+                                    val appliedCount = applyReceiptPriceSuggestions(editableDishes, suggestions)
+                                    when {
+                                        suggestions.isEmpty() -> snackbarHostState.showSnackbar("Receipt added, but no prices were detected")
+                                        appliedCount == 0 -> snackbarHostState.showSnackbar("Receipt found prices, but none matched these dishes")
+                                        else -> snackbarHostState.showSnackbar("Applied receipt prices to $appliedCount ${if (appliedCount == 1) "dish" else "dishes"}")
+                                    }
                                 }
+                            } finally {
+                                isAnalyzingReceipt = false
                             }
-                            isAnalyzingReceipt = false
                         }
                     }
                 },
@@ -558,3 +568,193 @@ private fun cleanPrice(value: String): String {
 
 private fun formatSuggestedPrice(price: Double): String =
     if (price % 1.0 == 0.0) price.toInt().toString() else price.toString()
+
+private fun applyReceiptPriceSuggestions(
+    dishes: List<EditableDishDraft>,
+    suggestions: List<ReceiptPriceSuggestion>
+): Int {
+    var applied = 0
+    val usedDishIndexes = mutableSetOf<Int>()
+
+    suggestions.forEach { suggestion ->
+        val matchIndex = bestReceiptMatchIndex(
+            dishes = dishes,
+            usedDishIndexes = usedDishIndexes,
+            suggestionName = suggestion.dishName
+        )
+        if (matchIndex != null) {
+            dishes[matchIndex].price = formatSuggestedPrice(suggestion.price)
+            usedDishIndexes += matchIndex
+            applied++
+        }
+    }
+
+    if (applied == 0 && suggestions.isNotEmpty()) {
+        suggestions.take(dishes.size).forEachIndexed { index, suggestion ->
+            if (dishes[index].price.isBlank()) {
+                dishes[index].price = formatSuggestedPrice(suggestion.price)
+                applied++
+            }
+        }
+    }
+
+    return applied
+}
+
+private fun mergeReceiptPriceSuggestions(
+    aiSuggestions: List<ReceiptPriceSuggestion>,
+    inferredSuggestions: List<ReceiptPriceSuggestion>
+): List<ReceiptPriceSuggestion> {
+    if (aiSuggestions.isEmpty()) return inferredSuggestions
+    if (inferredSuggestions.isEmpty()) return aiSuggestions
+
+    val merged = mutableListOf<ReceiptPriceSuggestion>()
+    (aiSuggestions + inferredSuggestions).forEach { suggestion ->
+        val normalized = normalizedReceiptName(suggestion.dishName)
+        val existingIndex = merged.indexOfFirst {
+            val existing = normalizedReceiptName(it.dishName)
+            existing == normalized || existing.contains(normalized) || normalized.contains(existing)
+        }
+        if (existingIndex == -1) {
+            merged += suggestion
+        } else if (suggestion.confidence > merged[existingIndex].confidence) {
+            merged[existingIndex] = suggestion
+        }
+    }
+    return merged
+}
+
+private fun inferReceiptPriceSuggestions(
+    dishes: List<EditableDishDraft>,
+    receiptItems: List<String>
+): List<ReceiptPriceSuggestion> {
+    val lines = receiptItems.mapNotNull { line ->
+        val price = parseReceiptLinePrice(line) ?: return@mapNotNull null
+        normalizedReceiptName(line).takeIf { it.isNotBlank() }?.let { normalized ->
+            ReceiptLine(line = line, normalized = normalized, price = price)
+        }
+    }
+    if (lines.isEmpty()) return emptyList()
+
+    val usedLineIndexes = mutableSetOf<Int>()
+    val matched = dishes.mapNotNull { dish ->
+        val dishName = normalizedReceiptName(dish.name)
+        if (dishName.isBlank()) return@mapNotNull null
+        val best = lines.mapIndexedNotNull { index, line ->
+            if (index in usedLineIndexes) return@mapIndexedNotNull null
+            val score = receiptLineMatchScore(dishName, line.normalized)
+            if (score > 0) index to (line to score) else null
+        }.maxByOrNull { it.second.second }
+
+        if (best != null && best.second.second >= 18) {
+            usedLineIndexes += best.first
+            ReceiptPriceSuggestion(
+                dishName = dish.name,
+                price = best.second.first.price,
+                confidence = (best.second.second / 100f).coerceIn(0f, 1f)
+            )
+        } else {
+            null
+        }
+    }
+
+    if (matched.isNotEmpty()) return matched
+
+    return lines.take(dishes.size).mapIndexed { index, line ->
+        ReceiptPriceSuggestion(
+            dishName = dishes[index].name,
+            price = line.price,
+            confidence = 0.35f
+        )
+    }
+}
+
+private fun bestReceiptMatchIndex(
+    dishes: List<EditableDishDraft>,
+    usedDishIndexes: Set<Int>,
+    suggestionName: String
+): Int? {
+    val suggestion = normalizedReceiptName(suggestionName)
+    if (suggestion.isBlank()) return null
+
+    val candidates = dishes.mapIndexedNotNull { index, draft ->
+        if (index in usedDishIndexes) return@mapIndexedNotNull null
+        val dish = normalizedReceiptName(draft.name)
+        if (dish.isBlank()) return@mapIndexedNotNull null
+
+        val score = when {
+            dish == suggestion -> 100
+            dish.contains(suggestion) || suggestion.contains(dish) -> 80
+            else -> {
+                val dishTokens = dish.split(" ").filter { it.length >= 3 }.toSet()
+                val suggestionTokens = suggestion.split(" ").filter { it.length >= 3 }.toSet()
+                val categoryScore = foodCategoryMatchScore(dishTokens, suggestionTokens)
+                val overlap = dishTokens.intersect(suggestionTokens).size
+                categoryScore + overlap * 20
+            }
+        }
+        if (score > 0) index to score else null
+    }
+
+    return candidates.maxByOrNull { it.second }
+        ?.takeIf { it.second >= 20 }
+        ?.first
+}
+
+private fun receiptLineMatchScore(dishName: String, receiptLine: String): Int = when {
+    dishName == receiptLine -> 100
+    dishName.contains(receiptLine) || receiptLine.contains(dishName) -> 80
+    else -> {
+        val dishTokens = dishName.split(" ").filter { it.length >= 3 }.toSet()
+        val lineTokens = receiptLine.split(" ").filter { it.length >= 3 }.toSet()
+        foodCategoryMatchScore(dishTokens, lineTokens) + dishTokens.intersect(lineTokens).size * 25
+    }
+}
+
+private fun foodCategoryMatchScore(leftTokens: Set<String>, rightTokens: Set<String>): Int =
+    foodCategoryTokens.maxOfOrNull { category ->
+        val leftMatches = leftTokens.any { it in category }
+        val rightMatches = rightTokens.any { it in category }
+        if (leftMatches && rightMatches) 35 else 0
+    } ?: 0
+
+private fun parseReceiptLinePrice(line: String): Double? {
+    val matches = Regex("""(?:[$₹]\s*)?(\d+(?:\.\d{1,2})?)""")
+        .findAll(line)
+        .mapNotNull { it.groupValues.getOrNull(1)?.toDoubleOrNull() }
+        .filter { it > 0.0 }
+        .toList()
+    return matches.lastOrNull()
+}
+
+private fun normalizedReceiptName(value: String): String =
+    value.lowercase()
+        .replace(Regex("[^a-z0-9 ]"), " ")
+        .split(" ")
+        .filter { token -> token.isNotBlank() && token !in receiptStopWords }
+        .joinToString(" ")
+
+private val receiptStopWords = setOf(
+    "dish",
+    "food",
+    "with",
+    "and",
+    "the",
+    "plate",
+    "item"
+)
+
+private val foodCategoryTokens = listOf(
+    setOf("bbq", "barbecue", "pizza", "pizzas"),
+    setOf("tofu", "salad", "bowl", "greens"),
+    setOf("burger", "cheeseburger", "hamburger", "sandwich"),
+    setOf("pasta", "spaghetti", "penne", "farfalle", "noodle", "noodles"),
+    setOf("biryani", "rice", "pulav", "pulao"),
+    setOf("fries", "chips", "potato")
+)
+
+private data class ReceiptLine(
+    val line: String,
+    val normalized: String,
+    val price: Double
+)
