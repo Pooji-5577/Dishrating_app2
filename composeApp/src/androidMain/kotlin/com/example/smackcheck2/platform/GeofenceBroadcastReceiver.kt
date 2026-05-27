@@ -8,15 +8,14 @@ import android.content.Intent
 import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.example.smackcheck2.data.SupabaseClientProvider
-import com.example.smackcheck2.data.dto.RestaurantVisitDto
+import com.example.smackcheck2.data.ApiClient
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 private const val TAG = "GeofenceReceiver"
 private const val CHANNEL_ID = "geofence_channel"
@@ -58,12 +57,10 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
     private fun recordVisitStart(restaurantId: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val userId = SupabaseClientProvider.client.auth.currentUserOrNull()?.id ?: return@launch
-                val dto = RestaurantVisitDto(
-                    userId = userId,
-                    restaurantId = restaurantId
+                ApiClient.post<VisitStartRequest, VisitResponse>(
+                    "visits",
+                    VisitStartRequest(restaurantId = restaurantId)
                 )
-                SupabaseClientProvider.client.postgrest["restaurant_visits"].insert(dto)
                 Log.d(TAG, "Recorded visit start for restaurant: $restaurantId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to record visit", e)
@@ -74,15 +71,10 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
     private fun recordVisitEnd(restaurantId: String) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
-                val userId = SupabaseClientProvider.client.auth.currentUserOrNull()?.id ?: return@launch
-                SupabaseClientProvider.client.postgrest["restaurant_visits"]
-                    .update(mapOf("exited_at" to "now()")) {
-                        filter {
-                            eq("user_id", userId)
-                            eq("restaurant_id", restaurantId)
-                            exact("exited_at", null)
-                        }
-                    }
+                ApiClient.patch<VisitEndRequest, VisitResponse>(
+                    "visits/end",
+                    VisitEndRequest(restaurantId = restaurantId)
+                )
                 Log.d(TAG, "Recorded visit end for restaurant: $restaurantId")
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to record visit end", e)
@@ -113,3 +105,20 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 }
+
+@Serializable
+private data class VisitStartRequest(
+    @SerialName("restaurant_id") val restaurantId: String
+)
+
+@Serializable
+private data class VisitEndRequest(
+    @SerialName("restaurant_id") val restaurantId: String
+)
+
+@Serializable
+private data class VisitResponse(
+    val id: String? = null,
+    val success: Boolean? = null,
+    val updated: Boolean? = null
+)

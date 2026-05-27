@@ -5,6 +5,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 
@@ -17,7 +18,8 @@ actual fun ByteArrayImage(
     imageBytes: ByteArray,
     contentDescription: String?,
     modifier: Modifier,
-    contentScale: ContentScale
+    contentScale: ContentScale,
+    colorFilter: ColorFilter?
 ) {
     val imageBitmap = remember(imageBytes) {
         BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)?.asImageBitmap()
@@ -28,7 +30,8 @@ actual fun ByteArrayImage(
             bitmap = imageBitmap,
             contentDescription = contentDescription,
             modifier = modifier,
-            contentScale = contentScale
+            contentScale = contentScale,
+            colorFilter = colorFilter
         )
     }
 }

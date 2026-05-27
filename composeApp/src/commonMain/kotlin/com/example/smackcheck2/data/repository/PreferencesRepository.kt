@@ -53,6 +53,12 @@ class PreferencesRepository(private val preferencesManager: PreferencesManager) 
     suspend fun hasSeenPermissionsOnboarding(): Boolean = preferencesManager.hasSeenPermissionsOnboarding()
     suspend fun setPermissionsOnboardingSeen() = preferencesManager.setPermissionsOnboardingSeen()
 
+    suspend fun hasDismissedProfileSetup(userId: String): Boolean =
+        preferencesManager.hasDismissedProfileSetup(userId)
+
+    suspend fun setProfileSetupDismissed(userId: String) =
+        preferencesManager.setProfileSetupDismissed(userId)
+
     suspend fun getBookmarks(): Set<String> {
         return try {
             preferencesManager.getBookmarks()
@@ -77,6 +83,37 @@ class PreferencesRepository(private val preferencesManager: PreferencesManager) 
     suspend fun isBookmarked(ratingId: String): Boolean {
         return getBookmarks().contains(ratingId)
     }
+
+    suspend fun getPendingRatings(): List<PendingRating> {
+        return try {
+            preferencesManager.getPendingRatings()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun savePendingRatings(ratings: List<PendingRating>) {
+        preferencesManager.savePendingRatings(ratings)
+    }
+
+    suspend fun upsertPendingRating(rating: PendingRating) {
+        val ratings = getPendingRatings()
+            .filterNot { it.localId == rating.localId } + rating
+        savePendingRatings(ratings.sortedByDescending { it.createdAt })
+    }
+
+    suspend fun removePendingRating(localId: String) {
+        savePendingRatings(getPendingRatings().filterNot { it.localId == localId })
+    }
+
+    suspend fun savePendingRatingImage(localId: String, imageBytes: ByteArray): String? =
+        preferencesManager.savePendingRatingImage(localId, imageBytes)
+
+    suspend fun readPendingRatingImage(imagePath: String): ByteArray? =
+        preferencesManager.readPendingRatingImage(imagePath)
+
+    suspend fun deletePendingRatingImage(imagePath: String) =
+        preferencesManager.deletePendingRatingImage(imagePath)
 
     suspend fun clearAllSettings(): Result<Unit> {
         return try {

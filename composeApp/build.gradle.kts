@@ -90,9 +90,7 @@ kotlin {
             // Supabase
             implementation(libs.supabase.gotrue)
             implementation(libs.supabase.postgrest)
-            implementation(libs.supabase.storage)
             implementation(libs.supabase.realtime)
-            implementation(libs.supabase.functions)
             // Serialization
             implementation(libs.kotlinx.serialization.json)
         }
@@ -146,6 +144,9 @@ android {
         // Supabase configuration from local.properties or .env
         buildConfigField("String", "SUPABASE_URL", "\"${getConfigProperty("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getConfigProperty("SUPABASE_ANON_KEY")}\"")
+
+        // Custom backend URL — set BACKEND_URL in local.properties or .env
+        buildConfigField("String", "BACKEND_URL", "\"${getConfigProperty("BACKEND_URL")}\"")
 
         // Mixpanel analytics
         buildConfigField("String", "MIXPANEL_TOKEN", "\"${getConfigProperty("MIXPANEL_TOKEN")}\"")

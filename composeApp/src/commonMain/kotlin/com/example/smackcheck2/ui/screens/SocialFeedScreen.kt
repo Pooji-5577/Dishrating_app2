@@ -55,11 +55,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
@@ -88,6 +92,8 @@ fun SocialFeedScreen(
     onLikeClick: (String) -> Unit,
     onCommentClick: (String) -> Unit,
     onShareClick: (FeedItem) -> Unit,
+    onReportClick: (FeedItem) -> Unit = {},
+    onBlockUserClick: (FeedItem) -> Unit = {},
     onUserClick: (String) -> Unit,
     onRefresh: () -> Unit,
     onLoadMore: () -> Unit = {},
@@ -116,6 +122,7 @@ fun SocialFeedScreen(
     val colors = appColors()
     val jakartaSans = PlusJakartaSans()
     val listState = rememberLazyListState()
+    val focusManager = LocalFocusManager.current
     var userSearch by remember { mutableStateOf("") }
 
     // Auto-scroll to newly created post
@@ -239,6 +246,13 @@ fun SocialFeedScreen(
                         .padding(horizontal = 24.dp)
                 ) {
                     val searchShape = RoundedCornerShape(32.dp)
+                    val submitSearch = {
+                        val query = userSearch.trim()
+                        if (query.isNotBlank()) {
+                            focusManager.clearFocus()
+                            onUserSearchSubmit(query)
+                        }
+                    }
 
                     OutlinedTextField(
                         value = userSearch,
@@ -248,15 +262,15 @@ fun SocialFeedScreen(
                         },
                         singleLine = true,
                         shape = searchShape,
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { submitSearch() }),
                         placeholder = { Text("Search user id (e.g. @simhateja)") },
                         trailingIcon = {
                             Icon(
                                 imageVector = Icons.Filled.Search,
                                 contentDescription = "Search",
                                 tint = BrandRed,
-                                modifier = Modifier.clickable {
-                                    if (userSearch.isNotBlank()) onUserSearchSubmit(userSearch)
-                                }
+                                modifier = Modifier.clickable { submitSearch() }
                             )
                         },
                         modifier = Modifier
@@ -482,9 +496,8 @@ fun SocialFeedScreen(
                 else -> {
                     val feedItems = uiState.feedItems
 
-                    // Show first 3 items
                     items(
-                        feedItems.take(3),
+                        feedItems,
                         key = { it.id }
                     ) { item ->
                         Box(modifier = Modifier.padding(horizontal = 24.dp)) {
@@ -493,6 +506,8 @@ fun SocialFeedScreen(
                                 onLikeClick = { onLikeClick(item.id) },
                                 onCommentClick = { onCommentClick(item.id) },
                                 onShareClick = { onShareClick(item) },
+                                onReportClick = { onReportClick(item) },
+                                onBlockUserClick = { onBlockUserClick(item) },
                                 onBookmarkClick = { onBookmarkClick(item.id) },
                                 onUserClick = { onUserClick(item.userId) },
                                 onDishClick = {
@@ -502,30 +517,6 @@ fun SocialFeedScreen(
                             )
                         }
                         Spacer(modifier = Modifier.height(24.dp))
-                    }
-
-                    // Remaining items
-                    if (feedItems.size > 3) {
-                        items(
-                            feedItems.drop(3),
-                            key = { it.id }
-                        ) { item ->
-                            Box(modifier = Modifier.padding(horizontal = 24.dp)) {
-                                ReviewPostCard(
-                                    feedItem = item,
-                                    onLikeClick = { onLikeClick(item.id) },
-                                    onCommentClick = { onCommentClick(item.id) },
-                                    onShareClick = { onShareClick(item) },
-                                    onBookmarkClick = { onBookmarkClick(item.id) },
-                                    onUserClick = { onUserClick(item.userId) },
-                                    onDishClick = {
-                                        val navId = item.dishId.takeIf { it.isNotBlank() } ?: item.id
-                                        onTopDishClick(navId)
-                                    }
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(24.dp))
-                        }
                     }
 
                     if (uiState.isLoadingMore) {

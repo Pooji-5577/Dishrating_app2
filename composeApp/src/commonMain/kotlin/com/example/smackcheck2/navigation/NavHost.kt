@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.AIDetectionRepository
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.ui.theme.appColors
@@ -133,6 +135,8 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import com.example.smackcheck2.util.Logger
 
+private const val NOT_DISH_NAME = "__SMACKCHECK_NOT_DISH__"
+
 /**
  * Navigation state holder for managing current screen with Compose state
  */
@@ -195,6 +199,10 @@ class NavigationState(initialScreen: Screen = Screen.Splash) {
         detectedType = type
     }
 
+    fun updateDishName(name: String) {
+        dishName = name
+    }
+
     fun navigateTo(screen: Screen) {
         backStack.add(currentScreen)
         currentScreen = screen
@@ -232,7 +240,16 @@ class NavigationState(initialScreen: Screen = Screen.Splash) {
     
     fun navigateBack(): Boolean {
         return if (backStack.isNotEmpty()) {
+            val previous = currentScreen
             currentScreen = backStack.removeAt(backStack.lastIndex)
+            // Clear heavy capture data when leaving capture/rating flow
+            val captureScreens = setOf(
+                Screen.DishCapture.route, Screen.DarkDishCapture.route,
+                Screen.DarkDishConfirm.route, Screen.DarkDishRating.route
+            )
+            if (previous.route in captureScreens && currentScreen.route !in captureScreens) {
+                clearCaptureData()
+            }
             true
         } else {
             false
@@ -248,6 +265,10 @@ class NavigationState(initialScreen: Screen = Screen.Splash) {
      * Switch to a primary tab (home, map, feed, profile) without stacking duplicate destinations.
      */
     fun navigateToMainTab(screen: Screen) {
+        // Clear heavy capture data when leaving a capture/rating flow
+        if (imageBytes != null || allCapturedImages.isNotEmpty()) {
+            clearCaptureData()
+        }
         backStack.clear()
         currentScreen = screen
     }
@@ -388,6 +409,7 @@ private fun NavHostContent(
     imagePicker: com.example.smackcheck2.platform.ImagePicker?,
     shareService: com.example.smackcheck2.platform.ShareService?
 ) {
+    val navScope = rememberCoroutineScope()
     val locationUiState by locationHomeViewModel.uiState.collectAsState()
     val isAuthenticated = when (authState) {
         is AuthState.Authenticated -> true
@@ -399,6 +421,62 @@ private fun NavHostContent(
     val isTopDishesVisible = navigationState.currentScreen is Screen.TopDishes
     val isNearbyRestaurantsVisible = navigationState.currentScreen is Screen.NearbyRestaurants
     val isBackgroundScreenVisible = isMapVisible || isTopDishesVisible || isNearbyRestaurantsVisible
+    val aiDetectionRepository = remember { AIDetectionRepository() }
+
+    fun navigateAfterAuth(fallbackScreen: Screen) {
+        val user = authViewModel.getCurrentUser()
+        navScope.launch {
+            val shouldShowProfileSetup = user != null &&
+                user.username.isBlank() &&
+                !preferencesRepository.hasDismissedProfileSetup(user.id)
+
+            navigationState.replaceWith(
+                if (shouldShowProfileSetup) Screen.ProfileSetup else fallbackScreen
+            )
+        }
+    }
+
+    LaunchedEffect(isAuthenticated, navigationState.currentScreen) {
+        if (isAuthenticated == true && navigationState.currentScreen is Screen.Login) {
+            navigateAfterAuth(Screen.Splash)
+        }
+    }
+
+    fun openRatingWithBackgroundAi(imageResult: com.example.smackcheck2.platform.ImageResult) {
+        gamificationViewModel.recordAction(
+            actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_UPLOAD_PHOTO,
+            actionLabel = "Photo Uploaded"
+        )
+        navigationState.updateImageBytes(imageResult.bytes)
+        navigationState.updateAllCapturedImages(listOf(CapturedImage(uri = imageResult.uri, bytes = imageResult.bytes)))
+        navigationState.updateDishMeta(null, 0f, null, null)
+        navigationState.navigateToWithArgs(
+            Screen.DarkDishRating,
+            "imageUri" to imageResult.uri,
+            "dishName" to "Identifying..."
+        )
+
+        navScope.launch {
+            val result = aiDetectionRepository.detectDish(
+                imageBytes = imageResult.aiBytes,
+                mimeType = imageResult.aiMimeType
+            )
+            if (navigationState.imageUri == imageResult.uri && !result.isOutage) {
+                if (result.itemType == "unknown" || result.dishName == "Unknown") {
+                    navigationState.updateDishName(NOT_DISH_NAME)
+                    navigationState.updateDishMeta(null, 0f, null, null)
+                } else {
+                    navigationState.updateDishName(result.dishName)
+                    navigationState.updateDishMeta(
+                        result.cuisine,
+                        result.confidence,
+                        result.restaurantChain,
+                        result.restaurantType
+                    )
+                }
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         // Map layer - always composed so native MapView stays warm
@@ -433,47 +511,49 @@ private fun NavHostContent(
             )
         }
 
-        // Top Dishes layer - always composed so it opens instantly
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(if (isTopDishesVisible) 1f else 0f)
-                .alpha(if (isTopDishesVisible) 1f else 0f)
-        ) {
-            val locationHomeUiState by locationHomeViewModel.uiState.collectAsState()
-            DarkTopDishesScreen(
-                isActive = isTopDishesVisible,
-                location = locationHomeUiState.selectedLocation ?: "Nearby",
-                dishes = locationHomeUiState.topDishes,
-                onNavigateBack = { navigationState.navigateBack() },
-                onDishClick = { dishId ->
-                    navigationState.navigateToWithArgs(
-                        Screen.DishDetail,
-                        "dishId" to dishId
-                    )
-                }
-            )
+        // Top Dishes layer - only composed when visible to save memory/CPU
+        if (isTopDishesVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(1f)
+            ) {
+                val locationHomeUiState by locationHomeViewModel.uiState.collectAsState()
+                DarkTopDishesScreen(
+                    isActive = true,
+                    location = locationHomeUiState.selectedLocation ?: "Nearby",
+                    dishes = locationHomeUiState.topDishes,
+                    onNavigateBack = { navigationState.navigateBack() },
+                    onDishClick = { dishId ->
+                        navigationState.navigateToWithArgs(
+                            Screen.DishDetail,
+                            "dishId" to dishId
+                        )
+                    }
+                )
+            }
         }
 
-        // Nearby Restaurants layer - always composed so it opens instantly
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(if (isNearbyRestaurantsVisible) 1f else 0f)
-                .alpha(if (isNearbyRestaurantsVisible) 1f else 0f)
-        ) {
-            NearbyRestaurantsScreen(
-                isActive = isNearbyRestaurantsVisible,
-                viewModel = nearbyRestaurantsViewModel,
-                photoViewModel = restaurantPhotoViewModel,
-                onNavigateBack = { navigationState.navigateBack() },
-                onRestaurantClick = { restaurant ->
-                    navigationState.navigateToRestaurantDetail(
-                        restaurantId = restaurant.id,
-                        restaurant = restaurant.toRestaurantPreview(locationUiState.selectedLocation)
-                    )
-                }
-            )
+        // Nearby Restaurants layer - only composed when visible
+        if (isNearbyRestaurantsVisible) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(1f)
+            ) {
+                NearbyRestaurantsScreen(
+                    isActive = true,
+                    viewModel = nearbyRestaurantsViewModel,
+                    photoViewModel = restaurantPhotoViewModel,
+                    onNavigateBack = { navigationState.navigateBack() },
+                    onRestaurantClick = { restaurant ->
+                        navigationState.navigateToRestaurantDetail(
+                            restaurantId = restaurant.id,
+                            restaurant = restaurant.toRestaurantPreview(locationUiState.selectedLocation)
+                        )
+                    }
+                )
+            }
         }
 
         if (!isBackgroundScreenVisible) {
@@ -490,14 +570,7 @@ private fun NavHostContent(
             val locationHomeUiState by locationHomeViewModel.uiState.collectAsState()
             DarkSplashScreen(
                 onNavigateToLogin = { navigationState.replaceWith(Screen.Login) },
-                onNavigateToHome = {
-                    val user = authViewModel.getCurrentUser()
-                    if (user != null && user.username.isBlank()) {
-                        navigationState.replaceWith(Screen.ProfileSetup)
-                    } else {
-                        navigationState.replaceWith(Screen.DarkHome)
-                    }
-                },
+                onNavigateToHome = { navigateAfterAuth(Screen.DarkHome) },
                 isAuthenticated = isAuthenticated,
                 isDataReady = locationHomeUiState.isInitialDataLoaded
             )
@@ -509,14 +582,7 @@ private fun NavHostContent(
                 viewModel = loginViewModel,
                 authViewModel = authViewModel,
                 onNavigateToRegister = { navigationState.navigateTo(Screen.Register) },
-                onNavigateToHome = {
-                    val user = authViewModel.getCurrentUser()
-                    if (user != null && user.username.isBlank()) {
-                        navigationState.replaceWith(Screen.ProfileSetup)
-                    } else {
-                        navigationState.replaceWith(Screen.Splash)
-                    }
-                }
+                onNavigateToHome = { navigateAfterAuth(Screen.Splash) }
             )
         }
 
@@ -539,7 +605,14 @@ private fun NavHostContent(
             ProfileSetupScreen(
                 viewModel = profileSetupViewModel,
                 currentUser = authViewModel.getCurrentUser(),
-                onComplete = { navigationState.replaceWith(Screen.Splash) }
+                onComplete = {
+                    navScope.launch {
+                        authViewModel.getCurrentUser()?.id?.let { userId ->
+                            preferencesRepository.setProfileSetupDismissed(userId)
+                        }
+                        navigationState.replaceWith(Screen.DarkHome)
+                    }
+                }
             )
         }
 
@@ -597,7 +670,8 @@ private fun NavHostContent(
 
         // Edit Profile Screen
         is Screen.EditProfile -> {
-            val currentUser = when (val state = authState) {
+            val profileState by profileViewModel.uiState.collectAsState()
+            val currentUser = profileState.user ?: when (val state = authState) {
                 is AuthState.Authenticated -> state.user
                 else -> null
             }
@@ -741,7 +815,9 @@ private fun NavHostContent(
         }
         
         is Screen.DishRating -> {
-            val dishRatingViewModel: DishRatingViewModel = viewModel { DishRatingViewModel() }
+            val dishRatingViewModel: DishRatingViewModel = viewModel {
+                DishRatingViewModel(preferencesRepository)
+            }
             val databaseRepository = remember { DatabaseRepository() }
             var allRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
 
@@ -840,6 +916,8 @@ private fun NavHostContent(
                         title = "Share Dish Rating"
                     )
                 },
+                onReportClick = { item -> socialFeedViewModel.reportPost(item.id) },
+                onBlockUserClick = { item -> socialFeedViewModel.blockUser(item.userId) },
                 onUserClick = { userId ->
                     navigationState.navigateToWithArgs(
                         Screen.UserProfile,
@@ -1219,11 +1297,12 @@ private fun NavHostContent(
                     }
                 }
 
-                val currentUserName = when (val state = authState) {
+                val profileState by profileViewModel.uiState.collectAsState()
+                val currentUserName = profileState.user?.name ?: when (val state = authState) {
                     is AuthState.Authenticated -> state.user.name
                     else -> ""
                 }
-                val currentUserPhoto = when (val state = authState) {
+                val currentUserPhoto = profileState.user?.profilePhotoUrl ?: when (val state = authState) {
                     is AuthState.Authenticated -> state.user.profilePhotoUrl
                     else -> null
                 }
@@ -1339,6 +1418,9 @@ private fun NavHostContent(
                         "dishName" to dishName
                     )
                 },
+                onImageReady = { imageResult ->
+                    openRatingWithBackgroundAi(imageResult)
+                },
                 onAddManually = { imageUri ->
                     // AI fallback -> open manual dish entry with the captured photo
                     navigationState.navigateToWithArgs(
@@ -1422,11 +1504,14 @@ private fun NavHostContent(
         }
         
         is Screen.DarkDishRating -> {
-            val dishRatingViewModel: DishRatingViewModel = viewModel { DishRatingViewModel() }
+            val dishRatingViewModel: DishRatingViewModel = viewModel {
+                DishRatingViewModel(preferencesRepository)
+            }
             val ratingUiState by dishRatingViewModel.uiState.collectAsState()
             val databaseRepository = remember { DatabaseRepository() }
             val locationUiState by locationHomeViewModel.uiState.collectAsState()
             val placesService = LocalPlacesService.current
+            val imagePicker = LocalImagePicker.current
 
             // State for restaurants
             var allRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
@@ -1629,7 +1714,7 @@ private fun NavHostContent(
             }
 
             DarkDishRatingScreen(
-                dishName = navigationState.dishName,
+                dishName = ratingUiState.dishName.ifBlank { navigationState.dishName },
                 imageUri = navigationState.imageUri,
                 imageBytes = ratingUiState.imageBytes,
                 restaurants = run {
@@ -1649,7 +1734,15 @@ private fun NavHostContent(
                 showSuccess = ratingUiState.isSuccess,
                 xpEarned = ratingUiState.xpEarned,
                 errorMessage = ratingUiState.errorMessage,
+                onDishNameChange = { dishRatingViewModel.onDishNameChange(it) },
                 onNavigateBack = { navigationState.navigateBack() },
+                onTryAgain = {
+                    dishRatingViewModel.resetForm()
+                    navigationState.clearCaptureData()
+                    if (!navigationState.navigateBack()) {
+                        navigationState.navigateToWithArgs(Screen.DarkDishCapture)
+                    }
+                },
                 onRatingComplete = {
                     dishRatingViewModel.resetForm()
                     navigationState.clearCaptureData()
@@ -1667,10 +1760,36 @@ private fun NavHostContent(
                     if (restaurant != null) {
                         dishRatingViewModel.setRestaurant(restaurant)
                         dishRatingViewModel.submitRating { _ ->
-                            // Refresh stories so the auto-published story appears immediately
+                            dishRatingViewModel.resetForm()
+                            navigationState.clearCaptureData()
+                            navigationState.popToRoot()
+                            navigationState.navigateToMainTab(Screen.SocialFeed)
                             socialFeedViewModel.refreshHomeData()
                         }
                     }
+                },
+                onSubmitRatingWithReceipt = { rating, comment, tags, restaurant, receiptBytes, receiptSource ->
+                    gamificationViewModel.recordAction(
+                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
+                        actionLabel = "Dish Rated"
+                    )
+                    dishRatingViewModel.onRatingChange(rating)
+                    dishRatingViewModel.onCommentChange(comment)
+                    dishRatingViewModel.onTagsChange(tags)
+                    if (restaurant != null) {
+                        dishRatingViewModel.setRestaurant(restaurant)
+                        dishRatingViewModel.submitRating(receiptBytes, receiptSource) { _ ->
+                            dishRatingViewModel.resetForm()
+                            navigationState.clearCaptureData()
+                            navigationState.popToRoot()
+                            navigationState.navigateToMainTab(Screen.SocialFeed)
+                            socialFeedViewModel.refreshHomeData()
+                        }
+                    }
+                },
+                onImageEdited = { editedBytes ->
+                    navigationState.updateImageBytes(editedBytes)
+                    dishRatingViewModel.setImageBytes(editedBytes)
                 },
                 onPriceChange = { dishRatingViewModel.onPriceChange(it) },
                 onDismissError = { dishRatingViewModel.clearError() },
@@ -1680,7 +1799,8 @@ private fun NavHostContent(
                 currentLongitude = locationUiState.userLongitude ?: locationUiState.currentLongitude,
                 detectedChain = navigationState.detectedChain,
                 detectedType = navigationState.detectedType,
-                currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol
+                currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol,
+                imagePicker = imagePicker
             )
         }
 

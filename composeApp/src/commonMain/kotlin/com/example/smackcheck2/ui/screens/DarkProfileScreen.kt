@@ -655,14 +655,86 @@ fun DarkProfileScreen(
             }
         } else {
             // ── Reviews tab ───────────────────────────────────────────────────
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Icon(Icons.Default.Restaurant, contentDescription = null, tint = MutedGrey, modifier = Modifier.size(48.dp))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Nothing here yet", color = MutedGrey, fontSize = 14.sp)
+            val reviews = userRatings.filter { it.comment.isNotBlank() }
+            if (reviews.isEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Default.Restaurant, contentDescription = null, tint = MutedGrey, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Nothing here yet", color = MutedGrey, fontSize = 14.sp)
+                    }
+                }
+            } else {
+                items(reviews, key = { "review_${it.id}" }) { item ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardWhite)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFEEE5DC)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (item.dishImageUrl != null) {
+                                    KamelImage(
+                                        resource = asyncPainterResource(item.dishImageUrl),
+                                        contentDescription = item.dishName,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(Icons.Default.Restaurant, contentDescription = null, tint = MutedGrey, modifier = Modifier.size(28.dp))
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        item.dishName,
+                                        color = DeepMaroon,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFD700), modifier = Modifier.size(13.dp))
+                                        Spacer(modifier = Modifier.width(3.dp))
+                                        Text(formatOneDecimal(item.rating.toDouble()), color = DeepMaroon, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                                Text(item.restaurantName, color = MutedGrey, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    item.comment,
+                                    color = Color(0xFF171717),
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp,
+                                    maxLines = 4,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }

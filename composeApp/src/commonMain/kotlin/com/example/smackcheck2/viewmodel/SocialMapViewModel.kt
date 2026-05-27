@@ -38,7 +38,28 @@ class SocialMapViewModel(
 
     private val repository = SocialMapRepository()
 
-    private val _uiState = MutableStateFlow(SocialMapUiState())
+    private val _uiState = MutableStateFlow(
+        SocialMapUiState(
+            isLoading = true,
+            currentUserProfile = null,
+            nearbyUsers = emptyList(),
+            myRatingMarkers = emptyList(),
+            selectedUser = null,
+            currentLatitude = null,
+            currentLongitude = null,
+            radiusMeters = DEFAULT_RADIUS_METERS,
+            errorMessage = null,
+            isRefreshing = false,
+            lastRefreshTime = 0L,
+            locationPermissionGranted = false,
+            mapMode = MapMode.MY_RATINGS,
+            recenterTrigger = 0,
+            fitBoundsTrigger = 0,
+            cameraFocusLatitude = null,
+            cameraFocusLongitude = null,
+            cameraFocusTrigger = 0
+        )
+    )
     val uiState: StateFlow<SocialMapUiState> = _uiState.asStateFlow()
 
     private var autoRefreshJob: Job? = null
@@ -47,11 +68,13 @@ class SocialMapViewModel(
     private var myRatingsJob: Job? = null
     private var hasLoadedMyRatings = false
     private var lastNearbyFetchAtMs = 0L
+    private var focusNearestNearbyOnNextLoad = false
 
     init {
         loadCurrentUserProfile()
         hydrateNearbyPostsFromCache()
         loadNearbyUsers() // World posts preload (throttled + deduped)
+        loadMyRatings(force = false) // Default mode is MY_RATINGS
         checkExistingLocationPermission()
     }
 
@@ -70,9 +93,13 @@ class SocialMapViewModel(
         if (_uiState.value.currentLatitude != null) {
             startAutoRefresh()
         }
-        // If posts were never loaded, warm them now
-        if (_uiState.value.nearbyUsers.isEmpty() && !_uiState.value.isLoading) {
-            loadNearbyUsers(force = false)
+        // Warm whichever mode is currently active.
+        if (!_uiState.value.isLoading) {
+            if (_uiState.value.mapMode == MapMode.MY_RATINGS) {
+                loadMyRatings(force = false)
+            } else if (_uiState.value.nearbyUsers.isEmpty()) {
+                loadNearbyUsers(force = false)
+            }
         }
     }
 
@@ -132,6 +159,9 @@ class SocialMapViewModel(
         // Refresh NEARBY markers using the latest GPS location
         if (_uiState.value.mapMode == MapMode.NEARBY) {
             loadNearbyUsers(force = true)
+        } else {
+            hasLoadedMyRatings = false
+            loadMyRatings(force = true)
         }
 
         // Start auto-refresh (posts were already loaded in init)
@@ -244,16 +274,34 @@ class SocialMapViewModel(
             nearbyResult
                 .onSuccess { posts ->
                     lastNearbyFetchAtMs = Clock.System.now().toEpochMilliseconds()
-                    val filteredPosts = posts.filterNot { it.isCurrentUser }
+                    val filteredPosts = posts
+                        .filterNot { it.isCurrentUser }
+                        .withDistanceFrom(userLat, userLng)
+                        .sortedBy { it.distanceMeters }
                     if (!hasLocation) {
                         cachedWorldPosts = filteredPosts
                         cachedWorldPostsAtMs = lastNearbyFetchAtMs
                     }
                     _uiState.update { currentState ->
+                        val canFocusNearest = hasLocation &&
+                            focusNearestNearbyOnNextLoad &&
+                            currentState.mapMode == MapMode.NEARBY
+                        val nearest = if (
+                            canFocusNearest
+                        ) {
+                            filteredPosts.nearestTo(userLat, userLng)
+                        } else null
+                        if (hasLocation) {
+                            focusNearestNearbyOnNextLoad = false
+                        }
                         currentState.copy(
                             isLoading = false,
                             isRefreshing = false,
                             nearbyUsers = filteredPosts,
+                            selectedUser = nearest ?: currentState.selectedUser,
+                            cameraFocusLatitude = nearest?.latitude ?: currentState.cameraFocusLatitude,
+                            cameraFocusLongitude = nearest?.longitude ?: currentState.cameraFocusLongitude,
+                            cameraFocusTrigger = if (nearest != null) currentState.cameraFocusTrigger + 1 else currentState.cameraFocusTrigger,
                             lastRefreshTime = Clock.System.now().toEpochMilliseconds(),
                             errorMessage = null
                         )
@@ -312,23 +360,35 @@ class SocialMapViewModel(
                     val state = _uiState.value
                     val userLat = state.currentLatitude
                     val userLng = state.currentLongitude
+                    val markersWithDistance = markers.withDistanceFrom(userLat, userLng)
+                    val validMarkers = markersWithDistance.filter { it.hasValidLocation() }
                     val nearbyMine = if (userLat != null && userLng != null) {
-                        markers.filter { marker ->
-                            (marker.latitude != 0.0 || marker.longitude != 0.0) &&
-                                distanceMeters(userLat, userLng, marker.latitude, marker.longitude) <= state.radiusMeters
+                        validMarkers.filter { marker ->
+                            marker.distanceMeters <= state.radiusMeters
                         }
                     } else {
-                        markers
+                        validMarkers
                     }
-                    val validMarkers = nearbyMine.filter { it.latitude != 0.0 || it.longitude != 0.0 }
+                    val fallbackNearest = if (
+                        userLat != null &&
+                        userLng != null &&
+                        nearbyMine.isEmpty()
+                    ) {
+                        validMarkers.nearestTo(userLat, userLng)
+                    } else null
+                    val displayedMarkers = if (fallbackNearest != null) listOf(fallbackNearest) else nearbyMine
                     Logger.d(
                         "SocialMapViewModel",
                         "SocialMapViewModel: loadMyRatings success - ${markers.size} total, ${nearbyMine.size} nearby, ${validMarkers.size} valid markers"
                     )
                     _uiState.update {
                         it.copy(
-                            myRatingMarkers = nearbyMine,
-                            fitBoundsTrigger = if (validMarkers.isNotEmpty()) it.fitBoundsTrigger + 1 else it.fitBoundsTrigger
+                            myRatingMarkers = displayedMarkers,
+                            selectedUser = if (fallbackNearest != null && it.mapMode == MapMode.MY_RATINGS) fallbackNearest else it.selectedUser,
+                            cameraFocusLatitude = if (fallbackNearest != null && it.mapMode == MapMode.MY_RATINGS) fallbackNearest.latitude else it.cameraFocusLatitude,
+                            cameraFocusLongitude = if (fallbackNearest != null && it.mapMode == MapMode.MY_RATINGS) fallbackNearest.longitude else it.cameraFocusLongitude,
+                            cameraFocusTrigger = if (fallbackNearest != null && it.mapMode == MapMode.MY_RATINGS) it.cameraFocusTrigger + 1 else it.cameraFocusTrigger,
+                            fitBoundsTrigger = if (displayedMarkers.isNotEmpty() && fallbackNearest == null) it.fitBoundsTrigger + 1 else it.fitBoundsTrigger
                         )
                     }
                 }
@@ -346,6 +406,7 @@ class SocialMapViewModel(
         if (mode == MapMode.MY_RATINGS) {
             loadMyRatings(force = true)
         } else {
+            focusNearestNearbyOnNextLoad = true
             if (_uiState.value.currentLatitude == null || _uiState.value.currentLongitude == null) {
                 requestCurrentLocation()
             }
@@ -455,5 +516,36 @@ class SocialMapViewModel(
             kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
         val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
         return earthRadiusM * c
+    }
+
+    private fun MapUserMarker.hasValidLocation(): Boolean =
+        latitude != 0.0 || longitude != 0.0
+
+    private fun List<MapUserMarker>.withDistanceFrom(
+        userLat: Double?,
+        userLng: Double?
+    ): List<MapUserMarker> {
+        if (userLat == null || userLng == null) return this
+        return map { marker ->
+            if (marker.hasValidLocation()) {
+                marker.copy(
+                    distanceMeters = distanceMeters(userLat, userLng, marker.latitude, marker.longitude)
+                )
+            } else {
+                marker
+            }
+        }
+    }
+
+    private fun List<MapUserMarker>.nearestTo(
+        userLat: Double?,
+        userLng: Double?
+    ): MapUserMarker? {
+        val validMarkers = filter { it.hasValidLocation() }
+        if (validMarkers.isEmpty()) return null
+        if (userLat == null || userLng == null) return validMarkers.first()
+        return validMarkers.minByOrNull {
+            distanceMeters(userLat, userLng, it.latitude, it.longitude)
+        }
     }
 }

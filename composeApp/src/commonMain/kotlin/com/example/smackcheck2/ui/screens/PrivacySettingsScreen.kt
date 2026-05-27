@@ -153,10 +153,28 @@ fun PrivacySettingsScreen(
 
                 PrivacySwitch(
                     title = "Show Location",
-                    description = "Display your city on reviews",
+                    description = "Allow location-aware surfaces to use your city",
                     checked = uiState.settings.showLocation,
                     onCheckedChange = { enabled ->
                         viewModel.updateSetting { it.copy(showLocation = enabled) }
+                    }
+                )
+
+                PrivacySwitch(
+                    title = "Exact Post Location",
+                    description = "Allow map feeds to use precise review coordinates",
+                    checked = uiState.settings.shareExactLocation,
+                    onCheckedChange = { enabled ->
+                        viewModel.updateSetting { it.copy(shareExactLocation = enabled) }
+                    }
+                )
+
+                PrivacySwitch(
+                    title = "Approximate Location",
+                    description = "Allow city-level discovery without exact coordinates",
+                    checked = uiState.settings.shareApproximateLocation,
+                    onCheckedChange = { enabled ->
+                        viewModel.updateSetting { it.copy(shareApproximateLocation = enabled) }
                     }
                 )
 

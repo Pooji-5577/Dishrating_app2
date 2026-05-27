@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.EditableProfileUpdate
+import com.example.smackcheck2.data.repository.ProfileInvalidationBus
 import com.example.smackcheck2.data.repository.ProfileRepository
 import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.model.EditProfileUiState
@@ -69,7 +70,32 @@ class EditProfileViewModel(
             val result = storageRepository.uploadProfileImage(userId, imageBytes, fileName)
             result.fold(
                 onSuccess = { url ->
-                    _uiState.update { it.copy(profilePhotoUrl = url, isUploadingPhoto = false) }
+                    _uiState.update { it.copy(profilePhotoUrl = url) }
+
+                    val currentUser = authRepository.getCurrentUser()
+                    if (currentUser == null) {
+                        _uiState.update {
+                            it.copy(
+                                isUploadingPhoto = false,
+                                errorMessage = "Photo uploaded, but your profile could not be refreshed. Please save your profile."
+                            )
+                        }
+                        return@fold
+                    }
+
+                    val saveResult = authRepository.updateProfile(currentUser.copy(profilePhotoUrl = url))
+                    saveResult.fold(
+                        onSuccess = {
+                            ProfileInvalidationBus.notifyUpdated()
+                            _uiState.update { it.copy(isUploadingPhoto = false) }
+                        },
+                        onFailure = { error ->
+                            val message = ErrorHandler.handleError(error, "Save Profile Photo")
+                            _uiState.update {
+                                it.copy(isUploadingPhoto = false, errorMessage = message)
+                            }
+                        }
+                    )
                 },
                 onFailure = { error ->
                     val message = ErrorHandler.handleError(error, "Upload Profile Photo")

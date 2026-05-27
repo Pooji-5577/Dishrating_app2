@@ -1,26 +1,29 @@
 package com.example.smackcheck2.data.repository
 
-import com.example.smackcheck2.data.SupabaseClientProvider
-import io.github.jan.supabase.storage.storage
+import com.example.smackcheck2.data.ApiClient
 import kotlinx.datetime.Clock
+import kotlinx.serialization.Serializable
 
 /**
- * Repository for file storage operations using Supabase Storage
+ * Repository for file storage operations via the custom backend API.
+ * All uploads go through ApiClient.uploadImage() → POST /api/storage/upload.
+ * All deletes go through DELETE /api/storage/delete with a JSON body.
  */
 class StorageRepository {
 
-    private val client = SupabaseClientProvider.client
-    private val storage = client.storage
-
     companion object {
-        const val BUCKET_DISH_IMAGES = "dish-images"
-        const val BUCKET_PROFILE_IMAGES = "profile-images"
-        const val BUCKET_RESTAURANT_IMAGES = "restaurant-images"
-        const val BUCKET_STORY_IMAGES = "story-images"
+        const val BUCKET_DISH_IMAGES = "dish"
+        const val BUCKET_PROFILE_IMAGES = "profile"
+        const val BUCKET_RESTAURANT_IMAGES = "restaurant"
+        const val BUCKET_STORY_IMAGES = "story"
+        const val BUCKET_RECEIPT_IMAGES = "receipt"
     }
 
+    @Serializable
+    private data class StorageDeleteRequest(val bucket: String, val path: String)
+
     /**
-     * Upload a dish image
+     * Upload a dish image.
      * @param userId User ID for organizing files
      * @param imageBytes Image data as ByteArray
      * @param fileName Original file name (for extension)
@@ -35,7 +38,7 @@ class StorageRepository {
     }
 
     /**
-     * Upload a profile image
+     * Upload a profile image.
      * @param userId User ID
      * @param imageBytes Image data as ByteArray
      * @param fileName Original file name (for extension)
@@ -50,7 +53,7 @@ class StorageRepository {
     }
 
     /**
-     * Upload a restaurant image
+     * Upload a restaurant image.
      * @param restaurantId Restaurant ID for organizing files
      * @param imageBytes Image data as ByteArray
      * @param fileName Original file name (for extension)
@@ -72,14 +75,25 @@ class StorageRepository {
         return uploadImage(BUCKET_STORY_IMAGES, userId, imageBytes, fileName)
     }
 
+    suspend fun uploadReceiptImage(
+        userId: String,
+        imageBytes: ByteArray,
+        fileName: String
+    ): Result<String> {
+        return uploadImage(BUCKET_RECEIPT_IMAGES, userId, imageBytes, fileName)
+    }
+
     /**
-     * Delete an image from storage
-     * @param bucketName Bucket name
-     * @param path Full path to the file
+     * Delete an image from storage via the backend.
+     * @param bucketName Bucket name (use the BUCKET_* constants)
+     * @param path Full path to the file within the bucket
      */
     suspend fun deleteImage(bucketName: String, path: String): Result<Unit> {
         return try {
-            storage.from(bucketName).delete(path)
+            ApiClient.deleteWithBody(
+                "storage/delete",
+                StorageDeleteRequest(bucket = bucketName, path = path)
+            )
             Result.success(Unit)
         } catch (e: Exception) {
             val message = when {
@@ -96,12 +110,12 @@ class StorageRepository {
     }
 
     /**
-     * Get public URL for a file
-     * @param bucketName Bucket name
-     * @param path Path to the file within the bucket
+     * Returns a constructed public URL for an already-uploaded file.
+     * This is a local helper; the authoritative URL is always the one
+     * returned by uploadImage / ApiClient.uploadImage.
      */
     fun getPublicUrl(bucketName: String, path: String): String {
-        return storage.from(bucketName).publicUrl(path)
+        return "${com.example.smackcheck2.data.BackendConfig.BACKEND_URL}/api/storage/$bucketName/$path"
     }
 
     private suspend fun uploadImage(
@@ -118,14 +132,23 @@ class StorageRepository {
 
             val extension = fileName.substringAfterLast(".", "jpg")
             val timestamp = Clock.System.now().toEpochMilliseconds()
-            val path = "$folderName/${timestamp}.$extension"
+            val storageName = "$folderName/$timestamp.$extension"
 
-            storage.from(bucketName).upload(path, imageBytes) {
-                upsert = true
+            val mimeType = when (extension.lowercase()) {
+                "png" -> "image/png"
+                "webp" -> "image/webp"
+                "gif" -> "image/gif"
+                else -> "image/jpeg"
             }
 
-            val publicUrl = storage.from(bucketName).publicUrl(path)
-            Result.success(publicUrl)
+            val response = ApiClient.uploadImage(
+                bucket = bucketName,
+                imageBytes = imageBytes,
+                fileName = storageName,
+                mimeType = mimeType
+            )
+
+            Result.success(response.url)
         } catch (e: Exception) {
             val message = when {
                 e.message?.contains("size", ignoreCase = true) == true ->

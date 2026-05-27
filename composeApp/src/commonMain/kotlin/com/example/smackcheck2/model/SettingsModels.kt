@@ -25,7 +25,9 @@ data class PrivacySettings(
     val showEmail: Boolean = false,
     val showLocation: Boolean = true,
     val allowTagging: Boolean = true,
-    val dataCollection: Boolean = true
+    val dataCollection: Boolean = true,
+    val shareExactLocation: Boolean = false,
+    val shareApproximateLocation: Boolean = true
 )
 
 enum class ProfileVisibility {

@@ -1,19 +1,14 @@
 package com.example.smackcheck2.data.repository
 
 import com.example.smackcheck2.data.ImageDelivery
-import com.example.smackcheck2.data.SupabaseClientProvider
+import com.example.smackcheck2.data.ApiClient
 import com.example.smackcheck2.model.FeedFilter
 import com.example.smackcheck2.model.FeedItem
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.rpc
 import kotlinx.datetime.Instant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 class FeedReadRepository {
-
-    private val postgrest
-        get() = SupabaseClientProvider.client.postgrest
 
     suspend fun getFeedPage(
         filter: FeedFilter,
@@ -28,21 +23,20 @@ class FeedReadRepository {
         currentUserId: String? = null
     ): Result<List<FeedItem>> {
         return try {
-            val rows = postgrest.rpc(
-                function = "get_feed_page",
-                parameters = FeedPageParams(
-                    p_filter = filter.name,
-                    p_limit = limit,
-                    p_cursor_created_at = cursorCreatedAt,
-                    p_cursor_id = cursorId,
-                    p_cursor_rating = cursorRating,
-                    p_user_lat = userLat,
-                    p_user_lon = userLon,
-                    p_user_city = userCity,
-                    p_radius_km = radiusKm,
-                    p_current_user_id = currentUserId
+            val rows = ApiClient.get<List<FeedPageRow>>(
+                "social/feed-page",
+                mapOf(
+                    "filter" to filter.name,
+                    "limit" to limit.toString(),
+                    "cursorCreatedAt" to cursorCreatedAt,
+                    "cursorId" to cursorId,
+                    "cursorRating" to cursorRating?.toString(),
+                    "userLat" to userLat?.toString(),
+                    "userLon" to userLon?.toString(),
+                    "userCity" to userCity,
+                    "radiusKm" to radiusKm.toString()
                 )
-            ).decodeList<FeedPageRow>()
+            )
 
             Result.success(rows.map { it.toFeedItem() })
         } catch (e: kotlinx.coroutines.CancellationException) {
@@ -87,20 +81,6 @@ class FeedReadRepository {
         }
     }
 }
-
-@Serializable
-private data class FeedPageParams(
-    val p_filter: String,
-    val p_limit: Int,
-    val p_cursor_created_at: String? = null,
-    val p_cursor_id: String? = null,
-    val p_cursor_rating: Double? = null,
-    val p_user_lat: Double? = null,
-    val p_user_lon: Double? = null,
-    val p_user_city: String? = null,
-    val p_radius_km: Double = 25.0,
-    val p_current_user_id: String? = null
-)
 
 @Serializable
 private data class FeedPageRow(

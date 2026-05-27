@@ -384,6 +384,9 @@ fun SocialMapScreen(
                         showMyLocation = uiState.locationPermissionGranted,
                         recenterTrigger = uiState.recenterTrigger,
                         fitBoundsTrigger = uiState.fitBoundsTrigger,
+                        cameraFocusLatitude = uiState.cameraFocusLatitude,
+                        cameraFocusLongitude = uiState.cameraFocusLongitude,
+                        cameraFocusTrigger = uiState.cameraFocusTrigger,
                         modifier = Modifier.fillMaxSize()
                     )
 

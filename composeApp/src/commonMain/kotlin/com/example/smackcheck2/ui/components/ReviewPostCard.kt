@@ -17,18 +17,27 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.outlined.BookmarkBorder
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.FeedItem
+import com.example.smackcheck2.model.PendingRatingSyncStatus
 import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
@@ -56,6 +66,8 @@ fun ReviewPostCard(
     onLikeClick: () -> Unit,
     onCommentClick: () -> Unit,
     onShareClick: () -> Unit,
+    onReportClick: () -> Unit = {},
+    onBlockUserClick: () -> Unit = {},
     onBookmarkClick: () -> Unit,
     onUserClick: () -> Unit,
     onDishClick: () -> Unit = {},
@@ -64,9 +76,13 @@ fun ReviewPostCard(
     val colors = appColors()
     val jakartaSans = PlusJakartaSans()
     val newsreader = NewsreaderFontFamily()
+    var menuExpanded by remember { mutableStateOf(false) }
+    val isPending = feedItem.syncStatus != null
 
     Surface(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(enabled = !isPending) { onDishClick() },
         shape = RoundedCornerShape(32.dp),
         color = Color.White,
         shadowElevation = 1.dp
@@ -141,14 +157,85 @@ fun ReviewPostCard(
                     }
                 }
 
-                // Timestamp
-                Text(
-                    text = formatRelativeTime(feedItem.timestamp),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = jakartaSans,
-                    color = BrandRedDark
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (feedItem.syncStatus != null) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = when (feedItem.syncStatus) {
+                                PendingRatingSyncStatus.FAILED -> BrandRed.copy(alpha = 0.14f)
+                                PendingRatingSyncStatus.PENDING,
+                                PendingRatingSyncStatus.SYNCING -> Color(0xFFEFE7FF)
+                            }
+                        ) {
+                            Text(
+                                text = when (feedItem.syncStatus) {
+                                    PendingRatingSyncStatus.FAILED -> "Retrying"
+                                    PendingRatingSyncStatus.PENDING -> "Posting"
+                                    PendingRatingSyncStatus.SYNCING -> "Posting"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = jakartaSans,
+                                color = when (feedItem.syncStatus) {
+                                    PendingRatingSyncStatus.FAILED -> BrandRed
+                                    PendingRatingSyncStatus.PENDING,
+                                    PendingRatingSyncStatus.SYNCING -> BrandRedDark
+                                },
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = formatRelativeTime(feedItem.timestamp),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = jakartaSans,
+                            color = BrandRedDark
+                        )
+                    }
+
+                    if (!isPending) Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Filled.MoreVert,
+                                contentDescription = "Post options",
+                                tint = Color.Black,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Report post") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.Flag,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onReportClick()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Block user") },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Filled.Block,
+                                        contentDescription = null
+                                    )
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onBlockUserClick()
+                                }
+                            )
+                        }
+                    }
+                }
             }
 
             // Content section
@@ -158,7 +245,6 @@ fun ReviewPostCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(256.dp)
-                        .clickable { onDishClick() }
                 ) {
                     if (feedItem.dishImageUrl != null) {
                         KamelImage(
@@ -239,7 +325,7 @@ fun ReviewPostCard(
                         fontFamily = newsreader,
                         color = BrandRedDark,
                         lineHeight = 30.sp,
-                        modifier = Modifier.clickable { onDishClick() }
+                        modifier = Modifier
                     )
 
                     // "at Restaurant Name"
@@ -284,7 +370,7 @@ fun ReviewPostCard(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onLikeClick() }
+                        modifier = Modifier.clickable(enabled = !isPending) { onLikeClick() }
                     ) {
                         Icon(
                             imageVector = if (feedItem.isLiked) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
@@ -307,7 +393,7 @@ fun ReviewPostCard(
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { onCommentClick() }
+                        modifier = Modifier.clickable(enabled = !isPending) { onCommentClick() }
                     ) {
                         Icon(
                             imageVector = Icons.Filled.ChatBubbleOutline,
@@ -330,8 +416,8 @@ fun ReviewPostCard(
                     Icon(
                         imageVector = Icons.Filled.Share,
                         contentDescription = "Share",
-                        tint = Color.Black,
-                        modifier = Modifier.size(15.dp).clickable { onShareClick() }
+                        tint = if (isPending) Color.Black.copy(alpha = 0.35f) else Color.Black,
+                        modifier = Modifier.size(15.dp).clickable(enabled = !isPending) { onShareClick() }
                     )
                 }
 
@@ -339,8 +425,8 @@ fun ReviewPostCard(
                 Icon(
                     imageVector = if (feedItem.isBookmarked) Icons.Filled.Bookmark else Icons.Outlined.BookmarkBorder,
                     contentDescription = "Bookmark",
-                    tint = if (feedItem.isBookmarked) colors.PrimaryDark else Color.Black,
-                    modifier = Modifier.size(18.dp).clickable { onBookmarkClick() }
+                    tint = if (isPending) Color.Black.copy(alpha = 0.35f) else if (feedItem.isBookmarked) colors.PrimaryDark else Color.Black,
+                    modifier = Modifier.size(18.dp).clickable(enabled = !isPending) { onBookmarkClick() }
                 )
             }
         }

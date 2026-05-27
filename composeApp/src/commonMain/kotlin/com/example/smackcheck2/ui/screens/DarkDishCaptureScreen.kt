@@ -81,6 +81,9 @@ import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.PhotoCropMode
+import com.example.smackcheck2.util.PhotoEditState
+import com.example.smackcheck2.util.PhotoFilterPreset
 import com.example.smackcheck2.viewmodel.DishCaptureViewModel
 import kotlinx.coroutines.launch
 
@@ -90,6 +93,7 @@ private val CrimsonRed = BrandRed
 private val RosePink = Color(0xFFBB5B5C)
 private val CreamWhite = Color(0xFFFFF8F0)
 private val WarmBeige = Color(0xFFF5EDE3)
+private val LightChipBackground = Color(0xFFF7EAEA)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +103,8 @@ fun DarkDishCaptureScreen(
     onNavigateBack: () -> Unit,
     onImageCaptured: (imageUri: String, dishName: String, imageBytes: ByteArray?, allImages: List<CapturedImage>, cuisine: String?, confidence: Float, restaurantChain: String?, restaurantType: String?) -> Unit,
     isStoryMode: Boolean = false,
-    onAddManually: ((String) -> Unit)? = null
+    onAddManually: ((String) -> Unit)? = null,
+    onImageReady: ((com.example.smackcheck2.platform.ImageResult) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -162,7 +167,7 @@ fun DarkDishCaptureScreen(
                 coroutineScope.launch {
                     val result = imagePicker?.captureImage()
                     if (result != null) {
-                        viewModel.onImageCaptured(result)
+                        if (onImageReady != null) onImageReady(result) else viewModel.onImageCaptured(result)
                     } else {
                         showPickerSheet = true
                     }
@@ -192,6 +197,7 @@ fun DarkDishCaptureScreen(
                     canAddMoreImages = viewModel.canAddMoreImages(),
                     onSelectImage = { viewModel.selectImage(it) },
                     onRemoveImage = { viewModel.removeImage(it) },
+                    onPhotoEditChange = { viewModel.updatePhotoEdit(it) },
                     onAddMoreFromGallery = {
                         coroutineScope.launch {
                             val remaining = viewModel.remainingImageSlots()
@@ -240,6 +246,13 @@ fun DarkDishCaptureScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = WarmMaroon,
+                            modifier = Modifier.padding(bottom = 2.dp)
+                        )
+                        Text(
+                            text = if (isStoryMode) "Share a moment from your food journey"
+                                   else "Snap or pick a photo to start your dish rating",
+                            fontSize = 13.sp,
+                            color = Color(0xFF888888),
                             modifier = Modifier.padding(bottom = 4.dp)
                         )
                         Row(
@@ -275,7 +288,9 @@ fun DarkDishCaptureScreen(
                                     showPickerSheet = false
                                     coroutineScope.launch {
                                         val result = imagePicker?.pickFromGallery()
-                                        if (result != null) viewModel.onImageCaptured(result)
+                                        if (result != null) {
+                                            if (onImageReady != null) onImageReady(result) else viewModel.onImageCaptured(result)
+                                        }
                                         else showPickerSheet = true
                                     }
                                 }
@@ -490,6 +505,7 @@ private fun ImagePreviewWithAI(
     canAddMoreImages: Boolean,
     onSelectImage: (Int) -> Unit,
     onRemoveImage: (Int) -> Unit,
+    onPhotoEditChange: (PhotoEditState) -> Unit,
     onAddMoreFromGallery: () -> Unit,
     onEditedNameChange: (String) -> Unit,
     onEditClick: () -> Unit,
@@ -503,6 +519,7 @@ private fun ImagePreviewWithAI(
 ) {
     val displayedImage = allImages.getOrNull(selectedImageIndex)
     val displayedImageBytes = displayedImage?.bytes ?: imageBytes
+    val displayedEditState = displayedImage?.editState ?: PhotoEditState()
 
     Column(
         modifier = Modifier
@@ -580,7 +597,11 @@ private fun ImagePreviewWithAI(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = if (isAIDetected) "AI IDENTIFIED" else "MANUAL ENTRY",
+                            text = when {
+                                isAnalyzing -> "IDENTIFYING"
+                                isAIDetected -> "AI IDENTIFIED"
+                                else -> "MANUAL ENTRY"
+                            },
                             color = CrimsonRed,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -617,7 +638,7 @@ private fun ImagePreviewWithAI(
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "\"${detectedDishName ?: "Unknown Dish"}\"",
+                                    text = "\"${detectedDishName ?: if (isAnalyzing) "Identifying..." else "Unknown Dish"}\"",
                                     color = DeepMaroon,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
@@ -669,18 +690,20 @@ private fun ImagePreviewWithAI(
                         }
                     }
 
-                    // Analyzing overlay
+                    // Non-blocking analysis status. The user can still inspect, edit, and continue.
                     if (isAnalyzing) {
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(20.dp)),
-                            contentAlignment = Alignment.Center
+                                .align(Alignment.TopStart)
+                                .padding(12.dp)
+                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.CenterStart
                         ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                CircularProgressIndicator(color = CrimsonRed, modifier = Modifier.size(40.dp))
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Text("AI Detecting Dish...", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Identifying...", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -730,6 +753,11 @@ private fun ImagePreviewWithAI(
                 )
             }
 
+            PhotoEditControls(
+                editState = displayedEditState,
+                onEditChange = onPhotoEditChange
+            )
+
             // TAKE ANOTHER | FROM GALLERY
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -755,11 +783,9 @@ private fun ImagePreviewWithAI(
         // Confirm button
         Button(
             onClick = onConfirm,
-            enabled = !isAnalyzing && (
-                isStoryMode ||
-                    ((!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown") ||
-                        (isEditingName && editedName.isNotBlank()))
-            ),
+            enabled = isStoryMode ||
+                ((!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown" && detectedDishName != "Identifying...") ||
+                    editedName.isNotBlank()),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
@@ -811,6 +837,89 @@ private fun CaptureActionButton(
                 letterSpacing = 0.5.sp
             )
         }
+    }
+}
+
+@Composable
+private fun PhotoEditControls(
+    editState: PhotoEditState,
+    onEditChange: (PhotoEditState) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "Crop",
+                color = DeepMaroon,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PhotoCropMode.entries.forEach { mode ->
+                    EditChip(
+                        label = mode.label,
+                        selected = editState.cropMode == mode,
+                        onClick = { onEditChange(editState.copy(cropMode = mode)) }
+                    )
+                }
+            }
+
+            Text(
+                text = "Filter",
+                color = DeepMaroon,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PhotoFilterPreset.entries.forEach { preset ->
+                    EditChip(
+                        label = preset.label,
+                        selected = editState.filterPreset == preset,
+                        onClick = { onEditChange(editState.copy(filterPreset = preset)) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) CrimsonRed else LightChipBackground)
+            .border(
+                width = 1.dp,
+                color = if (selected) CrimsonRed else RosePink.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(999.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else WarmMaroon,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        )
     }
 }
 

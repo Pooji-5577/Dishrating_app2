@@ -45,6 +45,9 @@ actual fun PlatformMapView(
     showMyLocation: Boolean,
     recenterTrigger: Int,
     fitBoundsTrigger: Int,
+    cameraFocusLatitude: Double?,
+    cameraFocusLongitude: Double?,
+    cameraFocusTrigger: Int,
     modifier: Modifier
 ) {
     val cameraPositionState = rememberCameraPositionState {
@@ -57,6 +60,17 @@ actual fun PlatformMapView(
             update = CameraUpdateFactory.newLatLngZoom(LatLng(latitude, longitude), zoom),
             durationMs = 800
         )
+    }
+
+    LaunchedEffect(cameraFocusTrigger) {
+        val focusLat = cameraFocusLatitude
+        val focusLng = cameraFocusLongitude
+        if (focusLat != null && focusLng != null) {
+            cameraPositionState.animate(
+                update = CameraUpdateFactory.newLatLngZoom(LatLng(focusLat, focusLng), 15f),
+                durationMs = 800
+            )
+        }
     }
 
     // Fit camera to all markers when fitBoundsTrigger changes

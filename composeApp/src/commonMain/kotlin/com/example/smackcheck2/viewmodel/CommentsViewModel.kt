@@ -66,9 +66,8 @@ class CommentsViewModel(private val ratingId: String) : ViewModel() {
                 return@launch
             }
 
-            socialRepository.addComment(
+            socialRepository.addCommentAsCurrentUser(
                 ratingId = ratingId,
-                userId = user.id,
                 content = content,
                 parentCommentId = parentId
             ).fold(

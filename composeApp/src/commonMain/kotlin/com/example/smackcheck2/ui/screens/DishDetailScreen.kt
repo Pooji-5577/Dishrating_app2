@@ -1,6 +1,7 @@
 package com.example.smackcheck2.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -49,12 +52,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.data.ImageDelivery
 import com.example.smackcheck2.model.Dish
+import com.example.smackcheck2.model.Comment
 import com.example.smackcheck2.model.Review
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishDetailViewModel
@@ -286,6 +292,7 @@ fun DishDetailScreen(
 
                     // Dish Info Section
                     item {
+                        val newsreader = NewsreaderFontFamily()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -298,6 +305,20 @@ fun DishDetailScreen(
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold
                             )
+
+                            val posterDescription = uiState.featuredReview?.comment?.trim().orEmpty()
+                            if (posterDescription.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "\"$posterDescription\"",
+                                    color = BrandRedDark,
+                                    fontSize = 20.sp,
+                                    fontFamily = newsreader,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
 
@@ -458,12 +479,87 @@ fun DishDetailScreen(
                             )
                         }
 
-                        items(uiState.reviews, key = { it.id }) { review ->
-                            ReviewItem(review = review)
-                            HorizontalDivider(
-                                color = appColors().Surface,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
+                        item {
+                            val hasAnchorReview = uiState.featuredReview != null || uiState.reviews.isNotEmpty()
+                            val inputShape = RoundedCornerShape(16.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = uiState.commentDraft,
+                                    onValueChange = viewModel::onCommentDraftChange,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .border(
+                                            width = 2.dp,
+                                            color = BrandRedDark,
+                                            shape = inputShape
+                                        ),
+                                    placeholder = { Text("Write a comment") },
+                                    singleLine = false,
+                                    maxLines = 3,
+                                    enabled = hasAnchorReview && !uiState.isCommentSubmitting,
+                                    shape = inputShape,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        cursorColor = BrandRedDark,
+                                        focusedTextColor = appColors().TextPrimary,
+                                        unfocusedTextColor = appColors().TextPrimary
+                                    ),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                        imeAction = ImeAction.Send
+                                    ),
+                                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                        onSend = { viewModel.submitComment() }
+                                    )
+                                )
+
+                                Button(
+                                    onClick = { viewModel.submitComment() },
+                                    enabled = hasAnchorReview &&
+                                        !uiState.isCommentSubmitting &&
+                                        uiState.commentDraft.isNotBlank(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandRedDark)
+                                ) {
+                                    Text(if (uiState.isCommentSubmitting) "..." else "Post")
+                                }
+                            }
+                        }
+
+                        if (!uiState.commentErrorMessage.isNullOrBlank()) {
+                            item {
+                                Text(
+                                    text = uiState.commentErrorMessage ?: "",
+                                    color = appColors().Error,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        if (uiState.comments.isEmpty()) {
+                            item {
+                                Text(
+                                    text = "No comments yet. Be the first to comment!",
+                                    color = appColors().TextSecondary,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        } else {
+                            items(uiState.comments, key = { it.id }) { comment ->
+                                DishCommentItem(comment = comment, featuredRating = uiState.featuredReview?.rating)
+                                HorizontalDivider(
+                                    color = appColors().Surface,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
                         }
                     } else if (!uiState.isLoading) {
                         item {
@@ -589,6 +685,75 @@ private fun ReviewItem(review: Review) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun DishCommentItem(
+    comment: Comment,
+    featuredRating: Float?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(appColors().SurfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = comment.userName.firstOrNull()?.toString() ?: "?",
+                color = appColors().Primary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = comment.userName,
+                    color = appColors().TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                if ((featuredRating ?: 0f) > 0f) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = appColors().StarYellow,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = formatRatingValue(featuredRating ?: 0f),
+                            color = appColors().TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = comment.content,
+                color = appColors().TextSecondary,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+            )
         }
     }
 }

@@ -1,11 +1,7 @@
 package com.example.smackcheck2.data.repository
 
-import com.example.smackcheck2.data.SupabaseClientProvider
-import io.github.jan.supabase.functions.functions
-import io.ktor.client.call.*
-import io.ktor.http.*
+import com.example.smackcheck2.data.ApiClient
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import com.example.smackcheck2.util.Logger
@@ -34,17 +30,8 @@ data class DishDetectionResult(
  */
 class AIDetectionRepository {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        prettyPrint = false
-        encodeDefaults = true
-    }
-
-    private val supabase = SupabaseClientProvider.client
-
     /**
-     * Detect dish name from image bytes using Supabase Edge Function
+     * Detect dish name from image bytes using the SmackCheck backend.
      */
     @OptIn(ExperimentalEncodingApi::class)
     suspend fun detectDish(imageBytes: ByteArray, mimeType: String = "image/jpeg"): DishDetectionResult {
@@ -72,79 +59,23 @@ class AIDetectionRepository {
             val base64Image = Base64.encode(imageBytes)
             Logger.d("AIDetectionRepository", "AIDetection: Base64 encoded successfully, length: ${base64Image.length}")
 
-            // Build the request body
             val requestBody = EdgeFunctionRequest(
                 imageBase64 = base64Image,
                 mimeType = actualMimeType
             )
 
-            Logger.d("AIDetectionRepository", "AIDetection: Calling Supabase Edge Function 'analyze-dish'...")
-
-            // Call the Supabase Edge Function
-            val response = supabase.functions.invoke(
-                function = "analyze-dish",
-                body = requestBody
+            Logger.d("AIDetectionRepository", "AIDetection: Calling backend /api/ai/detect-dish...")
+            val edgeResponse = ApiClient.post<EdgeFunctionRequest, EdgeFunctionResponse>(
+                "ai/detect-dish",
+                requestBody
             )
-
-            Logger.d("AIDetectionRepository", "AIDetection: Response status: ${response.status.value}")
-
-            if (response.status.value != 200) {
-                val errorText = response.body<String>()
-                Logger.e("AIDetectionRepository", "AIDetection: Edge Function error: $errorText")
-
-                // Handle specific HTTP errors
-                val isServerOutage = response.status.value in listOf(500, 502, 503, 504, 429)
-                val errorMessage = when (response.status.value) {
-                    401 -> "Authentication required. Please log in."
-                    403 -> "Access denied. Check your permissions."
-                    429 -> "Rate limit exceeded. Please try again in a few moments."
-                    500, 502, 503, 504 -> "AI service is temporarily unavailable. Please enter dish name manually."
-                    else -> "Error: ${response.status.value}"
-                }
-
-                return createFallbackResult("Unknown").copy(
-                    alternatives = listOf(errorMessage),
-                    debugInfo = "HTTP ${response.status.value}: ${errorText.take(100)}",
-                    isOutage = isServerOutage
-                )
-            }
-
-            // Parse the response
-            val responseText = response.body<String>()
-            Logger.d("AIDetectionRepository", "AIDetection: Response (first 500 chars): ${responseText.take(500)}")
-
-            // Robust deserialization: if full JSON parsing fails, fall back to regex extraction
-            val edgeResponse = try {
-                json.decodeFromString<EdgeFunctionResponse>(responseText)
-            } catch (parseException: Exception) {
-                Logger.e("AIDetectionRepository", "AIDetection: JSON parse failed (${parseException.message}), using regex fallback...", parseException)
-                val dishNameMatch = Regex("\"dishName\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val confidenceMatch = Regex("\"confidence\"\\s*:\\s*([\\d.]+)").find(responseText)
-                val cuisineMatch = Regex("\"cuisine\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val itemTypeMatch = Regex("\"itemType\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val chainMatch = Regex("\"restaurantChain\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
-                val typeMatch = Regex("\"restaurantType\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
-                val errorMatch = Regex("\"error\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val extracted = dishNameMatch?.groupValues?.getOrNull(1) ?: ""
-                val extractedConf = confidenceMatch?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: 0f
-                Logger.d("AIDetectionRepository", "AIDetection: Regex extracted -> dishName='$extracted', confidence=$extractedConf")
-                EdgeFunctionResponse(
-                    dishName = extracted,
-                    cuisine = cuisineMatch?.groupValues?.getOrNull(1) ?: "",
-                    confidence = extractedConf,
-                    itemType = itemTypeMatch?.groupValues?.getOrNull(1) ?: "unknown",
-                    restaurantChain = chainMatch?.groupValues?.getOrNull(1) ?: "",
-                    restaurantType = typeMatch?.groupValues?.getOrNull(1) ?: "",
-                    error = errorMatch?.groupValues?.getOrNull(1)
-                )
-            }
 
             // Check for error in response
             if (!edgeResponse.error.isNullOrBlank()) {
                 Logger.e("AIDetectionRepository", "AIDetection: Edge Function returned error: ${edgeResponse.error}")
                 return createFallbackResult("Unknown").copy(
                     alternatives = listOf(edgeResponse.error!!),
-                    debugInfo = "Edge Function error: ${edgeResponse.error}"
+                    debugInfo = "Backend AI error: ${edgeResponse.error}"
                 )
             }
 
@@ -158,9 +89,10 @@ class AIDetectionRepository {
 
             // Normalise item type — only accept known values
             // If AI didn't return a type, infer from the dish name as a fallback
-            val itemType = when (edgeResponse.itemType.lowercase()) {
-                "food" -> "food"
-                "beverage" -> "beverage"
+            val itemType = when {
+                edgeResponse.isFood == false -> "unknown"
+                edgeResponse.itemType.equals("food", ignoreCase = true) -> "food"
+                edgeResponse.itemType.equals("beverage", ignoreCase = true) -> "beverage"
                 else -> if (dishName != "Unknown") inferItemTypeFromName(dishName) else "unknown"
             }
 
@@ -170,13 +102,13 @@ class AIDetectionRepository {
                 dishName = dishName,
                 confidence = edgeResponse.confidence.coerceIn(0f, 1f),
                 alternatives = edgeResponse.alternatives,
-                cuisine = edgeResponse.cuisine.takeIf { it.isNotBlank() },
+                cuisine = (edgeResponse.cuisine.takeIf { it.isNotBlank() } ?: edgeResponse.cuisineType),
                 // Detected if we have a real name — removed the confidence > 0.1 gate
-                isAIDetected = dishName != "Unknown",
+                isAIDetected = dishName != "Unknown" && itemType != "unknown",
                 itemType = itemType,
                 restaurantChain = edgeResponse.restaurantChain.takeIf { it.isNotBlank() },
                 restaurantType = edgeResponse.restaurantType.takeIf { it.isNotBlank() },
-                debugInfo = "OK via Edge Function (type=$itemType, conf=${edgeResponse.confidence}, chain=${edgeResponse.restaurantChain})"
+                debugInfo = "OK via backend AI (type=$itemType, conf=${edgeResponse.confidence}, chain=${edgeResponse.restaurantChain})"
             )
 
         } catch (e: Exception) {
@@ -230,10 +162,12 @@ private data class EdgeFunctionRequest(
 private data class EdgeFunctionResponse(
     val dishName: String = "",
     val cuisine: String = "",
+    val cuisineType: String? = null,
     val confidence: Float = 0f,
     val alternatives: List<String> = emptyList(),
     val description: String = "",
     val ingredients: List<String> = emptyList(),
+    val isFood: Boolean? = null,
     val itemType: String = "unknown",
     val restaurantChain: String = "",
     val restaurantType: String = "",

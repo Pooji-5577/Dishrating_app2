@@ -1,5 +1,7 @@
 package com.example.smackcheck2.model
 
+import com.example.smackcheck2.util.PhotoEditState
+
 /**
  * Sealed class representing different UI states
  */
@@ -145,9 +147,13 @@ data class DishDetailUiState(
     val dish: Dish? = null,
     val restaurant: Restaurant? = null,
     val reviews: List<Review> = emptyList(),
+    val comments: List<Comment> = emptyList(),
     val relatedDishes: List<Dish> = emptyList(),
     val featuredReview: Review? = null,
     val isFavorite: Boolean = false,
+    val commentDraft: String = "",
+    val isCommentSubmitting: Boolean = false,
+    val commentErrorMessage: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
@@ -342,6 +348,8 @@ data class DiscoverUsersUiState(
 data class DishCaptureUiState(
     val imageUri: String? = null,
     val imageBytes: ByteArray? = null,
+    val originalImageBytes: ByteArray? = null,
+    val imageEditState: PhotoEditState = PhotoEditState(),
     // Support for multiple images
     val additionalImages: List<CapturedImage> = emptyList(),
     val selectedImageIndex: Int = 0, // Which image is currently displayed/being analyzed
@@ -369,7 +377,7 @@ data class DishCaptureUiState(
     /** Get all images as a list */
     val allImages: List<CapturedImage> get() = buildList {
         if (imageUri != null && imageBytes != null) {
-            add(CapturedImage(imageUri, imageBytes))
+            add(CapturedImage(imageUri, imageBytes, originalImageBytes ?: imageBytes, imageEditState))
         }
         addAll(additionalImages)
     }
@@ -391,6 +399,11 @@ data class DishCaptureUiState(
             if (other.imageBytes == null) return false
             if (!imageBytes.contentEquals(other.imageBytes)) return false
         } else if (other.imageBytes != null) return false
+        if (originalImageBytes != null) {
+            if (other.originalImageBytes == null) return false
+            if (!originalImageBytes.contentEquals(other.originalImageBytes)) return false
+        } else if (other.originalImageBytes != null) return false
+        if (imageEditState != other.imageEditState) return false
         if (additionalImages != other.additionalImages) return false
         if (selectedImageIndex != other.selectedImageIndex) return false
         if (perImageDetections != other.perImageDetections) return false
@@ -416,6 +429,8 @@ data class DishCaptureUiState(
     override fun hashCode(): Int {
         var result = imageUri?.hashCode() ?: 0
         result = 31 * result + (imageBytes?.contentHashCode() ?: 0)
+        result = 31 * result + (originalImageBytes?.contentHashCode() ?: 0)
+        result = 31 * result + imageEditState.hashCode()
         result = 31 * result + additionalImages.hashCode()
         result = 31 * result + selectedImageIndex
         result = 31 * result + perImageDetections.hashCode()
@@ -443,7 +458,9 @@ data class DishCaptureUiState(
  */
 data class CapturedImage(
     val uri: String,
-    val bytes: ByteArray
+    val bytes: ByteArray,
+    val originalBytes: ByteArray = bytes,
+    val editState: PhotoEditState = PhotoEditState()
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -451,12 +468,16 @@ data class CapturedImage(
         other as CapturedImage
         if (uri != other.uri) return false
         if (!bytes.contentEquals(other.bytes)) return false
+        if (!originalBytes.contentEquals(other.originalBytes)) return false
+        if (editState != other.editState) return false
         return true
     }
 
     override fun hashCode(): Int {
         var result = uri.hashCode()
         result = 31 * result + bytes.contentHashCode()
+        result = 31 * result + originalBytes.contentHashCode()
+        result = 31 * result + editState.hashCode()
         return result
     }
 }

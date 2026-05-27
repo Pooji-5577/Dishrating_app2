@@ -60,17 +60,17 @@ fun App(
 
     val kamelConfig = remember {
         KamelConfig {
-            imageBitmapCacheSize = 100
+            imageBitmapCacheSize = 300
             imageVectorCacheSize = 100
             svgCacheSize = 100
-            animatedImageCacheSize = 100
+            animatedImageCacheSize = 50
             stringMapper()
             urlMapper()
             uriMapper()
             fileFetcher()
             fileUrlFetcher()
             httpUrlFetcher {
-                httpCache(64 * 1024 * 1024)
+                httpCache(128 * 1024 * 1024)
             }
             imageBitmapDecoder()
         }

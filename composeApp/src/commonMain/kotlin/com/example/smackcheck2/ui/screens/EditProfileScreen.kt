@@ -125,9 +125,7 @@ fun EditProfileScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                // Extra bottom padding so the Update Profile button clears the
-                // floating BottomNavBar (~88dp tall with its shadow/offset)
-                .padding(bottom = 140.dp),
+                .padding(bottom = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // ── Top Bar ──
@@ -369,23 +367,12 @@ fun EditProfileScreen(
             }
         }
 
-        // Bottom nav bar
-        com.example.smackcheck2.ui.components.BottomNavBar(
-            selectedItem = com.example.smackcheck2.ui.components.NavItem.PROFILE,
-            onHomeClick = onNavHome,
-            onMapClick = onNavMap,
-            onCameraClick = onNavCamera,
-            onExploreClick = onNavExplore,
-            onProfileClick = onNavProfile,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
-
-        // Snackbar host (above bottom nav)
+        // Snackbar host
         SnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 56.dp)
+                .padding(bottom = 16.dp)
         )
     }
 }

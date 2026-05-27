@@ -1,27 +1,180 @@
 package com.example.smackcheck2.data.repository
 
-import com.example.smackcheck2.data.SupabaseClientProvider
+import com.example.smackcheck2.data.ApiClient
 import com.example.smackcheck2.data.dto.*
 import com.example.smackcheck2.model.*
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Columns
-import io.github.jan.supabase.postgrest.query.Order
-import kotlinx.datetime.Instant
-import kotlinx.datetime.Clock
 import com.example.smackcheck2.util.Logger
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
+// ── Local request/response DTOs used only within this file ───────────────────
+
+@Serializable
+private data class CreateRestaurantRequest(
+    val name: String,
+    val city: String,
+    val cuisine: String,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    @SerialName("google_place_id") val googlePlaceId: String? = null,
+    @SerialName("image_urls") val imageUrls: List<String>? = null,
+    @SerialName("photo_urls") val photoUrls: List<String>? = null,
+    val category: String? = null
+)
+
+@Serializable
+private data class CreateDishRequest(
+    val name: String,
+    @SerialName("restaurant_id") val restaurantId: String,
+    @SerialName("image_url") val imageUrl: String? = null
+)
+
+@Serializable
+private data class SubmitRatingRequest(
+    @SerialName("dish_id") val dishId: String,
+    @SerialName("restaurant_id") val restaurantId: String,
+    val rating: Float,
+    val comment: String,
+    @SerialName("image_url") val imageUrl: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val price: Double? = null
+)
+
+@Serializable
+private data class ValidateReceiptRequest(
+    @SerialName("rating_id") val ratingId: String,
+    @SerialName("receipt_image_url") val receiptImageUrl: String,
+    val source: String
+)
+
+@Serializable
+private data class ValidateReceiptResponse(
+    val id: String = "",
+    @SerialName("validation_status") val validationStatus: String = "pending"
+)
+
+@Serializable
+private data class ToggleLikeRequest(
+    @SerialName("rating_id") val ratingId: String
+)
+
+@Serializable
+private data class ToggleLikeResponse(
+    val liked: Boolean
+)
+
+@Serializable
+private data class LikeCheckResponse(
+    val liked: Boolean
+)
+
+@Serializable
+private data class ToggleSaveRequest(
+    @SerialName("restaurant_id") val restaurantId: String
+)
+
+@Serializable
+private data class ToggleSaveResponse(
+    val saved: Boolean
+)
+
+@Serializable
+private data class AwardBadgeRequest(
+    @SerialName("badge_id") val badgeId: String
+)
+
+@Serializable
+private data class BadgeHasResponse(
+    val has: Boolean
+)
+
+@Serializable
+private data class RecordActionRequest(
+    @SerialName("action_type") val actionType: String,
+    @SerialName("points_earned") val pointsEarned: Int,
+    val metadata: Map<String, String> = emptyMap()
+)
+
+@Serializable
+private data class RecordActionResponse(
+    val success: Boolean = true,
+    val xp: Int? = null,
+    val level: Int? = null,
+    @SerialName("streak_count") val streakCount: Int? = null
+)
+
+@Serializable
+private data class LeaderboardEntryDto(
+    val id: String,
+    val name: String,
+    val email: String = "",
+    @SerialName("profile_photo_url") val profilePhotoUrl: String? = null,
+    val level: Int = 1,
+    val xp: Int = 0,
+    @SerialName("streak_count") val streakCount: Int = 0,
+    @SerialName("last_location") val lastLocation: String? = null,
+    val bio: String? = null,
+    @SerialName("followers_count") val followersCount: Int = 0,
+    @SerialName("following_count") val followingCount: Int = 0,
+    val username: String? = null,
+    @SerialName("created_at") val createdAt: String? = null,
+    @SerialName("updated_at") val updatedAt: String? = null
+)
+
+@Serializable
+private data class CountTodayResponse(
+    val count: Int = 0
+)
+
+@Serializable
+private data class UniqueRestaurantsResponse(
+    val count: Int = 0
+)
+
+@Serializable
+private data class WithPhotosCountResponse(
+    val count: Int = 0
+)
+
+@Serializable
+private data class DishDetailResponse(
+    val id: String = "",
+    val name: String = "",
+    @SerialName("image_url")
+    val imageUrl: String? = null,
+    @SerialName("average_rating")
+    val averageRating: Float = 0f,
+    @SerialName("review_count")
+    val reviewCount: Int = 0,
+    @SerialName("restaurant_id")
+    val restaurantId: String = "",
+    val restaurants: DishDetailRestaurantResponse? = null
+)
+
+@Serializable
+private data class DishDetailRestaurantResponse(
+    val name: String = "",
+    val city: String? = null
+)
+
+@Serializable
+private data class CuisinesResponse(
+    val cuisines: List<String> = emptyList()
+)
+
+@Serializable
+private data class CitiesResponse(
+    val cities: List<String> = emptyList()
+)
 
 /**
- * Repository for database operations using Supabase Postgrest
+ * Repository for database operations using the SmackCheck custom backend API.
  */
 class DatabaseRepository(
     private val schemaAdapter: SupabaseSchemaAdapter = SupabaseSchemaAdapter(),
     private val feedAssembler: FeedAssembler = FeedAssembler()
 ) {
-
-    private val client get() = SupabaseClientProvider.client
-    private val postgrest get() = client.postgrest
 
     // ==================== RESTAURANTS ====================
 
@@ -30,9 +183,7 @@ class DatabaseRepository(
      */
     suspend fun getRestaurants(): Result<List<Restaurant>> {
         return try {
-            val restaurants = postgrest["restaurants"]
-                .select()
-                .decodeList<RestaurantDto>()
+            val restaurants = ApiClient.get<List<RestaurantDto>>("restaurants")
                 .map { it.toRestaurant() }
             Result.success(restaurants)
         } catch (e: Exception) {
@@ -41,8 +192,8 @@ class DatabaseRepository(
     }
 
     /**
-     * Search restaurants by query, cuisine, city, minimum rating, and category filter
-     * Query searches across name, cuisine, and city fields (case-insensitive)
+     * Search restaurants by query, cuisine, city, minimum rating, and category filter.
+     * Query searches across name, cuisine, and city fields (case-insensitive).
      */
     suspend fun searchRestaurants(
         query: String? = null,
@@ -53,38 +204,14 @@ class DatabaseRepository(
     ): Result<List<Restaurant>> {
         return try {
             Logger.d("DatabaseRepository", "Searching with query='$query', cuisines=$cuisines, city=$city, minRating=$minRating, restaurantsAndCafesOnly=$restaurantsAndCafesOnly")
-            val restaurants = postgrest["restaurants"]
-                .select {
-                    filter {
-                        // Text search: match name, cuisine, or city (case-insensitive)
-                        if (!query.isNullOrBlank()) {
-                            or {
-                                ilike("name", "%$query%")
-                                ilike("cuisine", "%$query%")
-                                ilike("city", "%$query%")
-                            }
-                        }
-                        if (cuisines.isNotEmpty()) {
-                            isIn("cuisine", cuisines.toList())
-                        }
-                        if (!city.isNullOrBlank()) {
-                            ilike("city", "%$city%")
-                        }
-                        if (minRating != null) {
-                            gte("average_rating", minRating)
-                        }
-                        // Restaurants & Cafes Only filter - filters by category field
-                        if (restaurantsAndCafesOnly) {
-                            or {
-                                ilike("category", "%restaurant%")
-                                ilike("category", "%cafe%")
-                                ilike("category", "%coffee%")
-                            }
-                        }
-                    }
-                    order("average_rating", Order.DESCENDING)
-                }
-                .decodeList<RestaurantDto>()
+            val params = buildMap<String, String?> {
+                if (!query.isNullOrBlank()) put("query", query)
+                if (cuisines.isNotEmpty()) put("cuisines", cuisines.joinToString(","))
+                if (!city.isNullOrBlank()) put("city", city)
+                if (minRating != null) put("minRating", minRating.toString())
+                if (restaurantsAndCafesOnly) put("restaurantsOnly", "true")
+            }
+            val restaurants = ApiClient.get<List<RestaurantDto>>("restaurants", params)
                 .map { it.toRestaurant() }
             Logger.d("DatabaseRepository", "Found ${restaurants.size} restaurants")
             Result.success(restaurants)
@@ -99,14 +226,9 @@ class DatabaseRepository(
      */
     suspend fun getRestaurantById(id: String): Result<Restaurant?> {
         return try {
-            val restaurant = postgrest["restaurants"]
-                .select {
-                    filter {
-                        eq("id", id)
-                    }
-                }
-                .decodeSingleOrNull<RestaurantDto>()
-                ?.toRestaurant()
+            val restaurant = try {
+                ApiClient.get<RestaurantDto>("restaurants/$id").toRestaurant()
+            } catch (_: Exception) { null }
             Result.success(restaurant)
         } catch (e: Exception) {
             Result.failure(e)
@@ -118,14 +240,12 @@ class DatabaseRepository(
      */
     suspend fun getRestaurantByGooglePlaceId(placeId: String): Result<Restaurant?> {
         return try {
-            val restaurant = postgrest["restaurants"]
-                .select {
-                    filter {
-                        eq("google_place_id", placeId)
-                    }
-                }
-                .decodeSingleOrNull<RestaurantDto>()
-                ?.toRestaurant()
+            val restaurant = try {
+                ApiClient.get<RestaurantDto>(
+                    "restaurants/by-place-id",
+                    mapOf("placeId" to placeId)
+                ).toRestaurant()
+            } catch (_: Exception) { null }
             Result.success(restaurant)
         } catch (e: Exception) {
             Result.failure(e)
@@ -134,7 +254,7 @@ class DatabaseRepository(
 
     /**
      * Ensure a restaurant exists in the DB (e.g. when selected from Google Places).
-     * If the restaurant ID is not found, inserts it. Optionally adds a dish photo as the restaurant image.
+     * If the restaurant is not found, inserts it. Optionally adds a dish photo as the restaurant image.
      */
     suspend fun ensureRestaurantExists(restaurant: Restaurant, dishImageUrl: String? = null): Result<Restaurant> {
         return try {
@@ -153,18 +273,18 @@ class DatabaseRepository(
                     restaurant.photoUrl != null -> listOf(restaurant.photoUrl)
                     else -> emptyList()
                 }
-                val dto = RestaurantDto(
-                    id = restaurant.id.takeIf { it.isNotBlank() },
+                val request = CreateRestaurantRequest(
                     name = restaurant.name,
                     city = restaurant.city,
                     cuisine = restaurant.cuisine,
-                    imageUrls = imageUrls,
                     latitude = restaurant.latitude,
                     longitude = restaurant.longitude,
                     googlePlaceId = restaurant.googlePlaceId,
-                    photoUrls = restaurant.photoUrl?.let { listOf(it) }
+                    imageUrls = imageUrls.ifEmpty { null },
+                    photoUrls = restaurant.photoUrl?.let { listOf(it) },
+                    category = restaurant.category.ifBlank { null }
                 )
-                val created = schemaAdapter.insertRestaurant(dto).getOrThrow()
+                val created = ApiClient.post<CreateRestaurantRequest, RestaurantDto>("restaurants", request)
                 Logger.d("DatabaseRepository", "Created new restaurant from Places: ${created.id} — ${created.name}")
                 Result.success(created.toRestaurant())
             }
@@ -175,26 +295,21 @@ class DatabaseRepository(
 
     private suspend fun findExistingRestaurant(restaurant: Restaurant): RestaurantDto? {
         if (restaurant.id.isNotBlank()) {
-            val byId = postgrest["restaurants"]
-                .select {
-                    filter { eq("id", restaurant.id) }
-                    limit(1)
-                }
-                .decodeList<RestaurantDto>()
-                .firstOrNull()
-            if (byId != null) return byId
+            try {
+                val byId = ApiClient.get<RestaurantDto>("restaurants/${restaurant.id}")
+                return byId
+            } catch (_: Exception) { /* not found */ }
         }
 
         val placeId = restaurant.googlePlaceId
         if (!placeId.isNullOrBlank()) {
-            val byPlaceId = postgrest["restaurants"]
-                .select {
-                    filter { eq("google_place_id", placeId) }
-                    limit(1)
-                }
-                .decodeList<RestaurantDto>()
-                .firstOrNull()
-            if (byPlaceId != null) return byPlaceId
+            try {
+                val byPlaceId = ApiClient.get<RestaurantDto>(
+                    "restaurants/by-place-id",
+                    mapOf("placeId" to placeId)
+                )
+                return byPlaceId
+            } catch (_: Exception) { /* not found */ }
         }
 
         return null
@@ -205,20 +320,40 @@ class DatabaseRepository(
      */
     suspend fun createRestaurant(restaurant: Restaurant): Result<Restaurant> {
         return try {
-            val dto = RestaurantDto(
+            val request = CreateRestaurantRequest(
                 name = restaurant.name,
                 city = restaurant.city,
                 cuisine = restaurant.cuisine,
-                imageUrls = restaurant.imageUrls,
                 latitude = restaurant.latitude,
-                longitude = restaurant.longitude
+                longitude = restaurant.longitude,
+                imageUrls = restaurant.imageUrls.ifEmpty { null }
             )
-            val created = postgrest["restaurants"]
-                .insert(dto) {
-                    select()
-                }
-                .decodeSingle<RestaurantDto>()
+            val created = ApiClient.post<CreateRestaurantRequest, RestaurantDto>("restaurants", request)
             Result.success(created.toRestaurant())
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get distinct cuisines across all restaurants
+     */
+    suspend fun getDistinctCuisines(): Result<List<String>> {
+        return try {
+            val response = ApiClient.get<CuisinesResponse>("restaurants/cuisines")
+            Result.success(response.cuisines)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get distinct cities across all restaurants
+     */
+    suspend fun getDistinctCities(): Result<List<String>> {
+        return try {
+            val response = ApiClient.get<CitiesResponse>("restaurants/cities")
+            Result.success(response.cities)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -227,64 +362,17 @@ class DatabaseRepository(
     /**
      * Get restaurants by city (case-insensitive partial match)
      */
-    suspend fun getDistinctCuisines(): Result<List<String>> {
-        return try {
-            val list = postgrest["restaurants"]
-                .select(columns = Columns.list("cuisine")) {}
-                .decodeList<Map<String, String>>()
-                .mapNotNull { it["cuisine"] }
-                .filter { it.isNotBlank() }
-                .distinct()
-                .sorted()
-            Result.success(list)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun getDistinctCities(): Result<List<String>> {
-        return try {
-            val list = postgrest["restaurants"]
-                .select(columns = Columns.list("city")) {}
-                .decodeList<Map<String, String>>()
-                .mapNotNull { it["city"] }
-                .filter { it.isNotBlank() }
-                .distinct()
-                .sorted()
-            Result.success(list)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
     suspend fun getRestaurantsByCity(city: String): Result<List<Restaurant>> {
         return try {
             Logger.d("DatabaseRepository", "Searching for restaurants in city: $city")
-            var restaurants = postgrest["restaurants"]
-                .select {
-                    filter {
-                        // Use case-insensitive pattern matching for better results
-                        ilike("city", "%$city%")
-                    }
-                    order("average_rating", Order.DESCENDING)
-                    limit(50)
-                }
-                .decodeList<RestaurantDto>()
-                .map { it.toRestaurant() }
-            Logger.d("DatabaseRepository", "Found ${restaurants.size} restaurants for city: $city")
+            val restaurants = try {
+                ApiClient.get<List<RestaurantDto>>(
+                    "restaurants/by-city",
+                    mapOf("city" to city)
+                ).map { it.toRestaurant() }
+            } catch (_: Exception) { emptyList() }
 
-            // If no results for the specific city, fetch all restaurants as fallback
-            if (restaurants.isEmpty()) {
-                Logger.d("DatabaseRepository", "No restaurants for '$city', fetching all restaurants")
-                restaurants = postgrest["restaurants"]
-                    .select {
-                        order("average_rating", Order.DESCENDING)
-                        limit(50)
-                    }
-                    .decodeList<RestaurantDto>()
-                    .map { it.toRestaurant() }
-                Logger.d("DatabaseRepository", "Fallback returned ${restaurants.size} restaurants")
-            }
+            Logger.d("DatabaseRepository", "Found ${restaurants.size} restaurants for city: $city")
 
             Result.success(restaurants)
         } catch (e: Exception) {
@@ -295,16 +383,13 @@ class DatabaseRepository(
 
     /**
      * Get restaurant IDs saved by a user.
+     * The userId parameter is kept for API compatibility; the backend resolves
+     * the current user from the JWT token.
      */
     suspend fun getSavedRestaurantIds(userId: String): Result<Set<String>> {
         return try {
-            val rows = postgrest["restaurant_saves"]
-                .select {
-                    filter { eq("user_id", userId) }
-                }
-                .decodeList<Map<String, String>>()
-            val ids = rows.mapNotNull { it["restaurant_id"] }.toSet()
-            Result.success(ids)
+            val restaurantIds = ApiClient.get<List<String>>("saves")
+            Result.success(restaurantIds.toSet())
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -317,34 +402,11 @@ class DatabaseRepository(
      */
     suspend fun toggleRestaurantSave(userId: String, restaurantId: String): Result<Boolean> {
         return try {
-            val existing = postgrest["restaurant_saves"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                        eq("restaurant_id", restaurantId)
-                    }
-                    limit(1)
-                }
-                .decodeList<Map<String, String>>()
-                .firstOrNull()
-
-            if (existing != null) {
-                postgrest["restaurant_saves"].delete {
-                    filter {
-                        eq("user_id", userId)
-                        eq("restaurant_id", restaurantId)
-                    }
-                }
-                Result.success(false)
-            } else {
-                postgrest["restaurant_saves"].insert(
-                    mapOf(
-                        "user_id" to userId,
-                        "restaurant_id" to restaurantId
-                    )
-                )
-                Result.success(true)
-            }
+            val response = ApiClient.post<ToggleSaveRequest, ToggleSaveResponse>(
+                "saves/toggle",
+                ToggleSaveRequest(restaurantId = restaurantId)
+            )
+            Result.success(response.saved)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -353,56 +415,13 @@ class DatabaseRepository(
     // ==================== DISHES ====================
 
     /**
-     * Get a single dish by ID, including its average rating and restaurant name
+     * Get a single dish by ID, including its average rating and restaurant info
      */
     suspend fun getDishById(dishId: String): Result<Dish?> {
         return try {
-            val dishDto = postgrest["dishes"]
-                .select {
-                    filter { eq("id", dishId) }
-                }
-                .decodeSingleOrNull<DishDto>()
-
-            if (dishDto == null) {
-                return Result.success(null)
-            }
-
-            // Fetch restaurant name
-            val restaurant = postgrest["restaurants"]
-                .select {
-                    filter { eq("id", dishDto.restaurantId) }
-                }
-                .decodeSingleOrNull<RestaurantDto>()
-
-            // Calculate average rating from all ratings for this dish
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter { eq("dish_id", dishId) }
-                }
-                .decodeList<RatingDto>()
-
-            val avgRating = if (ratings.isNotEmpty()) {
-                ratings.map { it.rating }.average().toFloat()
-            } else 0f
-
-            // Fetch uploader (top-rated reviewer) profile
-            val topRating = ratings.maxByOrNull { it.rating }
-            val uploaderProfile = topRating?.let { r ->
-                try {
-                    postgrest["profiles"]
-                        .select { filter { eq("id", r.userId) } }
-                        .decodeSingleOrNull<ProfileDto>()
-                } catch (_: Exception) { null }
-            }
-
-            val dish = dishDto.toDish().copy(
-                rating = avgRating,
-                ratingCount = ratings.size,
-                restaurantName = restaurant?.name ?: "Unknown Restaurant",
-                restaurantCity = restaurant?.city ?: "",
-                uploaderName = uploaderProfile?.name ?: "",
-                uploaderProfileUrl = uploaderProfile?.profilePhotoUrl
-            )
+            val dish = try {
+                ApiClient.get<DishDetailResponse>("dishes/$dishId").toDish()
+            } catch (_: Exception) { null }
             Result.success(dish)
         } catch (e: Exception) {
             Logger.e("DatabaseRepository", "Error fetching dish $dishId: ${e.message}", e)
@@ -411,8 +430,18 @@ class DatabaseRepository(
     }
 
     /**
-     * Get all ratings/reviews for a specific dish
+     * Fetch a single rating by its ID and return the associated dish_id,
+     * useful when a FeedItem only carries a rating ID (dishId blank).
      */
+    suspend fun getDishIdFromRating(ratingId: String): String? {
+        return try {
+            val rating = ApiClient.get<RatingDto>("ratings/$ratingId")
+            rating.dishId.takeIf { it.isNotBlank() }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     /**
      * Get all ratings for a dish, optionally restricted to a specific restaurant
      * (for location-specific review filtering).
@@ -425,52 +454,22 @@ class DatabaseRepository(
         restaurantId: String? = null
     ): Result<List<Review>> {
         return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("dish_id", dishId)
-                        if (!restaurantId.isNullOrBlank()) {
-                            eq("restaurant_id", restaurantId)
-                        }
-                    }
-                    order("created_at", Order.DESCENDING)
-                }
-                .decodeList<RatingDto>()
-
-            // Batch-fetch profiles and restaurants
-            val userIds = ratings.map { it.userId }.distinct()
-            val restIds = ratings.map { it.restaurantId }.distinct()
-
-            val profilesMap = try {
-                if (userIds.isNotEmpty()) {
-                    postgrest["profiles"]
-                        .select { filter { isIn("id", userIds) } }
-                        .decodeList<ProfileDto>()
-                        .associateBy { it.id }
-                } else emptyMap()
-            } catch (_: Exception) { emptyMap() }
-
-            val restaurantsMap = try {
-                if (restIds.isNotEmpty()) {
-                    postgrest["restaurants"]
-                        .select { filter { isIn("id", restIds) } }
-                        .decodeList<RestaurantDto>()
-                        .associateBy { it.id ?: "" }
-                } else emptyMap()
-            } catch (_: Exception) { emptyMap() }
+            val params = buildMap<String, String?> {
+                put("dishId", dishId)
+                if (!restaurantId.isNullOrBlank()) put("restaurantId", restaurantId)
+            }
+            val ratings = ApiClient.get<List<RatingDto>>("ratings", params)
 
             val reviews = ratings.map { rating ->
-                val profile = profilesMap[rating.userId]
-                val restaurant = restaurantsMap[rating.restaurantId]
                 Review(
                     id = rating.id ?: "",
                     userId = rating.userId,
-                    userName = profile?.name ?: "Unknown",
-                    userProfileUrl = profile?.profilePhotoUrl,
+                    userName = "",
+                    userProfileUrl = null,
                     dishId = rating.dishId,
                     dishName = "",
                     dishImageUrl = rating.imageUrl,
-                    restaurantName = restaurant?.name ?: "",
+                    restaurantName = "",
                     rating = rating.rating,
                     comment = rating.comment,
                     likesCount = rating.likesCount,
@@ -487,94 +486,15 @@ class DatabaseRepository(
 
     /**
      * Get top-rated dishes across all restaurants.
-     * Falls back to querying the dishes table directly when the ratings table is empty.
      */
     suspend fun getTopRatedDishes(limit: Int = 10): Result<List<Dish>> {
         return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    order("rating", Order.DESCENDING)
-                    limit(100)
-                }
-                .decodeList<RatingDto>()
-
-            Logger.d("DatabaseRepository", "getTopRatedDishes - found ${ratings.size} ratings globally")
-
-            if (ratings.isNotEmpty()) {
-                // Ratings exist — build dish list from them
-                val dishRatingGroups = ratings.groupBy { it.dishId }
-                val dishRatings = dishRatingGroups
-                    .mapValues { (_, r) -> r.map { it.rating }.average().toFloat() }
-                    .entries
-                    .sortedByDescending { it.value }
-                    .take(limit)
-
-                val topDishes = dishRatings.mapNotNull { (dishId, avgRating) ->
-                    try {
-                        val dish = postgrest["dishes"]
-                            .select { filter { eq("id", dishId) } }
-                            .decodeSingleOrNull<DishDto>()
-                        if (dish != null) {
-                            val restaurant = postgrest["restaurants"]
-                                .select { filter { eq("id", dish.restaurantId) } }
-                                .decodeSingleOrNull<RestaurantDto>()
-                            val topRating = dishRatingGroups[dishId]?.maxByOrNull { it.rating }
-                            val uploaderProfile = topRating?.let { r ->
-                                try { postgrest["profiles"].select { filter { eq("id", r.userId) } }.decodeSingleOrNull<ProfileDto>() } catch (_: Exception) { null }
-                            }
-                            // Prefer any rating photo over a blank dish image — users
-                            // typically attach their dish photo to the rating, not the
-                            // dishes row itself.
-                            val ratingImageUrl = dishRatingGroups[dishId]
-                                ?.firstOrNull { !it.imageUrl.isNullOrBlank() }
-                                ?.imageUrl
-                            dish.toDish().copy(
-                                imageUrl = dish.imageUrl?.takeIf { it.isNotBlank() } ?: ratingImageUrl,
-                                rating = avgRating,
-                                ratingCount = dishRatingGroups[dishId]?.size ?: 0,
-                                restaurantName = restaurant?.name ?: dish.restaurantName ?: "Unknown Restaurant",
-                                restaurantCity = restaurant?.city ?: "",
-                                uploaderName = uploaderProfile?.name ?: "",
-                                uploaderProfileUrl = uploaderProfile?.profilePhotoUrl
-                            )
-                        } else null
-                    } catch (e: Exception) {
-                        Logger.e("DatabaseRepository", "Error fetching dish $dishId: ${e.message}", e)
-                        null
-                    }
-                }
-                Logger.d("DatabaseRepository", "getTopRatedDishes → ${topDishes.size} rated dishes")
-                Result.success(topDishes)
-            } else {
-                // No ratings yet — fall back to most recently added dishes
-                Logger.d("DatabaseRepository", "No ratings found, falling back to dishes table")
-                val dishes = postgrest["dishes"]
-                    .select { order("created_at", Order.DESCENDING); limit(limit.toLong()) }
-                    .decodeList<DishDto>()
-
-                // Batch-fetch restaurants for those dishes
-                val restaurantIds = dishes.map { it.restaurantId }.distinct()
-                val restaurantsMap = if (restaurantIds.isNotEmpty()) {
-                    try {
-                        postgrest["restaurants"]
-                            .select { filter { isIn("id", restaurantIds) } }
-                            .decodeList<RestaurantDto>()
-                            .associateBy { it.id ?: "" }
-                    } catch (_: Exception) { emptyMap() }
-                } else emptyMap()
-
-                val fallbackDishes = dishes.mapNotNull { dto ->
-                    try {
-                        val restaurant = restaurantsMap[dto.restaurantId]
-                        dto.toDish().copy(
-                            restaurantName = restaurant?.name ?: dto.restaurantName ?: "Unknown Restaurant",
-                            restaurantCity = restaurant?.city ?: ""
-                        )
-                    } catch (_: Exception) { null }
-                }
-                Logger.d("DatabaseRepository", "getTopRatedDishes fallback → ${fallbackDishes.size} dishes")
-                Result.success(fallbackDishes)
-            }
+            val dishes = ApiClient.get<List<DishDto>>(
+                "dishes/top",
+                mapOf("limit" to limit.toString())
+            ).map { it.toDish() }
+            Logger.d("DatabaseRepository", "getTopRatedDishes → ${dishes.size} dishes")
+            Result.success(dishes)
         } catch (e: Exception) {
             Logger.e("DatabaseRepository", "Error fetching top rated dishes: ${e.message}", e)
             Result.failure(e)
@@ -583,103 +503,26 @@ class DatabaseRepository(
 
     /**
      * Get top-rated dishes restricted to the given restaurant IDs (location-based).
-     * Falls back to querying the dishes table directly when ratings are absent.
+     * Falls back to global top dishes when restaurantIds is empty.
      */
     suspend fun getTopRatedDishesForRestaurants(restaurantIds: List<String>, limit: Int = 10): Result<List<Dish>> {
         if (restaurantIds.isEmpty()) return getTopRatedDishes(limit)
         return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter { isIn("restaurant_id", restaurantIds) }
-                    order("rating", Order.DESCENDING)
-                    limit(100)
-                }
-                .decodeList<RatingDto>()
+            val dishes = ApiClient.get<List<DishDto>>(
+                "dishes/top-for-restaurants",
+                mapOf(
+                    "ids" to restaurantIds.joinToString(","),
+                    "limit" to limit.toString()
+                )
+            ).map { it.toDish() }
+            Logger.d("DatabaseRepository", "getTopRatedDishesForRestaurants → ${dishes.size} dishes")
 
-            Logger.d("DatabaseRepository", "getTopRatedDishesForRestaurants - ${restaurantIds.size} restaurants, ${ratings.size} ratings")
-
-            if (ratings.isNotEmpty()) {
-                // Ratings exist for this location — use them
-                val dishRatingGroups = ratings.groupBy { it.dishId }
-                val dishRatings = dishRatingGroups
-                    .mapValues { (_, r) -> r.map { it.rating }.average().toFloat() }
-                    .entries
-                    .sortedByDescending { it.value }
-                    .take(limit)
-
-                val topDishes = dishRatings.mapNotNull { (dishId, avgRating) ->
-                    try {
-                        val dish = postgrest["dishes"]
-                            .select { filter { eq("id", dishId) } }
-                            .decodeSingleOrNull<DishDto>()
-                        if (dish != null) {
-                            val restaurant = postgrest["restaurants"]
-                                .select { filter { eq("id", dish.restaurantId) } }
-                                .decodeSingleOrNull<RestaurantDto>()
-                            val topRating = dishRatingGroups[dishId]?.maxByOrNull { it.rating }
-                            val uploaderProfile = topRating?.let { r ->
-                                try { postgrest["profiles"].select { filter { eq("id", r.userId) } }.decodeSingleOrNull<ProfileDto>() } catch (_: Exception) { null }
-                            }
-                            val ratingImageUrl = dishRatingGroups[dishId]
-                                ?.firstOrNull { !it.imageUrl.isNullOrBlank() }
-                                ?.imageUrl
-                            dish.toDish().copy(
-                                imageUrl = dish.imageUrl?.takeIf { it.isNotBlank() } ?: ratingImageUrl,
-                                rating = avgRating,
-                                ratingCount = dishRatingGroups[dishId]?.size ?: 0,
-                                restaurantName = restaurant?.name ?: dish.restaurantName ?: "Unknown Restaurant",
-                                restaurantCity = restaurant?.city ?: "",
-                                uploaderName = uploaderProfile?.name ?: "",
-                                uploaderProfileUrl = uploaderProfile?.profilePhotoUrl
-                            )
-                        } else null
-                    } catch (e: Exception) { null }
-                }
-                Logger.d("DatabaseRepository", "getTopRatedDishesForRestaurants → ${topDishes.size} rated dishes")
-                Result.success(topDishes)
-            } else {
-                // No ratings for this location yet — query dishes table directly for these restaurants
-                Logger.d("DatabaseRepository", "No local ratings, falling back to dishes table for ${restaurantIds.size} restaurants")
-                val dishes = postgrest["dishes"]
-                    .select {
-                        filter { isIn("restaurant_id", restaurantIds) }
-                        order("created_at", Order.DESCENDING)
-                        limit(limit.toLong())
-                    }
-                    .decodeList<DishDto>()
-
-                Logger.d("DatabaseRepository", "Found ${dishes.size} dishes in dishes table for these restaurants")
-
-                // Batch-fetch restaurants
-                val restIds = dishes.map { it.restaurantId }.distinct()
-                val restaurantsMap = if (restIds.isNotEmpty()) {
-                    try {
-                        postgrest["restaurants"]
-                            .select { filter { isIn("id", restIds) } }
-                            .decodeList<RestaurantDto>()
-                            .associateBy { it.id ?: "" }
-                    } catch (_: Exception) { emptyMap() }
-                } else emptyMap()
-
-                val fallbackDishes = dishes.mapNotNull { dto ->
-                    try {
-                        val restaurant = restaurantsMap[dto.restaurantId]
-                        dto.toDish().copy(
-                            restaurantName = restaurant?.name ?: dto.restaurantName ?: "Unknown Restaurant",
-                            restaurantCity = restaurant?.city ?: ""
-                        )
-                    } catch (_: Exception) { null }
-                }
-
-                // If still empty (no dishes in DB for these restaurants), fall back globally
-                if (fallbackDishes.isEmpty()) {
-                    Logger.d("DatabaseRepository", "Location dishes table also empty, falling back to global")
-                    return getTopRatedDishes(limit)
-                }
-
-                Logger.d("DatabaseRepository", "getTopRatedDishesForRestaurants fallback → ${fallbackDishes.size} dishes")
-                Result.success(fallbackDishes)
+            if (dishes.isEmpty()) {
+                Logger.d("DatabaseRepository", "No location dishes, falling back to global")
+                return getTopRatedDishes(limit)
             }
+
+            Result.success(dishes)
         } catch (e: Exception) {
             Logger.e("DatabaseRepository", "Error fetching location top dishes: ${e.message}", e)
             Result.failure(e)
@@ -691,14 +534,10 @@ class DatabaseRepository(
      */
     suspend fun getDishesForRestaurant(restaurantId: String): Result<List<Dish>> {
         return try {
-            val dishes = postgrest["dishes"]
-                .select {
-                    filter {
-                        eq("restaurant_id", restaurantId)
-                    }
-                }
-                .decodeList<DishDto>()
-                .map { it.toDish() }
+            val dishes = ApiClient.get<List<DishDto>>(
+                "dishes",
+                mapOf("restaurantId" to restaurantId)
+            ).map { it.toDish() }
             Result.success(dishes)
         } catch (e: Exception) {
             Result.failure(e)
@@ -711,14 +550,10 @@ class DatabaseRepository(
     suspend fun getDishesForRestaurants(restaurantIds: List<String>): Result<List<Dish>> {
         if (restaurantIds.isEmpty()) return Result.success(emptyList())
         return try {
-            val dishes = postgrest["dishes"]
-                .select {
-                    filter {
-                        isIn("restaurant_id", restaurantIds)
-                    }
-                }
-                .decodeList<DishDto>()
-                .map { it.toDish() }
+            val dishes = ApiClient.get<List<DishDto>>(
+                "dishes",
+                mapOf("restaurantIds" to restaurantIds.joinToString(","))
+            ).map { it.toDish() }
             Result.success(dishes)
         } catch (e: Exception) {
             Result.failure(e)
@@ -738,14 +573,13 @@ class DatabaseRepository(
             return Result.failure(IllegalArgumentException("Dish name cannot be blank"))
         }
         return try {
-            val existing = postgrest["dishes"]
-                .select {
-                    filter {
-                        eq("name", name)
-                        eq("restaurant_id", restaurantId)
-                    }
-                }
-                .decodeSingleOrNull<DishDto>()
+            // Try to find existing dish by fetching dishes for this restaurant
+            val existing = try {
+                ApiClient.get<List<DishDto>>(
+                    "dishes",
+                    mapOf("restaurantId" to restaurantId)
+                ).firstOrNull { it.name.equals(name, ignoreCase = true) }
+            } catch (_: Exception) { null }
 
             if (existing != null) {
                 val needsImageUpdate = existing.imageUrl == null && imageUrl != null
@@ -761,22 +595,24 @@ class DatabaseRepository(
                         )
                     )
                 }
-                return Result.success(existing.toDish().copy(
-                    restaurantName = existing.restaurantName ?: restaurantName ?: ""
-                ))
+                return Result.success(
+                    existing.toDish().copy(
+                        restaurantName = existing.restaurantName ?: restaurantName ?: ""
+                    )
+                )
             }
 
-            @OptIn(ExperimentalUuidApi::class)
-            val dishId = Uuid.random().toString()
-            val dto = DishDto(
-                id = dishId,
+            val request = CreateDishRequest(
                 name = name,
                 restaurantId = restaurantId,
-                imageUrl = imageUrl,
-                restaurantName = restaurantName
+                imageUrl = imageUrl
             )
-            val created = schemaAdapter.insertDish(dto).getOrThrow()
-            Result.success(created.toDish().copy(restaurantName = schemaAdapter.resolveRestaurantName(created, restaurantName)))
+            val created = ApiClient.post<CreateDishRequest, DishDto>("dishes", request)
+            Result.success(
+                created.toDish().copy(
+                    restaurantName = schemaAdapter.resolveRestaurantName(created, restaurantName)
+                )
+            )
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -788,9 +624,15 @@ class DatabaseRepository(
     suspend fun getRatingsByDishIds(dishIds: List<String>): List<RatingDto> {
         if (dishIds.isEmpty()) return emptyList()
         return try {
-            postgrest["ratings"]
-                .select { filter { isIn("dish_id", dishIds) } }
-                .decodeList<RatingDto>()
+            // Fetch ratings for each dish ID and combine — the backend supports dishId param
+            dishIds.flatMap { dishId ->
+                try {
+                    ApiClient.get<List<RatingDto>>(
+                        "ratings",
+                        mapOf("dishId" to dishId)
+                    )
+                } catch (_: Exception) { emptyList() }
+            }
         } catch (_: Exception) { emptyList() }
     }
 
@@ -814,11 +656,7 @@ class DatabaseRepository(
             return Result.failure(IllegalArgumentException("Star rating is required"))
         }
         return try {
-            @OptIn(ExperimentalUuidApi::class)
-            val ratingId = Uuid.random().toString()
-            val dto = RatingDto(
-                id = ratingId,
-                userId = userId,
+            val request = SubmitRatingRequest(
                 dishId = dishId,
                 restaurantId = restaurantId,
                 rating = rating,
@@ -828,9 +666,30 @@ class DatabaseRepository(
                 longitude = longitude,
                 price = price
             )
-            postgrest["ratings"].insert(dto)
+            val created = ApiClient.post<SubmitRatingRequest, RatingDto>("ratings", request)
+            Result.success(created.id ?: "")
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 
-            Result.success(ratingId)
+    suspend fun validateRatingReceipt(
+        ratingId: String,
+        receiptImageUrl: String,
+        source: String
+    ): Result<Unit> {
+        if (ratingId.isBlank()) return Result.failure(IllegalArgumentException("ratingId required"))
+        if (receiptImageUrl.isBlank()) return Result.failure(IllegalArgumentException("receipt image required"))
+        return try {
+            ApiClient.post<ValidateReceiptRequest, ValidateReceiptResponse>(
+                "ratings/receipt",
+                ValidateReceiptRequest(
+                    ratingId = ratingId,
+                    receiptImageUrl = receiptImageUrl,
+                    source = source
+                )
+            )
+            Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -841,41 +700,20 @@ class DatabaseRepository(
      */
     suspend fun getRatingsForRestaurant(restaurantId: String): Result<List<Review>> {
         return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("restaurant_id", restaurantId)
-                    }
-                    order("created_at", Order.DESCENDING)
-                }
-                .decodeList<RatingDto>()
+            val ratings = ApiClient.get<List<RatingDto>>(
+                "ratings",
+                mapOf("restaurantId" to restaurantId)
+            )
 
-            // Fetch user profiles for each rating
             val reviews = ratings.map { rating ->
-                val profile = postgrest["profiles"]
-                    .select {
-                        filter {
-                            eq("id", rating.userId)
-                        }
-                    }
-                    .decodeSingleOrNull<ProfileDto>()
-
-                val dish = postgrest["dishes"]
-                    .select {
-                        filter {
-                            eq("id", rating.dishId)
-                        }
-                    }
-                    .decodeSingleOrNull<DishDto>()
-
                 Review(
                     id = rating.id ?: "",
                     userId = rating.userId,
-                    userName = profile?.name ?: "Unknown",
-                    userProfileUrl = profile?.profilePhotoUrl,
+                    userName = "",
+                    userProfileUrl = null,
                     dishId = rating.dishId,
-                    dishName = dish?.name ?: "Unknown Dish",
-                    dishImageUrl = rating.imageUrl ?: dish?.imageUrl,
+                    dishName = "",
+                    dishImageUrl = rating.imageUrl,
                     restaurantName = "",
                     rating = rating.rating,
                     comment = rating.comment,
@@ -901,13 +739,13 @@ class DatabaseRepository(
         currentUserId: String? = null
     ): Result<List<FeedItem>> {
         return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    order("created_at", Order.DESCENDING)
-                    range(offset.toLong(), (offset + limit - 1).toLong())
-                }
-                .decodeList<RatingDto>()
-
+            val ratings = ApiClient.get<List<RatingDto>>(
+                "ratings/feed",
+                mapOf(
+                    "limit" to limit.toString(),
+                    "offset" to offset.toString()
+                )
+            )
             Result.success(feedAssembler.mapRatingsToFeedItems(ratings, currentUserId))
         } catch (e: Exception) {
             Result.failure(e)
@@ -921,36 +759,11 @@ class DatabaseRepository(
      */
     suspend fun toggleLike(userId: String, ratingId: String): Result<Boolean> {
         return try {
-            // Check if already liked
-            val existing = postgrest["likes"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                        eq("rating_id", ratingId)
-                    }
-                }
-                .decodeSingleOrNull<LikeDto>()
-
-            if (existing != null) {
-                // Unlike
-                postgrest["likes"].delete {
-                    filter {
-                        eq("user_id", userId)
-                        eq("rating_id", ratingId)
-                    }
-                }
-                // Decrement likes count
-                updateLikesCount(ratingId, -1)
-                Result.success(false)
-            } else {
-                // Like — generate UUID for id since the DB column has no default
-                @OptIn(ExperimentalUuidApi::class)
-                val like = LikeDto(id = Uuid.random().toString(), userId = userId, ratingId = ratingId)
-                postgrest["likes"].insert(like)
-                // Increment likes count
-                updateLikesCount(ratingId, 1)
-                Result.success(true)
-            }
+            val response = ApiClient.post<ToggleLikeRequest, ToggleLikeResponse>(
+                "likes/toggle",
+                ToggleLikeRequest(ratingId = ratingId)
+            )
+            Result.success(response.liked)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -961,15 +774,11 @@ class DatabaseRepository(
      */
     suspend fun hasUserLiked(userId: String, ratingId: String): Boolean {
         return try {
-            val existing = postgrest["likes"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                        eq("rating_id", ratingId)
-                    }
-                }
-                .decodeSingleOrNull<LikeDto>()
-            existing != null
+            val response = ApiClient.get<LikeCheckResponse>(
+                "likes/check",
+                mapOf("ratingId" to ratingId)
+            )
+            response.liked
         } catch (e: Exception) {
             false
         }
@@ -978,34 +787,18 @@ class DatabaseRepository(
     // ==================== USER PROGRESS ====================
 
     /**
-     * Add XP to user
+     * Add XP to user via gamification record-action endpoint
      */
     suspend fun addXpToUser(userId: String, xpAmount: Int): Result<Unit> {
         return try {
-            val profile = postgrest["profiles"]
-                .select {
-                    filter {
-                        eq("id", userId)
-                    }
-                }
-                .decodeSingleOrNull<ProfileDto>()
-                ?: return Result.failure(Exception("Profile not found"))
-
-            val newXp = profile.xp + xpAmount
-            val newLevel = calculateLevel(newXp)
-
-            postgrest["profiles"]
-                .update(
-                    mapOf(
-                        "xp" to newXp,
-                        "level" to newLevel
-                    )
-                ) {
-                    filter {
-                        eq("id", userId)
-                    }
-                }
-
+            ApiClient.post<RecordActionRequest, RecordActionResponse>(
+                "gamification/record-action",
+                RecordActionRequest(
+                    actionType = "xp_award",
+                    pointsEarned = xpAmount,
+                    metadata = mapOf("userId" to userId)
+                )
+            )
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -1013,16 +806,21 @@ class DatabaseRepository(
     }
 
     /**
-     * Update user streak (legacy - simple update)
+     * Update user streak (simple update)
      */
     suspend fun updateStreak(userId: String, streakCount: Int): Result<Unit> {
         return try {
-            postgrest["profiles"]
-                .update(mapOf("streak_count" to streakCount)) {
-                    filter {
-                        eq("id", userId)
-                    }
-                }
+            ApiClient.post<RecordActionRequest, RecordActionResponse>(
+                "gamification/record-action",
+                RecordActionRequest(
+                    actionType = "streak_update",
+                    pointsEarned = 0,
+                    metadata = mapOf(
+                        "userId" to userId,
+                        "streakCount" to streakCount.toString()
+                    )
+                )
+            )
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -1030,73 +828,24 @@ class DatabaseRepository(
     }
 
     /**
-     * Update user's rating streak
-     * Increments streak if rating on consecutive days, resets if gap > 48 hours
+     * Update user's rating streak.
+     * Increments streak if rating on consecutive days, resets if gap > 48 hours.
      */
     suspend fun updateUserStreak(userId: String): Result<Int> {
         return try {
-            // Get current profile
-            val profile = postgrest["profiles"]
-                .select { filter { eq("id", userId) } }
-                .decodeSingleOrNull<ProfileDto>()
-                ?: return Result.failure(Exception("Profile not found"))
-
-            // Get last 2 ratings to find previous rating time
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter { eq("user_id", userId) }
-                    order("created_at", Order.DESCENDING)
-                    limit(2)
-                }
-                .decodeList<RatingDto>()
-
-            val newStreak = if (ratings.size >= 2) {
-                val lastRatingTime = parseTimestamp(ratings[1].createdAt ?: "")
-                val currentTime = Clock.System.now().toEpochMilliseconds()
-                val hoursSinceLast = (currentTime - lastRatingTime) / (1000 * 60 * 60)
-
-                when {
-                    hoursSinceLast < 24 -> profile.streakCount // Same day
-                    hoursSinceLast < 48 -> profile.streakCount + 1 // Next day
-                    else -> 1 // Streak broken, restart
-                }
-            } else {
-                1 // First rating
-            }
-
-            // Update streak in database
-            postgrest["profiles"]
-                .update(mapOf("streak_count" to newStreak)) {
-                    filter { eq("id", userId) }
-                }
-
-            // Award streak bonus XP if maintaining/increasing streak
-            if (newStreak > profile.streakCount) {
-                addXpToUser(userId, 5)
-            }
-
+            val response = ApiClient.post<RecordActionRequest, RecordActionResponse>(
+                "gamification/record-action",
+                RecordActionRequest(
+                    actionType = "rating_submitted",
+                    pointsEarned = 10,
+                    metadata = mapOf("userId" to userId)
+                )
+            )
+            val newStreak = response.streakCount ?: 1
             Result.success(newStreak)
         } catch (e: Exception) {
             Logger.e("DatabaseRepository", "Error updating streak: ${e.message}", e)
             Result.failure(e)
-        }
-    }
-
-    /**
-     * Parse ISO timestamp to milliseconds
-     * Handles Supabase/PostgreSQL timestamp formats: 2024-01-15T12:34:56.789Z
-     */
-    private fun parseTimestamp(timestamp: String): Long {
-        return try {
-            if (timestamp.isBlank()) return 0L
-
-            // Parse ISO 8601 timestamp using kotlinx-datetime
-            val instant = Instant.parse(timestamp)
-            instant.toEpochMilliseconds()
-        } catch (e: Exception) {
-            Logger.e("DatabaseRepository", "Failed to parse timestamp '$timestamp': ${e.message}", e)
-            // Return 0 on parse failure (will be treated as very old timestamp)
-            0L
         }
     }
 
@@ -1107,12 +856,29 @@ class DatabaseRepository(
      */
     suspend fun getLeaderboard(limit: Int = 50): Result<List<ProfileDto>> {
         return try {
-            val profiles = postgrest["profiles"]
-                .select {
-                    order("xp", Order.DESCENDING)
-                    limit(limit.toLong())
-                }
-                .decodeList<ProfileDto>()
+            val entries = ApiClient.get<List<LeaderboardEntryDto>>(
+                "gamification/leaderboard",
+                mapOf("limit" to limit.toString())
+            )
+            // Map LeaderboardEntryDto → ProfileDto for backward compat with callers
+            val profiles = entries.map { entry ->
+                ProfileDto(
+                    id = entry.id,
+                    name = entry.name,
+                    email = entry.email,
+                    profilePhotoUrl = entry.profilePhotoUrl,
+                    level = entry.level,
+                    xp = entry.xp,
+                    streakCount = entry.streakCount,
+                    lastLocation = entry.lastLocation,
+                    bio = entry.bio,
+                    followersCount = entry.followersCount,
+                    followingCount = entry.followingCount,
+                    username = entry.username,
+                    createdAt = entry.createdAt,
+                    updatedAt = entry.updatedAt
+                )
+            }
             Result.success(profiles)
         } catch (e: Exception) {
             Result.failure(e)
@@ -1126,9 +892,7 @@ class DatabaseRepository(
      */
     suspend fun getAllBadges(): Result<List<Badge>> {
         return try {
-            val badges = postgrest["badges"]
-                .select()
-                .decodeList<BadgeDto>()
+            val badges = ApiClient.get<List<BadgeDto>>("badges")
                 .map { it.toBadge() }
             Result.success(badges)
         } catch (e: Exception) {
@@ -1141,24 +905,10 @@ class DatabaseRepository(
      */
     suspend fun getUserBadges(userId: String): Result<List<Badge>> {
         return try {
-            val userBadges = postgrest["user_badges"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                    }
-                }
-                .decodeList<UserBadgeDto>()
-
-            val badges = userBadges.mapNotNull { ub ->
-                postgrest["badges"]
-                    .select {
-                        filter {
-                            eq("id", ub.badgeId)
-                        }
-                    }
-                    .decodeSingleOrNull<BadgeDto>()
-                    ?.toBadge(isEarned = true)
-            }
+            val badges = ApiClient.get<List<BadgeDto>>(
+                "badges/user",
+                mapOf("userId" to userId)
+            ).map { it.toBadge(isEarned = true) }
             Result.success(badges)
         } catch (e: Exception) {
             Result.failure(e)
@@ -1170,11 +920,10 @@ class DatabaseRepository(
      */
     suspend fun awardBadge(userId: String, badgeId: String): Result<Unit> {
         return try {
-            val userBadge = UserBadgeDto(
-                userId = userId,
-                badgeId = badgeId
+            ApiClient.post<AwardBadgeRequest, RecordActionResponse>(
+                "badges/award",
+                AwardBadgeRequest(badgeId = badgeId)
             )
-            postgrest["user_badges"].insert(userBadge)
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -1186,15 +935,11 @@ class DatabaseRepository(
      */
     suspend fun hasUserBadge(userId: String, badgeId: String): Result<Boolean> {
         return try {
-            val existing = postgrest["user_badges"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                        eq("badge_id", badgeId)
-                    }
-                }
-                .decodeSingleOrNull<UserBadgeDto>()
-            Result.success(existing != null)
+            val response = ApiClient.get<BadgeHasResponse>(
+                "badges/has",
+                mapOf("badgeId" to badgeId)
+            )
+            Result.success(response.has)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1207,23 +952,8 @@ class DatabaseRepository(
      */
     suspend fun getRatingsCountToday(userId: String): Result<Int> {
         return try {
-            // Get ratings from last 24 hours
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                    }
-                    order("created_at", Order.DESCENDING)
-                }
-                .decodeList<RatingDto>()
-
-            val todayCount = ratings.count { rating ->
-                val ratingTime = parseTimestamp(rating.createdAt ?: "")
-                val hoursSince = (Clock.System.now().toEpochMilliseconds() - ratingTime) / (1000 * 60 * 60)
-                hoursSince < 24
-            }
-
-            Result.success(todayCount)
+            val response = ApiClient.get<CountTodayResponse>("ratings/count-today")
+            Result.success(response.count)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1234,16 +964,8 @@ class DatabaseRepository(
      */
     suspend fun getUniqueRestaurantsRated(userId: String): Result<Int> {
         return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                    }
-                }
-                .decodeList<RatingDto>()
-
-            val uniqueRestaurants = ratings.map { it.restaurantId }.toSet()
-            Result.success(uniqueRestaurants.size)
+            val response = ApiClient.get<UniqueRestaurantsResponse>("ratings/unique-restaurants")
+            Result.success(response.count)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1254,16 +976,8 @@ class DatabaseRepository(
      */
     suspend fun getRatingsWithPhotosCount(userId: String): Result<Int> {
         return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                    }
-                }
-                .decodeList<RatingDto>()
-
-            val withPhotos = ratings.count { it.imageUrl != null }
-            Result.success(withPhotos)
+            val response = ApiClient.get<WithPhotosCountResponse>("ratings/with-photos-count")
+            Result.success(response.count)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -1274,30 +988,21 @@ class DatabaseRepository(
      */
     suspend fun getUniqueCuisinesTried(userId: String): Result<Set<String>> {
         return try {
-            // Get all ratings by user
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                    }
-                }
-                .decodeList<RatingDto>()
-
-            // Get unique restaurant IDs
+            // Fetch all ratings for this user, then resolve their restaurant cuisines
+            val ratings = ApiClient.get<List<RatingDto>>(
+                "ratings",
+                mapOf("restaurantId" to "")  // endpoint returns user's own ratings via JWT
+            )
             val restaurantIds = ratings.map { it.restaurantId }.toSet()
 
-            // Get cuisines for those restaurants
             val cuisines = mutableSetOf<String>()
             for (restaurantId in restaurantIds) {
-                val restaurant = postgrest["restaurants"]
-                    .select {
-                        filter {
-                            eq("id", restaurantId)
-                        }
+                try {
+                    val restaurant = ApiClient.get<RestaurantDto>("restaurants/$restaurantId")
+                    if (restaurant.cuisine.isNotBlank()) {
+                        cuisines.add(restaurant.cuisine)
                     }
-                    .decodeSingleOrNull<RestaurantDto>()
-
-                restaurant?.cuisine?.let { cuisines.add(it) }
+                } catch (_: Exception) { /* skip individual failures */ }
             }
 
             Result.success(cuisines)
@@ -1308,72 +1013,25 @@ class DatabaseRepository(
 
     // ==================== PRIVATE HELPERS ====================
 
-    private suspend fun updateRestaurantRating(restaurantId: String) {
-        try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("restaurant_id", restaurantId)
-                    }
-                }
-                .decodeList<RatingDto>()
-
-            val avgRating = if (ratings.isNotEmpty()) {
-                ratings.map { it.rating }.average().toFloat()
-            } else 0f
-
-            postgrest["restaurants"]
-                .update(
-                    mapOf(
-                        "average_rating" to avgRating,
-                        "review_count" to ratings.size
-                    )
-                ) {
-                    filter {
-                        eq("id", restaurantId)
-                    }
-                }
-        } catch (e: Exception) {
-            // Log error but don't fail the main operation
-        }
-    }
-
     suspend fun refreshRestaurantRating(restaurantId: String): Result<Unit> {
+        // Restaurant ratings are maintained server-side on every POST /api/ratings
+        return Result.success(Unit)
+    }
+
+    /**
+     * Get the total number of ratings submitted by a user.
+     */
+    suspend fun getUserRatingCount(userId: String): Int {
         return try {
-            updateRestaurantRating(restaurantId)
-            Result.success(Unit)
+            val ratings = ApiClient.get<List<RatingDto>>(
+                "ratings",
+                mapOf("limit" to "1000")
+            )
+            ratings.size
         } catch (e: Exception) {
-            Result.failure(e)
+            Logger.e("DatabaseRepository", "Failed to get user rating count: ${e.message}", e)
+            0
         }
-    }
-
-    private suspend fun updateLikesCount(ratingId: String, delta: Int) {
-        try {
-            val rating = postgrest["ratings"]
-                .select {
-                    filter {
-                        eq("id", ratingId)
-                    }
-                }
-                .decodeSingleOrNull<RatingDto>()
-
-            if (rating != null) {
-                val newCount = (rating.likesCount + delta).coerceAtLeast(0)
-                postgrest["ratings"]
-                    .update(mapOf("likes_count" to newCount)) {
-                        filter {
-                            eq("id", ratingId)
-                        }
-                    }
-            }
-        } catch (e: Exception) {
-            // Log error but don't fail the main operation
-        }
-    }
-
-    private fun calculateLevel(xp: Int): Int {
-        // Simple level calculation: every 100 XP = 1 level
-        return (xp / 100) + 1
     }
 
     // ==================== EXTENSION FUNCTIONS ====================
@@ -1404,21 +1062,17 @@ class DatabaseRepository(
         )
     }
 
-    /**
-     * Get the total number of ratings submitted by a user.
-     */
-    suspend fun getUserRatingCount(userId: String): Int {
-        return try {
-            val ratings = postgrest["ratings"]
-                .select {
-                    filter { eq("user_id", userId) }
-                }
-                .decodeList<RatingDto>()
-            ratings.size
-        } catch (e: Exception) {
-            Logger.e("DatabaseRepository", "Failed to get user rating count: ${e.message}", e)
-            0
-        }
+    private fun DishDetailResponse.toDish(): Dish {
+        return Dish(
+            id = id,
+            name = name,
+            imageUrl = imageUrl,
+            rating = averageRating,
+            ratingCount = reviewCount,
+            restaurantId = restaurantId,
+            restaurantName = restaurants?.name.orEmpty(),
+            restaurantCity = restaurants?.city.orEmpty()
+        )
     }
 
     private fun BadgeDto.toBadge(isEarned: Boolean = false): Badge {

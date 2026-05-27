@@ -3,5 +3,7 @@
 // DO NOT commit Config.xcconfig to version control.
 
 GOOGLE_MAPS_API_KEY = your-google-maps-api-key
-SUPABASE_URL = https://your-project-id.supabase.co
+// Xcode .xcconfig treats // as a comment, so URLs must escape // as /$()/.
+SUPABASE_URL = https:/$()/your-project-id.supabase.co
 SUPABASE_ANON_KEY = your-supabase-anon-key
+BACKEND_URL = https:/$()/api.withcouture.me

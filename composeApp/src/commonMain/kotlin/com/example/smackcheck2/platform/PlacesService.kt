@@ -1,11 +1,8 @@
 package com.example.smackcheck2.platform
 
-import com.example.smackcheck2.data.SupabaseClientProvider
-import io.github.jan.supabase.functions.functions
-import io.ktor.client.call.*
+import com.example.smackcheck2.data.ApiClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import com.example.smackcheck2.util.Logger
 
 /**
@@ -35,29 +32,20 @@ data class GeocodedCity(
 )
 
 /**
- * Places API service that proxies requests through a Supabase Edge Function.
+ * Places API service that proxies requests through the custom backend.
  *
- * The Google Places API key is stored server-side as a Supabase secret
- * (GOOGLE_PLACES_API_KEY), keeping it out of client code entirely.
+ * The Google Places API key is stored server-side, keeping it out of client code entirely.
  */
 class PlacesService {
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        prettyPrint = false
-        encodeDefaults = true
-    }
-
-    private val supabase = SupabaseClientProvider.client
-
     /**
-     * Find nearby restaurants based on current location using the
-     * google-places Supabase Edge Function.
+     * Find nearby restaurants based on current location.
+     *
+     * GET /api/places/nearby?lat=...&lng=...&radius=5000&keyword=...&minRating=...
      *
      * @param latitude User's current latitude
      * @param longitude User's current longitude
-     * @param radiusInMeters Search radius in meters (default: 2000m = 2km)
+     * @param radiusInMeters Search radius in meters (default: 5000m)
      * @param keyword Optional keyword to search for (e.g., "Italian", "Japanese")
      * @param minRating Optional minimum rating filter (applied client-side)
      * @return List of nearby restaurants
@@ -70,34 +58,20 @@ class PlacesService {
         minRating: Double? = null
     ): List<NearbyRestaurant> {
         return try {
-            val requestBody = NearbySearchRequest(
-                action = "nearby-search",
-                latitude = latitude,
-                longitude = longitude,
-                radiusInMeters = radiusInMeters,
-                keyword = keyword
-            )
-
-            val response = supabase.functions.invoke(
-                function = "google-places",
-                body = requestBody
-            )
-
-            if (response.status.value != 200) {
-                val errorText = response.body<String>()
-                Logger.e("PlacesService", "PlacesService: Edge Function error (${response.status.value}): $errorText")
-                return emptyList()
+            val params = buildMap<String, String?> {
+                put("lat", latitude.toString())
+                put("lng", longitude.toString())
+                put("radius", radiusInMeters.toString())
+                if (keyword != null) put("keyword", keyword)
+                if (minRating != null) put("minRating", minRating.toString())
             }
 
-            val responseText = response.body<String>()
-            val placesResponse = json.decodeFromString<PlacesEdgeResponse>(responseText)
+            val response: List<RestaurantDto> = ApiClient.get(
+                path = "places/nearby",
+                params = params
+            )
 
-            if (!placesResponse.error.isNullOrBlank()) {
-                Logger.e("PlacesService", "PlacesService: Server error: ${placesResponse.error}")
-                return emptyList()
-            }
-
-            val results = placesResponse.results.map { it.toNearbyRestaurant() }
+            val results = response.map { it.toNearbyRestaurant() }
 
             // Filter by minimum rating client-side if specified
             if (minRating != null) {
@@ -114,36 +88,17 @@ class PlacesService {
     }
 
     /**
-     * Get detailed information about a specific place using the
-     * google-places Supabase Edge Function.
+     * Get detailed information about a specific place.
+     *
+     * GET /api/places/details?placeId=...
      */
     suspend fun getPlaceDetails(placeId: String): NearbyRestaurant? {
         return try {
-            val requestBody = PlaceDetailsRequest(
-                action = "place-details",
-                placeId = placeId
+            val response: RestaurantDto = ApiClient.get(
+                path = "places/details",
+                params = mapOf("placeId" to placeId)
             )
-
-            val response = supabase.functions.invoke(
-                function = "google-places",
-                body = requestBody
-            )
-
-            if (response.status.value != 200) {
-                val errorText = response.body<String>()
-                Logger.e("PlacesService", "PlacesService: Edge Function error (${response.status.value}): $errorText")
-                return null
-            }
-
-            val responseText = response.body<String>()
-            val detailsResponse = json.decodeFromString<PlaceDetailsEdgeResponse>(responseText)
-
-            if (!detailsResponse.error.isNullOrBlank()) {
-                Logger.e("PlacesService", "PlacesService: Server error: ${detailsResponse.error}")
-                return null
-            }
-
-            detailsResponse.result?.toNearbyRestaurant()
+            response.toNearbyRestaurant()
         } catch (e: Exception) {
             Logger.e("PlacesService", "PlacesService: Exception: ${e::class.simpleName} - ${e.message}", e)
             null
@@ -151,8 +106,9 @@ class PlacesService {
     }
 
     /**
-     * Geocode a city name to get its coordinates using Google Places Text Search.
-     * This is more reliable than device geocoders for smaller/regional cities.
+     * Geocode a city name to get its coordinates.
+     *
+     * GET /api/places/geocode?city=...
      *
      * @param cityName The name of the city to geocode (e.g., "Rajampet", "Hyderabad")
      * @return GeocodedCity with coordinates or null if geocoding fails
@@ -160,40 +116,21 @@ class PlacesService {
     suspend fun geocodeCity(cityName: String): GeocodedCity? {
         return try {
             Logger.d("PlacesService", "PlacesService: Geocoding city: $cityName")
-            
-            val requestBody = GeocodeCityRequest(
-                action = "geocode-city",
-                cityName = cityName
+
+            val response: GeocodeCityResponse = ApiClient.get(
+                path = "places/geocode",
+                params = mapOf("city" to cityName)
             )
 
-            val response = supabase.functions.invoke(
-                function = "google-places",
-                body = requestBody
-            )
-
-            if (response.status.value != 200) {
-                val errorText = response.body<String>()
-                Logger.e("PlacesService", "PlacesService: Geocode error (${response.status.value}): $errorText")
-                return null
-            }
-
-            val responseText = response.body<String>()
-            val geocodeResponse = json.decodeFromString<GeocodeCityResponse>(responseText)
-
-            if (!geocodeResponse.error.isNullOrBlank()) {
-                Logger.e("PlacesService", "PlacesService: Geocode server error: ${geocodeResponse.error}")
-                return null
-            }
-
-            if (geocodeResponse.latitude == null || geocodeResponse.longitude == null) {
+            if (response.latitude == null || response.longitude == null) {
                 Logger.d("PlacesService", "PlacesService: No geocode results for: $cityName")
                 return null
             }
 
             val result = GeocodedCity(
-                latitude = geocodeResponse.latitude,
-                longitude = geocodeResponse.longitude,
-                formattedAddress = geocodeResponse.formattedAddress
+                latitude = response.latitude,
+                longitude = response.longitude,
+                formattedAddress = response.formattedAddress
             )
             Logger.d("PlacesService", "PlacesService: Geocoded $cityName to: ${result.latitude}, ${result.longitude}")
             result
@@ -204,8 +141,9 @@ class PlacesService {
     }
 
     /**
-     * Search for restaurants by text query (restaurant name + optional city).
-     * Uses Google Places Text Search API.
+     * Search for restaurants by text query (restaurant name + optional location bias).
+     *
+     * GET /api/places/search?query=...&lat=...&lng=...&radius=10000
      *
      * @param query The search query (e.g., "Blue Nail restaurant Hyderabad")
      * @return List of matching restaurants
@@ -219,34 +157,19 @@ class PlacesService {
         return try {
             Logger.d("PlacesService", "PlacesService: Text search for: $query (lat=$latitude, lng=$longitude)")
 
-            val requestBody = TextSearchRequest(
-                action = "text-search",
-                query = "$query restaurant",
-                latitude = latitude,
-                longitude = longitude,
-                radiusInMeters = if (latitude != null) radiusInMeters else null
-            )
-
-            val response = supabase.functions.invoke(
-                function = "google-places",
-                body = requestBody
-            )
-
-            if (response.status.value != 200) {
-                val errorText = response.body<String>()
-                Logger.e("PlacesService", "PlacesService: Text search error (${response.status.value}): $errorText")
-                return emptyList()
+            val params = buildMap<String, String?> {
+                put("query", "$query restaurant")
+                if (latitude != null) put("lat", latitude.toString())
+                if (longitude != null) put("lng", longitude.toString())
+                if (latitude != null) put("radius", radiusInMeters.toString())
             }
 
-            val responseText = response.body<String>()
-            val placesResponse = json.decodeFromString<PlacesEdgeResponse>(responseText)
+            val response: List<RestaurantDto> = ApiClient.get(
+                path = "places/search",
+                params = params
+            )
 
-            if (!placesResponse.error.isNullOrBlank()) {
-                Logger.e("PlacesService", "PlacesService: Text search server error: ${placesResponse.error}")
-                return emptyList()
-            }
-
-            val results = placesResponse.results.map { it.toNearbyRestaurant() }
+            val results = response.map { it.toNearbyRestaurant() }
             Logger.d("PlacesService", "PlacesService: Text search returned ${results.size} results")
             results
         } catch (e: Exception) {
@@ -256,72 +179,35 @@ class PlacesService {
     }
 }
 
-// --- Edge Function Request DTOs ---
-
-@Serializable
-private data class NearbySearchRequest(
-    val action: String,
-    val latitude: Double,
-    val longitude: Double,
-    val radiusInMeters: Int,
-    val keyword: String? = null
-)
-
-@Serializable
-private data class PlaceDetailsRequest(
-    val action: String,
-    val placeId: String
-)
-
-@Serializable
-private data class GeocodeCityRequest(
-    val action: String,
-    val cityName: String
-)
-
-@Serializable
-private data class TextSearchRequest(
-    val action: String,
-    val query: String,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    val radiusInMeters: Int? = null
-)
-
-// --- Edge Function Response DTOs ---
-
-@Serializable
-private data class PlacesEdgeResponse(
-    val results: List<RestaurantDto> = emptyList(),
-    val error: String? = null
-)
-
-@Serializable
-private data class PlaceDetailsEdgeResponse(
-    val result: RestaurantDto? = null,
-    val error: String? = null
-)
+// ── Response DTOs ──────────────────────────────────────────────────
 
 @Serializable
 private data class GeocodeCityResponse(
     val latitude: Double? = null,
     val longitude: Double? = null,
+    @SerialName("formatted_address")
     val formattedAddress: String? = null,
     val error: String? = null
 )
 
 @Serializable
 private data class RestaurantDto(
+    @SerialName("place_id")
     val id: String = "",
     val name: String = "",
     val address: String? = null,
     val latitude: Double = 0.0,
     val longitude: Double = 0.0,
     val rating: Double? = null,
+    @SerialName("user_ratings_total")
     val userRatingsTotal: Int? = null,
+    @SerialName("price_level")
     val priceLevel: Int? = null,
-    val photoReference: String? = null,
+    @SerialName("photo_references")
+    val photoReferences: List<String> = emptyList(),
+    @SerialName("photo_url")
     val photoUrl: String? = null,
+    @SerialName("is_open")
     val isOpen: Boolean? = null
 ) {
     fun toNearbyRestaurant() = NearbyRestaurant(
@@ -333,7 +219,7 @@ private data class RestaurantDto(
         rating = rating,
         userRatingsTotal = userRatingsTotal,
         priceLevel = priceLevel,
-        photoReference = photoReference,
+        photoReference = photoReferences.firstOrNull(),
         photoUrl = photoUrl,
         isOpen = isOpen
     )

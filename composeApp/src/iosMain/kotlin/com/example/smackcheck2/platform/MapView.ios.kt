@@ -86,6 +86,9 @@ actual fun PlatformMapView(
     showMyLocation: Boolean,
     recenterTrigger: Int,
     fitBoundsTrigger: Int,
+    cameraFocusLatitude: Double?,
+    cameraFocusLongitude: Double?,
+    cameraFocusTrigger: Int,
     modifier: Modifier
 ) {
     val delegate = remember(onMarkerClick) { MapViewDelegate(onMarkerClick) }
@@ -119,7 +122,10 @@ actual fun PlatformMapView(
         },
         modifier = modifier,
         update = { mapView ->
-            val coordinate = CLLocationCoordinate2DMake(latitude, longitude)
+            val coordinate = CLLocationCoordinate2DMake(
+                cameraFocusLatitude ?: latitude,
+                cameraFocusLongitude ?: longitude
+            )
             val region = MKCoordinateRegionMakeWithDistance(coordinate, spanDistance, spanDistance)
             mapView.setRegion(region, animated = true)
 

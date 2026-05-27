@@ -2,7 +2,10 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.SocialRepository
+import com.example.smackcheck2.model.Comment
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.DishDetailUiState
 import kotlinx.coroutines.async
@@ -20,6 +23,8 @@ import kotlinx.coroutines.launch
 class DishDetailViewModel : ViewModel() {
 
     private val databaseRepository = DatabaseRepository()
+    private val socialRepository = SocialRepository()
+    private val authRepository = AuthRepository()
 
     private val _uiState = MutableStateFlow(DishDetailUiState(isLoading = true))
     val uiState: StateFlow<DishDetailUiState> = _uiState.asStateFlow()
@@ -35,9 +40,20 @@ class DishDetailViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
 
-            // 1. Load the dish itself
-            val dishResult = databaseRepository.getDishById(dishId)
-            dishResult.onSuccess { dish ->
+            // 1. Load the dish itself; if not found, the ID may be a rating ID —
+            //    resolve to the real dish ID and retry.
+            var resolvedDishId = dishId
+            var dishResult = databaseRepository.getDishById(resolvedDishId)
+            var dish = dishResult.getOrNull()
+            if (dish == null) {
+                val realDishId = databaseRepository.getDishIdFromRating(dishId)
+                if (realDishId != null) {
+                    resolvedDishId = realDishId
+                    dishResult = databaseRepository.getDishById(resolvedDishId)
+                    dish = dishResult.getOrNull()
+                }
+            }
+            dishResult.onSuccess {
                 if (dish == null) {
                     _uiState.update {
                         it.copy(isLoading = false, errorMessage = "Dish not found")
@@ -46,7 +62,7 @@ class DishDetailViewModel : ViewModel() {
                 }
 
                 _uiState.update { it.copy(dish = dish) }
-                loadedDishId = dishId
+                loadedDishId = resolvedDishId
 
                 coroutineScope {
                     val restaurantDeferred = async {
@@ -58,12 +74,12 @@ class DishDetailViewModel : ViewModel() {
                         if (dish.restaurantId.isNotBlank()) {
                             databaseRepository.getDishesForRestaurant(dish.restaurantId)
                                 .getOrDefault(emptyList())
-                                .filter { it.id != dishId }
+                                .filter { it.id != resolvedDishId }
                         } else emptyList()
                     }
                     val reviewsDeferred = async {
                         databaseRepository.getRatingsForDish(
-                            dishId = dishId,
+                            dishId = resolvedDishId,
                             restaurantId = dish.restaurantId.takeIf { it.isNotBlank() }
                         ).getOrDefault(emptyList())
                     }
@@ -75,12 +91,20 @@ class DishDetailViewModel : ViewModel() {
                         .filter { !it.dishImageUrl.isNullOrBlank() }
                         .maxByOrNull { it.rating }
                         ?: reviews.maxByOrNull { it.rating }
+                    val anchorRatingId = featured?.id ?: reviews.firstOrNull()?.id
+                    val comments = if (anchorRatingId.isNullOrBlank()) {
+                        emptyList()
+                    } else {
+                        socialRepository.getCommentsForRating(anchorRatingId)
+                            .getOrDefault(emptyList())
+                    }
 
                     _uiState.update {
                         it.copy(
                             restaurant = restaurant,
                             relatedDishes = related,
                             reviews = reviews,
+                            comments = comments,
                             featuredReview = featured
                         )
                     }
@@ -118,6 +142,70 @@ class DishDetailViewModel : ViewModel() {
      */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
+    }
+
+    fun onCommentDraftChange(value: String) {
+        if (value.length <= 500) {
+            _uiState.update { it.copy(commentDraft = value, commentErrorMessage = null) }
+        }
+    }
+
+    fun submitComment() {
+        val state = _uiState.value
+        val anchorReviewId = state.featuredReview?.id ?: state.reviews.firstOrNull()?.id
+        if (anchorReviewId.isNullOrBlank()) {
+            _uiState.update { it.copy(commentErrorMessage = "No review available to comment on yet") }
+            return
+        }
+
+        val draft = state.commentDraft.trim()
+        if (draft.isBlank()) {
+            _uiState.update { it.copy(commentErrorMessage = "Comment cannot be empty") }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCommentSubmitting = true, commentErrorMessage = null) }
+
+            val user = authRepository.getCurrentUser()
+            if (user == null) {
+                _uiState.update {
+                    it.copy(
+                        isCommentSubmitting = false,
+                        commentErrorMessage = "Please sign in to comment"
+                    )
+                }
+                return@launch
+            }
+
+            socialRepository.addCommentAsCurrentUser(
+                ratingId = anchorReviewId,
+                content = draft
+            ).fold(
+                onSuccess = { createdComment ->
+                    _uiState.update { current ->
+                        current.copy(
+                            commentDraft = "",
+                            isCommentSubmitting = false,
+                            comments = listOf(createdComment) + current.comments,
+                            reviews = current.reviews.map { review ->
+                                if (review.id == anchorReviewId) {
+                                    review.copy(commentsCount = review.commentsCount + 1)
+                                } else review
+                            }
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isCommentSubmitting = false,
+                            commentErrorMessage = error.message ?: "Failed to post comment"
+                        )
+                    }
+                }
+            )
+        }
     }
 
     private suspend fun enrichRelatedDishesWithRatings(dishes: List<Dish>): List<Dish> {
