@@ -3,7 +3,10 @@ package com.example.smackcheck2.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -12,6 +15,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -21,6 +25,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.smackcheck2.model.CapturedDishDraft
 import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.BrandRed
@@ -37,11 +42,22 @@ private val ConfirmPageBg      = Color(0xFFFFF8F0)
 fun DarkDishConfirmScreen(
     dishName: String,
     imageBytes: ByteArray?,
+    dishDrafts: List<CapturedDishDraft> = emptyList(),
     cuisine: String?,
     confidence: Float,
     onNavigateBack: () -> Unit,
     onRateNow: () -> Unit
 ) {
+    val confirmItems = remember(dishDrafts, imageBytes, dishName, confidence) {
+        if (dishDrafts.isNotEmpty()) {
+            dishDrafts.map { ConfirmDishItem(it.dishName, it.image.bytes, it.confidence) }
+        } else {
+            listOf(ConfirmDishItem(dishName, imageBytes, confidence))
+        }
+    }
+    val pagerState = rememberPagerState(pageCount = { confirmItems.size })
+    val currentItem = confirmItems.getOrNull(pagerState.currentPage) ?: confirmItems.first()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -85,22 +101,62 @@ fun DarkDishConfirmScreen(
                 .background(ConfirmCreamWhite),
             contentAlignment = Alignment.Center
         ) {
-            if (imageBytes != null) {
-                ByteArrayImage(
-                    imageBytes = imageBytes,
-                    contentDescription = dishName,
+            HorizontalPager(state = pagerState) { page ->
+                val item = confirmItems[page]
+                if (item.imageBytes != null) {
+                    ByteArrayImage(
+                        imageBytes = item.imageBytes,
+                        contentDescription = item.dishName,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(20.dp)),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Restaurant,
+                        contentDescription = null,
+                        tint = ConfirmWarmMaroon.copy(alpha = 0.4f),
+                        modifier = Modifier.size(72.dp)
+                    )
+                }
+            }
+
+            if (confirmItems.size > 1) {
+                Surface(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(20.dp)),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Filled.Restaurant,
-                    contentDescription = null,
-                    tint = ConfirmWarmMaroon.copy(alpha = 0.4f),
-                    modifier = Modifier.size(72.dp)
-                )
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.6f)
+                ) {
+                    Text(
+                        text = "${pagerState.currentPage + 1}/${confirmItems.size}",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    repeat(confirmItems.size) { index ->
+                        Box(
+                            modifier = Modifier
+                                .size(if (index == pagerState.currentPage) 7.dp else 5.dp)
+                                .background(
+                                    Color.White.copy(alpha = if (index == pagerState.currentPage) 0.95f else 0.55f),
+                                    CircleShape
+                                )
+                        )
+                    }
+                }
             }
         }
 
@@ -133,7 +189,7 @@ fun DarkDishConfirmScreen(
                         letterSpacing = 1.sp,
                         color = ConfirmWarmMaroon.copy(alpha = 0.7f)
                     )
-                    if (confidence > 0f) {
+                    if (currentItem.confidence > 0f) {
                         Spacer(Modifier.width(8.dp))
                         Box(
                             modifier = Modifier
@@ -141,7 +197,7 @@ fun DarkDishConfirmScreen(
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = "${(confidence * 100).toInt()}% MATCH",
+                                text = "${(currentItem.confidence * 100).toInt()}% MATCH",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
@@ -154,7 +210,7 @@ fun DarkDishConfirmScreen(
 
                 // Dish name
                 Text(
-                    text = dishName,
+                    text = currentItem.dishName.ifBlank { dishName },
                     fontSize = 26.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = ConfirmDeepMaroon
@@ -217,3 +273,9 @@ fun DarkDishConfirmScreen(
         Spacer(Modifier.height(32.dp))
     }
 }
+
+private data class ConfirmDishItem(
+    val dishName: String,
+    val imageBytes: ByteArray?,
+    val confidence: Float
+)

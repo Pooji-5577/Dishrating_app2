@@ -482,6 +482,12 @@ data class CapturedImage(
     }
 }
 
+data class CapturedDishDraft(
+    val image: CapturedImage,
+    val dishName: String,
+    val confidence: Float = 0f
+)
+
 /**
  * Per-image AI detection result
  */

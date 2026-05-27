@@ -394,6 +394,12 @@ entrypoint = "./functions/analyze-dish/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/analyze-dish/*.html" ]
 
+[functions.analyze-receipt]
+enabled = true
+verify_jwt = true
+import_map = "./functions/analyze-receipt/deno.json"
+entrypoint = "./functions/analyze-receipt/index.ts"
+
 [functions.google-places]
 enabled = true
 verify_jwt = true

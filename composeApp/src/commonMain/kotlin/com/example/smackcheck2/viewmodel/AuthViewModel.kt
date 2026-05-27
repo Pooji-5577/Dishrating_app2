@@ -236,6 +236,16 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    fun refreshCurrentUser(onComplete: (User?) -> Unit = {}) {
+        viewModelScope.launch {
+            val user = authRepository.getCurrentUser()
+            if (user != null) {
+                _authState.value = AuthState.Authenticated(user)
+            }
+            onComplete(user)
+        }
+    }
+
     /**
      * Sign in as demo user (no Supabase call)
      */

@@ -117,7 +117,18 @@ data class FeedItem(
     val comment: String = "",
     val imageUrls: List<String> = emptyList(),
     val price: Double? = null,
-    val syncStatus: PendingRatingSyncStatus? = null
+    val syncStatus: PendingRatingSyncStatus? = null,
+    val isGrouped: Boolean = false,
+    val groupId: String? = null,
+    val groupedDishes: List<GroupedFeedDish> = emptyList()
+)
+
+data class GroupedFeedDish(
+    val dishId: String,
+    val dishName: String,
+    val imageUrl: String?,
+    val price: Double? = null,
+    val ratingId: String? = null
 )
 
 @Serializable

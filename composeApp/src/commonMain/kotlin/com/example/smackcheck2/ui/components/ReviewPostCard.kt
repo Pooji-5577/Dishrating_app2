@@ -13,15 +13,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.ChatBubbleOutline
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Share
@@ -60,6 +63,12 @@ import com.example.smackcheck2.util.formatRelativeTime
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
 
+private data class ReviewImagePage(
+    val dishName: String,
+    val imageUrl: String?,
+    val price: Double?
+)
+
 @Composable
 fun ReviewPostCard(
     feedItem: FeedItem,
@@ -78,6 +87,27 @@ fun ReviewPostCard(
     val newsreader = NewsreaderFontFamily()
     var menuExpanded by remember { mutableStateOf(false) }
     val isPending = feedItem.syncStatus != null
+    val imagePages = remember(feedItem) {
+        if (feedItem.isGrouped && feedItem.groupedDishes.isNotEmpty()) {
+            feedItem.groupedDishes.map {
+                ReviewImagePage(
+                    dishName = it.dishName,
+                    imageUrl = it.imageUrl,
+                    price = it.price
+                )
+            }
+        } else {
+            listOf(
+                ReviewImagePage(
+                    dishName = feedItem.dishName,
+                    imageUrl = feedItem.dishImageUrl,
+                    price = feedItem.price
+                )
+            )
+        }
+    }
+    val pagerState = rememberPagerState(pageCount = { imagePages.size })
+    val currentPage = imagePages.getOrNull(pagerState.currentPage) ?: imagePages.first()
 
     Surface(
         modifier = modifier
@@ -245,42 +275,84 @@ fun ReviewPostCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(256.dp)
+                        .clickable(enabled = !isPending) { onDishClick() }
                 ) {
-                    if (feedItem.dishImageUrl != null) {
-                        KamelImage(
-                            resource = asyncPainterResource(feedItem.dishImageUrl),
-                            contentDescription = feedItem.dishName,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            onFailure = {
+                    HorizontalPager(state = pagerState) { page ->
+                        val imagePage = imagePages[page]
+                        if (imagePage.imageUrl != null) {
+                            KamelImage(
+                                resource = asyncPainterResource(imagePage.imageUrl),
+                                contentDescription = imagePage.dishName,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                onFailure = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(colors.SurfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Restaurant,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(48.dp),
+                                            tint = colors.TextTertiary
+                                        )
+                                    }
+                                }
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(colors.SurfaceVariant),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Restaurant,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = colors.TextTertiary
+                                )
+                            }
+                        }
+                    }
+
+                    if (imagePages.size > 1) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(12.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color.Black.copy(alpha = 0.65f)
+                        ) {
+                            Text(
+                                text = "${pagerState.currentPage + 1}/${imagePages.size}",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = jakartaSans,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            repeat(imagePages.size) { index ->
                                 Box(
                                     modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(colors.SurfaceVariant),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Restaurant,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp),
-                                        tint = colors.TextTertiary
-                                    )
-                                }
+                                        .size(if (index == pagerState.currentPage) 7.dp else 5.dp)
+                                        .background(
+                                            color = Color.White.copy(alpha = if (index == pagerState.currentPage) 0.95f else 0.55f),
+                                            shape = CircleShape
+                                        )
+                                )
                             }
-                        )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(colors.SurfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Restaurant,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = colors.TextTertiary
-                            )
                         }
                     }
 
@@ -317,16 +389,37 @@ fun ReviewPostCard(
                 // Dish name + restaurant + review
                 Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     // Dish name - Newsreader Italic
-                    Text(
-                        text = feedItem.dishName,
-                        fontSize = 22.sp,
-                        fontWeight = FontWeight.Normal,
-                        fontStyle = FontStyle.Italic,
-                        fontFamily = newsreader,
-                        color = BrandRedDark,
-                        lineHeight = 30.sp,
-                        modifier = Modifier
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth().clickable { onDishClick() },
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = currentPage.dishName.ifBlank { feedItem.dishName },
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Normal,
+                            fontStyle = FontStyle.Italic,
+                            fontFamily = newsreader,
+                            color = BrandRedDark,
+                            lineHeight = 30.sp,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        currentPage.price?.let { price ->
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = Color(0xFFF8EFE8),
+                                modifier = Modifier.align(Alignment.Start)
+                            ) {
+                                Text(
+                                    text = formatDishPrice(price),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    fontFamily = jakartaSans,
+                                    color = BrandRed,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
+                    }
 
                     // "at Restaurant Name"
                     if (feedItem.restaurantName.isNotBlank()) {
@@ -350,6 +443,29 @@ fun ReviewPostCard(
                             color = Color(0xFF444444),
                             lineHeight = 26.sp
                         )
+                    }
+
+                    if (feedItem.isGrouped && imagePages.size > 1) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            items(imagePages.size) { index ->
+                                val page = imagePages[index]
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = if (index == pagerState.currentPage) BrandRedDark else Color(0xFFF8EFE8)
+                                ) {
+                                    Text(
+                                        text = page.dishName.ifBlank { "Dish ${index + 1}" },
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        fontFamily = jakartaSans,
+                                        color = if (index == pagerState.currentPage) Color.White else BrandRedDark,
+                                        maxLines = 1,
+                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                        modifier = Modifier.width(112.dp).padding(horizontal = 10.dp, vertical = 7.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -431,4 +547,9 @@ fun ReviewPostCard(
             }
         }
     }
+}
+
+private fun formatDishPrice(price: Double): String {
+    val amount = if (price % 1.0 == 0.0) price.toInt().toString() else formatOneDecimal(price)
+    return "\u20B9 $amount"
 }

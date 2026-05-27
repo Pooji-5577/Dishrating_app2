@@ -108,6 +108,7 @@ fun DarkDishCaptureScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
+    var pendingAdditionalCameraCapture by remember { mutableStateOf(false) }
 
     if (uiState.showNotDishError) {
         AlertDialog(
@@ -167,12 +168,20 @@ fun DarkDishCaptureScreen(
                 coroutineScope.launch {
                     val result = imagePicker?.captureImage()
                     if (result != null) {
-                        if (onImageReady != null) onImageReady(result) else viewModel.onImageCaptured(result)
+                        if (pendingAdditionalCameraCapture && uiState.imageUri != null) {
+                            viewModel.onAdditionalImageCaptured(result)
+                        } else if (onImageReady != null) {
+                            onImageReady(result)
+                        } else {
+                            viewModel.onImageCaptured(result)
+                        }
                     } else {
                         showPickerSheet = true
                     }
+                    pendingAdditionalCameraCapture = false
                 }
             } else {
+                pendingAdditionalCameraCapture = false
                 showPickerSheet = true
             }
         }
@@ -198,6 +207,10 @@ fun DarkDishCaptureScreen(
                     onSelectImage = { viewModel.selectImage(it) },
                     onRemoveImage = { viewModel.removeImage(it) },
                     onPhotoEditChange = { viewModel.updatePhotoEdit(it) },
+                    onAddMoreFromCamera = {
+                        pendingAdditionalCameraCapture = true
+                        requestCameraPermission()
+                    },
                     onAddMoreFromGallery = {
                         coroutineScope.launch {
                             val remaining = viewModel.remainingImageSlots()
@@ -246,13 +259,6 @@ fun DarkDishCaptureScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp,
                             color = WarmMaroon,
-                            modifier = Modifier.padding(bottom = 2.dp)
-                        )
-                        Text(
-                            text = if (isStoryMode) "Share a moment from your food journey"
-                                   else "Snap or pick a photo to start your dish rating",
-                            fontSize = 13.sp,
-                            color = Color(0xFF888888),
                             modifier = Modifier.padding(bottom = 4.dp)
                         )
                         Row(
@@ -262,6 +268,7 @@ fun DarkDishCaptureScreen(
                                 .background(Color(0xFFF6F6F6))
                                 .clickable {
                                     showPickerSheet = false
+                                    pendingAdditionalCameraCapture = false
                                     requestCameraPermission()
                                 }
                                 .padding(16.dp),
@@ -506,6 +513,7 @@ private fun ImagePreviewWithAI(
     onSelectImage: (Int) -> Unit,
     onRemoveImage: (Int) -> Unit,
     onPhotoEditChange: (PhotoEditState) -> Unit,
+    onAddMoreFromCamera: () -> Unit,
     onAddMoreFromGallery: () -> Unit,
     onEditedNameChange: (String) -> Unit,
     onEditClick: () -> Unit,
@@ -597,11 +605,7 @@ private fun ImagePreviewWithAI(
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = when {
-                                isAnalyzing -> "IDENTIFYING"
-                                isAIDetected -> "AI IDENTIFIED"
-                                else -> "MANUAL ENTRY"
-                            },
+                            text = if (isAIDetected) "AI IDENTIFIED" else "MANUAL ENTRY",
                             color = CrimsonRed,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
@@ -638,7 +642,7 @@ private fun ImagePreviewWithAI(
                         } else {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    text = "\"${detectedDishName ?: if (isAnalyzing) "Identifying..." else "Unknown Dish"}\"",
+                                    text = "\"${detectedDishName ?: "Unknown Dish"}\"",
                                     color = DeepMaroon,
                                     fontSize = 20.sp,
                                     fontWeight = FontWeight.Bold,
@@ -690,20 +694,18 @@ private fun ImagePreviewWithAI(
                         }
                     }
 
-                    // Non-blocking analysis status. The user can still inspect, edit, and continue.
+                    // Analyzing overlay
                     if (isAnalyzing) {
                         Box(
                             modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(12.dp)
-                                .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(999.dp))
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
-                            contentAlignment = Alignment.CenterStart
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(20.dp)),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(color = Color.White, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Identifying...", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator(color = CrimsonRed, modifier = Modifier.size(40.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text("AI Detecting Dish...", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -740,9 +742,9 @@ private fun ImagePreviewWithAI(
                 }
             }
 
-            // Thumbnail strip for multiple images
-            if (allImages.size > 1) {
-                ImageThumbnailStrip(
+            // Selected photos with remove controls
+            if (allImages.isNotEmpty()) {
+                SelectedPhotosStrip(
                     images = allImages,
                     selectedIndex = selectedImageIndex,
                     canAddMore = canAddMoreImages,
@@ -766,13 +768,15 @@ private fun ImagePreviewWithAI(
                 CaptureActionButton(
                     icon = { Icon(Icons.Default.CameraAlt, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(28.dp)) },
                     label = "TAKE ANOTHER",
-                    onClick = onRetake,
+                    onClick = onAddMoreFromCamera,
+                    enabled = canAddMoreImages && imagePicker != null,
                     modifier = Modifier.weight(1f)
                 )
                 CaptureActionButton(
                     icon = { Icon(Icons.Default.PhotoLibrary, contentDescription = null, tint = WarmMaroon, modifier = Modifier.size(28.dp)) },
                     label = "FROM GALLERY",
                     onClick = onAddMoreFromGallery,
+                    enabled = canAddMoreImages && imagePicker != null,
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -783,9 +787,11 @@ private fun ImagePreviewWithAI(
         // Confirm button
         Button(
             onClick = onConfirm,
-            enabled = isStoryMode ||
-                ((!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown" && detectedDishName != "Identifying...") ||
-                    editedName.isNotBlank()),
+            enabled = !isAnalyzing && (
+                isStoryMode ||
+                    ((!detectedDishName.isNullOrBlank() && detectedDishName != "Unknown") ||
+                        (isEditingName && editedName.isNotBlank()))
+            ),
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 16.dp)
@@ -812,12 +818,15 @@ private fun CaptureActionButton(
     icon: @Composable () -> Unit,
     label: String,
     onClick: () -> Unit,
+    enabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.clickable { onClick() },
+        modifier = modifier.clickable(enabled = enabled) { onClick() },
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(
+            containerColor = if (enabled) Color.White else Color.White.copy(alpha = 0.55f)
+        ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(
@@ -831,7 +840,7 @@ private fun CaptureActionButton(
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = label,
-                color = WarmMaroon,
+                color = WarmMaroon.copy(alpha = if (enabled) 1f else 0.45f),
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
                 letterSpacing = 0.5.sp
@@ -924,7 +933,7 @@ private fun EditChip(
 }
 
 @Composable
-private fun ImageThumbnailStrip(
+private fun SelectedPhotosStrip(
     images: List<CapturedImage>,
     selectedIndex: Int,
     canAddMore: Boolean,
@@ -935,23 +944,46 @@ private fun ImageThumbnailStrip(
 ) {
     val scrollState = rememberScrollState()
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .horizontalScroll(scrollState),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        images.forEachIndexed { index, image ->
-            ImageThumbnail(
-                image = image,
-                isSelected = index == selectedIndex,
-                onSelect = { onSelectImage(index) },
-                onRemove = { onRemoveImage(index) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Selected photos",
+                color = WarmMaroon,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 0.4.sp
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Text(
+                text = "${images.size}/5",
+                color = WarmMaroon.copy(alpha = 0.75f),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
-        if (canAddMore && imagePicker != null) {
-            AddMoreImageButton(onClick = onAddMoreFromGallery)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            images.forEachIndexed { index, image ->
+                ImageThumbnail(
+                    image = image,
+                    isSelected = index == selectedIndex,
+                    onSelect = { onSelectImage(index) },
+                    onRemove = { onRemoveImage(index) }
+                )
+            }
+            if (canAddMore && imagePicker != null) {
+                AddMoreImageButton(onClick = onAddMoreFromGallery)
+            }
         }
     }
 }

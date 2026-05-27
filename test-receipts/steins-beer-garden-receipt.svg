@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1300" viewBox="0 0 900 1300">
+  <rect width="900" height="1300" fill="#f8f4ec"/>
+  <rect x="80" y="60" width="740" height="1180" rx="18" fill="#fffdf8" stroke="#d8d0c2" stroke-width="3"/>
+  <text x="450" y="145" text-anchor="middle" font-family="Courier New, monospace" font-size="42" font-weight="700" fill="#221b18">STEINS BEER GARDEN</text>
+  <text x="450" y="192" text-anchor="middle" font-family="Courier New, monospace" font-size="30" fill="#221b18">&amp; RESTAURANT</text>
+  <text x="450" y="238" text-anchor="middle" font-family="Courier New, monospace" font-size="24" fill="#5b534d">Mountain View, CA</text>
+  <line x1="130" y1="300" x2="770" y2="300" stroke="#221b18" stroke-width="3" stroke-dasharray="14 10"/>
+  <text x="130" y="365" font-family="Courier New, monospace" font-size="30" fill="#221b18">QTY  ITEM</text>
+  <text x="770" y="365" text-anchor="end" font-family="Courier New, monospace" font-size="30" fill="#221b18">PRICE</text>
+  <line x1="130" y1="400" x2="770" y2="400" stroke="#221b18" stroke-width="2"/>
+  <text x="130" y="470" font-family="Courier New, monospace" font-size="32" fill="#221b18">1  BBQ CHICKEN PIZZA</text>
+  <text x="770" y="470" text-anchor="end" font-family="Courier New, monospace" font-size="32" fill="#221b18">18.50</text>
+  <text x="130" y="540" font-family="Courier New, monospace" font-size="32" fill="#221b18">1  TOFU SALAD BOWL</text>
+  <text x="770" y="540" text-anchor="end" font-family="Courier New, monospace" font-size="32" fill="#221b18">14.25</text>
+  <text x="130" y="610" font-family="Courier New, monospace" font-size="32" fill="#221b18">1  HOUSE LEMONADE</text>
+  <text x="770" y="610" text-anchor="end" font-family="Courier New, monospace" font-size="32" fill="#221b18">4.75</text>
+  <line x1="130" y1="685" x2="770" y2="685" stroke="#221b18" stroke-width="2"/>
+  <text x="130" y="750" font-family="Courier New, monospace" font-size="30" fill="#221b18">SUBTOTAL</text>
+  <text x="770" y="750" text-anchor="end" font-family="Courier New, monospace" font-size="30" fill="#221b18">37.50</text>
+  <text x="130" y="815" font-family="Courier New, monospace" font-size="30" fill="#221b18">TAX</text>
+  <text x="770" y="815" text-anchor="end" font-family="Courier New, monospace" font-size="30" fill="#221b18">3.37</text>
+  <text x="130" y="880" font-family="Courier New, monospace" font-size="34" font-weight="700" fill="#221b18">TOTAL</text>
+  <text x="770" y="880" text-anchor="end" font-family="Courier New, monospace" font-size="34" font-weight="700" fill="#221b18">40.87</text>
+  <line x1="130" y1="950" x2="770" y2="950" stroke="#221b18" stroke-width="3" stroke-dasharray="14 10"/>
+  <text x="450" y="1025" text-anchor="middle" font-family="Courier New, monospace" font-size="27" fill="#221b18">THANK YOU</text>
+  <text x="450" y="1072" text-anchor="middle" font-family="Courier New, monospace" font-size="23" fill="#5b534d">Guest Copy</text>
+  <text x="450" y="1120" text-anchor="middle" font-family="Courier New, monospace" font-size="20" fill="#5b534d">05/27/2026 7:15 PM</text>
+</svg>

@@ -11,4 +11,5 @@ import com.example.smackcheck2.BuildConfig
 actual object SupabaseConfig {
     actual val SUPABASE_URL: String = BuildConfig.SUPABASE_URL
     actual val SUPABASE_ANON_KEY: String = BuildConfig.SUPABASE_ANON_KEY
+    actual val BACKEND_URL: String = BuildConfig.BACKEND_URL
 }

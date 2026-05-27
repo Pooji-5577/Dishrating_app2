@@ -4,7 +4,7 @@
 
 - Device: Android emulator `emulator-5554`, Android 16 / SDK 36.
 - Package: `com.example.smackcheck2`.
-- APK reproduced: `SmackCheck_V00.60.apk` (`application-label: SmackCheck00.52`, `versionName: 1.0`).
+- APK reproduced from local Gradle output: `composeApp/build/outputs/apk/debug/composeApp-debug.apk`.
 - Artifact directory: `/private/tmp/smackcheck-crash-review-20260519`.
 
 ## Reproduction
@@ -12,7 +12,7 @@
 Commands used:
 
 ```bash
-/Users/teja/Library/Android/sdk/platform-tools/adb -s emulator-5554 install -r SmackCheck_V00.60.apk
+/Users/teja/Library/Android/sdk/platform-tools/adb -s emulator-5554 install -r composeApp/build/outputs/apk/debug/composeApp-debug.apk
 /Users/teja/Library/Android/sdk/platform-tools/adb -s emulator-5554 logcat -c
 /Users/teja/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell am force-stop com.example.smackcheck2
 /Users/teja/Library/Android/sdk/platform-tools/adb -s emulator-5554 shell monkey -p com.example.smackcheck2 1

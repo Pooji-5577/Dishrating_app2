@@ -144,6 +144,7 @@ android {
         // Supabase configuration from local.properties or .env
         buildConfigField("String", "SUPABASE_URL", "\"${getConfigProperty("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getConfigProperty("SUPABASE_ANON_KEY")}\"")
+        buildConfigField("String", "BACKEND_URL", "\"${getConfigProperty("BACKEND_URL").ifBlank { "https://api.withcouture.me" }}\"")
 
         // Custom backend URL — set BACKEND_URL in local.properties or .env
         buildConfigField("String", "BACKEND_URL", "\"${getConfigProperty("BACKEND_URL")}\"")

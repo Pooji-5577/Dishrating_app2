@@ -29,6 +29,9 @@ Return ONLY compact JSON with these exact keys:
 Rules:
 - item_type is "food", "beverage", or "unknown".
 - Use "Unknown" and confidence 0 only when no food or drink is visible.
+- If multiple dishes are visible, name the most prominent foreground dish.
+- Do not return Unknown if a recognizable food or drink is visible.
+- Use the most specific common dish name, for example "pesto pasta salad" instead of "pasta".
 - alternatives: max 2 short names.
 - restaurant_chain only when clear branding/logo is visible, else "".
 - restaurant_type: short lowercase venue type like "restaurant", "cafe", "pizzeria", "fast food", or "".
@@ -77,8 +80,9 @@ Deno.serve(async (req) => {
     console.log(`Analyzing dish image: ${imageBase64.length} chars, mimeType: ${mimeType}`)
 
     // Call Gemini API with vision capabilities.
+    const geminiModel = Deno.env.get('GEMINI_MODEL') ?? 'gemini-2.5-flash-lite'
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1alpha/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: {
@@ -88,13 +92,14 @@ Deno.serve(async (req) => {
           contents: [{
             parts: [
               {
+                text: DETECTION_PROMPT
+              },
+              {
                 inline_data: {
                   mime_type: mimeType,
                   data: imageBase64
-                }
-              },
-              {
-                text: DETECTION_PROMPT
+                },
+                media_resolution: { level: 'MEDIA_RESOLUTION_HIGH' },
               }
             ]
           }],

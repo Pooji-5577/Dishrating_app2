@@ -11,4 +11,5 @@ package com.example.smackcheck2.data
 expect object SupabaseConfig {
     val SUPABASE_URL: String
     val SUPABASE_ANON_KEY: String
+    val BACKEND_URL: String
 }
