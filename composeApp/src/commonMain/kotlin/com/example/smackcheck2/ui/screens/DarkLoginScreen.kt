@@ -1,6 +1,7 @@
 package com.example.smackcheck2.ui.screens
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.SpanStyle
@@ -92,8 +95,8 @@ fun DarkLoginScreen(
         if (uiState.isSuccess) onNavigateToHome()
     }
 
-    val pageBackground = Color(0xFF2B1818)
     val topBackground = BrandRedDark
+    val lowerOverlay = Color.Black.copy(alpha = 0.5f)
     val buttonColor = BrandRed
     val circleColor = Color(0xFFD4D4D4)
     val fieldBackground = Color(0xFF3D1F1F)
@@ -101,34 +104,66 @@ fun DarkLoginScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(pageBackground)
+            .background(topBackground)
     ) {
-        // ── Top maroon header with food-pattern overlay and curved bottom edge ──
+        // ── Top maroon header with food-pattern overlay ──
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(300.dp)
+                .height(440.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
+                    .height(360.dp)
                     .background(topBackground)
             )
             Image(
                 painter = painterResource(Res.drawable.login_food_pattern),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                alpha = 0.22f
-            )
-            // Giant dark circle creates the concave curve at bottom of top section
-            Box(
                 modifier = Modifier
-                    .size(width = 1400.dp, height = 600.dp)
-                    .align(Alignment.BottomCenter)
-                    .offset(y = 310.dp)
-                    .background(pageBackground, CircleShape)
+                    .fillMaxWidth()
+                    .height(360.dp)
+                    .offset(y = (-25).dp)
             )
+        }
+
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val radius = 900.dp.toPx()
+            val arcCenterY = 325.dp.toPx()
+            val halfWidth = size.width / 2f
+            val centerX = size.width / 2f
+            val circleCenterY = arcCenterY + radius
+            val verticalOffset = kotlin.math.sqrt(
+                (radius * radius - halfWidth * halfWidth).coerceAtLeast(0f)
+            )
+            val edgeY = circleCenterY - verticalOffset
+            val startAngle = Math.toDegrees(
+                kotlin.math.atan2(edgeY - circleCenterY, -halfWidth).toDouble()
+            ).toFloat()
+            val endAngle = Math.toDegrees(
+                kotlin.math.atan2(edgeY - circleCenterY, halfWidth).toDouble()
+            ).toFloat()
+
+            val path = Path().apply {
+                moveTo(0f, edgeY)
+                arcTo(
+                    rect = Rect(
+                        left = centerX - radius,
+                        top = circleCenterY - radius,
+                        right = centerX + radius,
+                        bottom = circleCenterY + radius
+                    ),
+                    startAngleDegrees = startAngle,
+                    sweepAngleDegrees = endAngle - startAngle,
+                    forceMoveTo = false
+                )
+                lineTo(size.width, size.height)
+                lineTo(0f, size.height)
+                close()
+            }
+            drawPath(path = path, color = lowerOverlay)
         }
 
         // Circular app logo straddling the curve
@@ -136,7 +171,7 @@ fun DarkLoginScreen(
             modifier = Modifier
                 .size(150.dp)
                 .align(Alignment.TopCenter)
-                .offset(y = 200.dp)
+                .offset(y = 230.dp)
                 .background(circleColor, CircleShape)
         ) {
             Image(
@@ -153,12 +188,13 @@ fun DarkLoginScreen(
         Column(
             modifier = Modifier
                 .align(Alignment.TopCenter)
-                .offset(y = 375.dp),
+                .offset(y = 390.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             SmackCheckWordmark(
                 fontFamily = PlusJakartaSans(),
                 fontSize = 30.sp,
+                checkColor = Color.White.copy(alpha = 0.5f),
                 letterSpacing = 0.sp
             )
 
@@ -272,7 +308,7 @@ fun DarkLoginScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // ── Log In button ──
             Button(
@@ -326,7 +362,7 @@ fun DarkLoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
             // ── "Or" divider ──
             Row(
@@ -348,7 +384,7 @@ fun DarkLoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             // ── Google Sign-In button ──
             OutlinedButton(
@@ -390,13 +426,13 @@ fun DarkLoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // ── Sign Up link ──
             Row(
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(bottom = 32.dp)
+                modifier = Modifier.padding(bottom = 12.dp)
             ) {
                 Text(
                     text = "Don't have an account?",

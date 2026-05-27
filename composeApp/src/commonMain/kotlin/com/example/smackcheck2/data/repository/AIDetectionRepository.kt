@@ -3,6 +3,7 @@ package com.example.smackcheck2.data.repository
 import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.SupabaseConfig
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.functions.functions
 import io.github.jan.supabase.auth.status.SessionStatus
 import io.ktor.client.HttpClient
 import io.ktor.client.call.*
@@ -10,6 +11,7 @@ import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.http.*
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -94,66 +96,17 @@ class AIDetectionRepository {
                 )
             }
 
-            Logger.d("AIDetectionRepository", "AIDetection: Calling backend /api/ai/detect-dish...")
-
-            val response = httpClient.post("${SupabaseConfig.BACKEND_URL.trimEnd('/')}/api/ai/detect-dish") {
-                contentType(ContentType.Application.Json)
-                header(HttpHeaders.Authorization, "Bearer $accessToken")
-                setBody(json.encodeToString(requestBody))
-            }
-
-            Logger.d("AIDetectionRepository", "AIDetection: Response status: ${response.status.value}")
-
-            if (response.status.value != 200) {
-                val errorText = response.body<String>()
-                Logger.e("AIDetectionRepository", "AIDetection: Backend AI error: $errorText")
-
-                // Handle specific HTTP errors
-                val isServerOutage = response.status.value in listOf(500, 502, 503, 504, 429)
-                val errorMessage = when (response.status.value) {
-                    401 -> "Authentication required. Please log in."
-                    403 -> "Access denied. Check your permissions."
-                    429 -> "Rate limit exceeded. Please try again in a few moments."
-                    500, 502, 503, 504 -> "AI service is temporarily unavailable. Please enter dish name manually."
-                    else -> "Error: ${response.status.value}"
+            val edgeResponse = detectDishWithBackend(requestBody, accessToken)
+                .getOrElse { backendError ->
+                    Logger.e("AIDetectionRepository", "AIDetection: Backend unavailable or empty, trying Edge Function: ${backendError.message}", backendError)
+                    detectDishWithEdgeFunction(requestBody).getOrElse { edgeError ->
+                        return createFallbackResult("Unknown").copy(
+                            alternatives = listOf("AI service unavailable. Please enter dish name manually."),
+                            debugInfo = "Backend: ${backendError.message?.take(80)}; Edge: ${edgeError.message?.take(80)}",
+                            isOutage = true
+                        )
+                    }
                 }
-
-                return createFallbackResult("Unknown").copy(
-                    alternatives = listOf(errorMessage),
-                    debugInfo = "HTTP ${response.status.value}: ${errorText.take(100)}",
-                    isOutage = isServerOutage
-                )
-            }
-
-            // Parse the response
-            val responseText = response.body<String>()
-            Logger.d("AIDetectionRepository", "AIDetection: Response (first 500 chars): ${responseText.take(500)}")
-
-            // Robust deserialization: if full JSON parsing fails, fall back to regex extraction
-            val edgeResponse = try {
-                json.decodeFromString<EdgeFunctionResponse>(responseText)
-            } catch (parseException: Exception) {
-                Logger.e("AIDetectionRepository", "AIDetection: JSON parse failed (${parseException.message}), using regex fallback...", parseException)
-                val dishNameMatch = Regex("\"dishName\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val confidenceMatch = Regex("\"confidence\"\\s*:\\s*([\\d.]+)").find(responseText)
-                val cuisineMatch = Regex("\"cuisine\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val itemTypeMatch = Regex("\"itemType\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val chainMatch = Regex("\"restaurantChain\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
-                val typeMatch = Regex("\"restaurantType\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
-                val errorMatch = Regex("\"error\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
-                val extracted = dishNameMatch?.groupValues?.getOrNull(1) ?: ""
-                val extractedConf = confidenceMatch?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: 0f
-                Logger.d("AIDetectionRepository", "AIDetection: Regex extracted -> dishName='$extracted', confidence=$extractedConf")
-                EdgeFunctionResponse(
-                    dishName = extracted,
-                    cuisine = cuisineMatch?.groupValues?.getOrNull(1) ?: "",
-                    confidence = extractedConf,
-                    itemType = itemTypeMatch?.groupValues?.getOrNull(1) ?: "unknown",
-                    restaurantChain = chainMatch?.groupValues?.getOrNull(1) ?: "",
-                    restaurantType = typeMatch?.groupValues?.getOrNull(1) ?: "",
-                    error = errorMatch?.groupValues?.getOrNull(1)
-                )
-            }
 
             // Check for error in response
             if (!edgeResponse.error.isNullOrBlank()) {
@@ -232,6 +185,96 @@ class AIDetectionRepository {
             itemType = "unknown"
         )
     }
+
+    private suspend fun detectDishWithBackend(
+        requestBody: EdgeFunctionRequest,
+        accessToken: String
+    ): Result<EdgeFunctionResponse> {
+        repeat(2) { attempt ->
+            try {
+                Logger.d("AIDetectionRepository", "AIDetection: Calling backend /api/ai/detect-dish attempt ${attempt + 1}...")
+                val response = httpClient.post("${SupabaseConfig.BACKEND_URL.trimEnd('/')}/api/ai/detect-dish") {
+                    contentType(ContentType.Application.Json)
+                    header(HttpHeaders.Authorization, "Bearer $accessToken")
+                    setBody(json.encodeToString(requestBody))
+                }
+                val responseText = response.body<String>()
+                Logger.d("AIDetectionRepository", "AIDetection: Backend status ${response.status.value}, response: ${responseText.take(500)}")
+                if (response.status.value in 200..299) {
+                    val parsed = parseDishDetectionResponse(responseText)
+                    if (parsed.isUsableDishResult()) return Result.success(parsed)
+                    Logger.e("AIDetectionRepository", "AIDetection: Backend returned empty/unknown dish result")
+                } else if (response.status.value !in listOf(429, 500, 502, 503, 504)) {
+                    return Result.failure(IllegalStateException("Backend AI failed ${response.status.value}: ${responseText.take(160)}"))
+                }
+            } catch (e: Exception) {
+                Logger.e("AIDetectionRepository", "AIDetection: Backend attempt ${attempt + 1} failed: ${e.message}", e)
+            }
+            delay(350L)
+        }
+        return Result.failure(IllegalStateException("Backend AI returned no usable dish result"))
+    }
+
+    private suspend fun detectDishWithEdgeFunction(
+        requestBody: EdgeFunctionRequest
+    ): Result<EdgeFunctionResponse> {
+        repeat(2) { attempt ->
+            try {
+                Logger.d("AIDetectionRepository", "AIDetection: Calling analyze-dish Edge Function attempt ${attempt + 1}...")
+                val response = supabase.functions.invoke(
+                    function = "analyze-dish",
+                    body = requestBody
+                )
+                val responseText = response.body<String>()
+                Logger.d("AIDetectionRepository", "AIDetection: Edge status ${response.status.value}, response: ${responseText.take(500)}")
+                if (response.status.value in 200..299) {
+                    val parsed = parseDishDetectionResponse(responseText)
+                    if (parsed.isUsableDishResult()) return Result.success(parsed)
+                    Logger.e("AIDetectionRepository", "AIDetection: Edge returned empty/unknown dish result")
+                } else if (response.status.value !in listOf(429, 500, 502, 503, 504)) {
+                    return Result.failure(IllegalStateException("Edge AI failed ${response.status.value}: ${responseText.take(160)}"))
+                }
+            } catch (e: Exception) {
+                Logger.e("AIDetectionRepository", "AIDetection: Edge attempt ${attempt + 1} failed: ${e.message}", e)
+            }
+            delay(350L)
+        }
+        return Result.failure(IllegalStateException("Edge AI returned no usable dish result"))
+    }
+
+    private fun parseDishDetectionResponse(responseText: String): EdgeFunctionResponse {
+        return try {
+            json.decodeFromString<EdgeFunctionResponse>(responseText)
+        } catch (parseException: Exception) {
+            Logger.e("AIDetectionRepository", "AIDetection: JSON parse failed (${parseException.message}), using regex fallback...", parseException)
+            val dishNameMatch = Regex("\"dishName\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+                ?: Regex("\"dish_name\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+            val confidenceMatch = Regex("\"confidence\"\\s*:\\s*([\\d.]+)").find(responseText)
+            val cuisineMatch = Regex("\"cuisine\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+            val itemTypeMatch = Regex("\"itemType\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+                ?: Regex("\"item_type\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+            val chainMatch = Regex("\"restaurantChain\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
+                ?: Regex("\"restaurant_chain\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
+            val typeMatch = Regex("\"restaurantType\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
+                ?: Regex("\"restaurant_type\"\\s*:\\s*\"([^\"]*)\"").find(responseText)
+            val errorMatch = Regex("\"error\"\\s*:\\s*\"([^\"]+)\"").find(responseText)
+            EdgeFunctionResponse(
+                dishName = dishNameMatch?.groupValues?.getOrNull(1) ?: "",
+                cuisine = cuisineMatch?.groupValues?.getOrNull(1) ?: "",
+                confidence = confidenceMatch?.groupValues?.getOrNull(1)?.toFloatOrNull() ?: 0f,
+                itemType = itemTypeMatch?.groupValues?.getOrNull(1) ?: "unknown",
+                restaurantChain = chainMatch?.groupValues?.getOrNull(1) ?: "",
+                restaurantType = typeMatch?.groupValues?.getOrNull(1) ?: "",
+                error = errorMatch?.groupValues?.getOrNull(1)
+            )
+        }
+    }
+
+    private fun EdgeFunctionResponse.isUsableDishResult(): Boolean =
+        error.isNullOrBlank() &&
+            dishName.isNotBlank() &&
+            !dishName.equals("Unknown", ignoreCase = true) &&
+            !dishName.equals("Unknown Dish", ignoreCase = true)
 
     private fun currentAccessToken(): String? {
         val status = supabase.auth.sessionStatus.value

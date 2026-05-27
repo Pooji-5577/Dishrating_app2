@@ -14,6 +14,7 @@ import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
+import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -54,22 +55,14 @@ class ReceiptAnalysisRepository {
                 mimeType = mimeType,
                 dishNames = dishNames
             )
-            val response = httpClient.post("${SupabaseConfig.BACKEND_URL.trimEnd('/')}/api/ai/analyze-receipt") {
-                contentType(ContentType.Application.Json)
-                header(HttpHeaders.Authorization, "Bearer $accessToken")
-                setBody(json.encodeToString(requestBody))
+            val backendResult = analyzeReceiptWithBackend(requestBody, accessToken)
+            if (backendResult.isSuccess) {
+                backendResult
+            } else {
+                val backendError = backendResult.exceptionOrNull()
+                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend unavailable or empty, trying edge fallback: ${backendError?.message}", backendError)
+                analyzeReceiptWithEdgeFunction(requestBody)
             }
-            val responseText = response.body<String>()
-            if (response.status.value !in 200..299) {
-                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend failed (${response.status.value}): ${responseText.take(300)}")
-                return analyzeReceiptWithEdgeFunction(requestBody)
-            }
-            val parsedResult = parseReceiptAnalysis(responseText)
-            if (parsedResult.suggestions.isEmpty() && parsedResult.rawItems.isEmpty()) {
-                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend returned no prices or line items; trying edge fallback")
-                return analyzeReceiptWithEdgeFunction(requestBody)
-            }
-            Result.success(parsedResult)
         } catch (e: Exception) {
             Logger.e("ReceiptAnalysisRepository", "Receipt analysis failed: ${e.message}", e)
             analyzeReceiptWithEdgeFunction(
@@ -82,24 +75,62 @@ class ReceiptAnalysisRepository {
         }
     }
 
+    private suspend fun analyzeReceiptWithBackend(
+        requestBody: ReceiptAnalysisRequest,
+        accessToken: String
+    ): Result<ReceiptAnalysisResult> {
+        repeat(2) { attempt ->
+            try {
+                val response = httpClient.post("${SupabaseConfig.BACKEND_URL.trimEnd('/')}/api/ai/analyze-receipt") {
+                    contentType(ContentType.Application.Json)
+                    header(HttpHeaders.Authorization, "Bearer $accessToken")
+                    setBody(json.encodeToString(requestBody))
+                }
+                val responseText = response.body<String>()
+                Logger.d("ReceiptAnalysisRepository", "Receipt analysis backend status ${response.status.value}, response: ${responseText.take(500)}")
+                if (response.status.value in 200..299) {
+                    val parsedResult = parseReceiptAnalysis(responseText)
+                    if (parsedResult.suggestions.isNotEmpty() || parsedResult.rawItems.isNotEmpty()) {
+                        return Result.success(parsedResult)
+                    }
+                    Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend returned no prices or line items")
+                } else if (response.status.value !in listOf(429, 500, 502, 503, 504)) {
+                    return Result.failure(IllegalStateException("Backend receipt analysis failed ${response.status.value}: ${responseText.take(160)}"))
+                }
+            } catch (e: Exception) {
+                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend attempt ${attempt + 1} failed: ${e.message}", e)
+            }
+            delay(350L)
+        }
+        return Result.failure(IllegalStateException("Backend receipt analysis returned no usable result"))
+    }
+
     private suspend fun analyzeReceiptWithEdgeFunction(
         requestBody: ReceiptAnalysisRequest
     ): Result<ReceiptAnalysisResult> {
-        return try {
-            val response = supabase.functions.invoke(
-                function = "analyze-receipt",
-                body = requestBody
-            )
-            val responseText = response.body<String>()
-            if (response.status.value !in 200..299) {
-                Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge function failed (${response.status.value}): ${responseText.take(300)}")
-                return Result.success(ReceiptAnalysisResult())
+        repeat(2) { attempt ->
+            try {
+                val response = supabase.functions.invoke(
+                    function = "analyze-receipt",
+                    body = requestBody
+                )
+                val responseText = response.body<String>()
+                Logger.d("ReceiptAnalysisRepository", "Receipt analysis edge status ${response.status.value}, response: ${responseText.take(500)}")
+                if (response.status.value in 200..299) {
+                    val parsedResult = parseReceiptAnalysis(responseText)
+                    if (parsedResult.suggestions.isNotEmpty() || parsedResult.rawItems.isNotEmpty()) {
+                        return Result.success(parsedResult)
+                    }
+                    Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge returned no prices or line items")
+                } else if (response.status.value !in listOf(429, 500, 502, 503, 504)) {
+                    return Result.success(ReceiptAnalysisResult())
+                }
+            } catch (e: Exception) {
+                Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge attempt ${attempt + 1} failed: ${e.message}", e)
             }
-            Result.success(parseReceiptAnalysis(responseText))
-        } catch (e: Exception) {
-            Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge fallback failed: ${e.message}", e)
-            Result.success(ReceiptAnalysisResult())
+            delay(350L)
         }
+        return Result.success(ReceiptAnalysisResult())
     }
 
     private fun parseReceiptAnalysis(responseText: String): ReceiptAnalysisResult {
