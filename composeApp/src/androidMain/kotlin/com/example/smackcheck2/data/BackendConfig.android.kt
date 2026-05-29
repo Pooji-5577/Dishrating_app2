@@ -5,13 +5,11 @@ import com.example.smackcheck2.BuildConfig
 actual object BackendConfig {
     actual val BACKEND_URL: String =
         BuildConfig.BACKEND_URL.takeUnless { it.isBlank() || it.startsWith("MISSING_") }
-            ?: "http://10.0.2.2:3000"
+            ?: "https://api.withcouture.me"
 
     actual val CANDIDATE_URLS: List<String> = buildList {
         add(BACKEND_URL)
         addAll(expandDevPorts(BACKEND_URL))
-        addAll(expandDevPorts("http://10.0.2.2:3000"))
-        addAll(expandDevPorts("http://127.0.0.1:3000"))
     }.map { it.trimEnd('/') }.distinct()
 }
 

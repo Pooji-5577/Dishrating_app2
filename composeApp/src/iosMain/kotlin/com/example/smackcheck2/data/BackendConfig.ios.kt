@@ -6,13 +6,11 @@ actual object BackendConfig {
     actual val BACKEND_URL: String =
         (NSBundle.mainBundle.objectForInfoDictionaryKey("BACKEND_URL") as? String)
             ?.takeIf { it.isUsableBackendUrl() }
-            ?: "http://localhost:3000"
+            ?: "https://api.withcouture.me"
 
     actual val CANDIDATE_URLS: List<String> = buildList {
         add(BACKEND_URL)
         addAll(expandDevPorts(BACKEND_URL))
-        addAll(expandDevPorts("http://localhost:3000"))
-        addAll(expandDevPorts("http://127.0.0.1:3000"))
     }.map { it.trimEnd('/') }.distinct()
 }
 

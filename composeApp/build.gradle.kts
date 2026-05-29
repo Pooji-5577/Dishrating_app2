@@ -50,6 +50,11 @@ fun getConfigProperty(key: String): String {
         ?: "MISSING_$key"
 }
 
+fun getConfigPropertyOrDefault(key: String, defaultValue: String): String {
+    val value = localProperties.getProperty(key) ?: envProperties.getProperty(key)
+    return value?.takeIf { it.isNotBlank() } ?: defaultValue
+}
+
 kotlin {
     androidTarget {
         compilerOptions {
@@ -144,10 +149,7 @@ android {
         // Supabase configuration from local.properties or .env
         buildConfigField("String", "SUPABASE_URL", "\"${getConfigProperty("SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"${getConfigProperty("SUPABASE_ANON_KEY")}\"")
-        buildConfigField("String", "BACKEND_URL", "\"${getConfigProperty("BACKEND_URL").ifBlank { "https://api.withcouture.me" }}\"")
-
-        // Custom backend URL — set BACKEND_URL in local.properties or .env
-        buildConfigField("String", "BACKEND_URL", "\"${getConfigProperty("BACKEND_URL")}\"")
+        buildConfigField("String", "BACKEND_URL", "\"${getConfigPropertyOrDefault("BACKEND_URL", "https://api.withcouture.me")}\"")
 
         // Mixpanel analytics
         buildConfigField("String", "MIXPANEL_TOKEN", "\"${getConfigProperty("MIXPANEL_TOKEN")}\"")
