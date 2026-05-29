@@ -14,16 +14,34 @@ import platform.Foundation.NSBundle
 actual object SupabaseConfig {
     actual val SUPABASE_URL: String =
         (NSBundle.mainBundle.objectForInfoDictionaryKey("SUPABASE_URL") as? String)
-            ?.takeIf { it.isNotBlank() && !it.startsWith("$(") }
+            ?.takeIf { it.isUsableSupabaseUrl() }
             ?: "https://ayopmvhtfuwbsjxhpfgd.supabase.co"
 
     actual val SUPABASE_ANON_KEY: String =
         (NSBundle.mainBundle.objectForInfoDictionaryKey("SUPABASE_ANON_KEY") as? String)
-            ?.takeIf { it.isNotBlank() && !it.startsWith("$(") && it.length > 20 }
+            ?.takeIf { it.isUsableSupabaseAnonKey() }
             ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF5b3Btdmh0ZnV3YnNqeGhwZmdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjkyNjAyMTksImV4cCI6MjA4NDgzNjIxOX0.2siGUJfE3iLoaEKae5gycw_6mo748KKyi5C7YEHuUlQ"
 
     actual val BACKEND_URL: String =
         (NSBundle.mainBundle.objectForInfoDictionaryKey("BACKEND_URL") as? String)
             ?.takeIf { it.isNotBlank() && !it.startsWith("$(") }
             ?: "https://api.withcouture.me"
+}
+
+private fun String.isUsableSupabaseUrl(): Boolean {
+    val value = trim()
+    return value.isNotBlank() &&
+        !value.startsWith("$(") &&
+        !value.contains("your-project-id") &&
+        value.startsWith("https://") &&
+        value.endsWith(".supabase.co")
+}
+
+private fun String.isUsableSupabaseAnonKey(): Boolean {
+    val value = trim()
+    return value.isNotBlank() &&
+        !value.startsWith("$(") &&
+        !value.contains("your-supabase") &&
+        value.count { it == '.' } == 2 &&
+        value.length > 100
 }
