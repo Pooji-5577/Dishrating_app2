@@ -58,6 +58,17 @@ class DishCaptureViewModel : ViewModel() {
     }
 
     /**
+     * Called when the initial gallery selection returns one or more images.
+     * The first image becomes primary; the rest are added as additional images.
+     */
+    fun onImagesSelected(images: List<ImageResult>) {
+        if (images.isEmpty()) return
+
+        onImageCaptured(images.first())
+        onAdditionalImagesSelected(images.drop(1))
+    }
+
+    /**
      * Called when user adds additional images from gallery
      * Triggers AI detection for each new image
      */

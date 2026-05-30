@@ -96,6 +96,7 @@ private data class EditableDishDraft(
 ) {
     var name by mutableStateOf(initialName)
     var price by mutableStateOf("")
+    var dishRating by mutableFloatStateOf(0f)
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -213,7 +214,8 @@ fun DarkGroupedDishReviewScreen(
                     draft = draft,
                     currencySymbol = currencySymbol,
                     onNameChange = { draft.name = it },
-                    onPriceChange = { draft.price = cleanPrice(it) }
+                    onPriceChange = { draft.price = cleanPrice(it) },
+                    onRatingChange = { editableDishes[index].dishRating = it }
                 )
             }
 
@@ -342,7 +344,8 @@ fun DarkGroupedDishReviewScreen(
                                 dishName = it.name,
                                 image = it.image,
                                 price = it.price.toDoubleOrNull(),
-                                aiConfidence = it.confidence
+                                aiConfidence = it.confidence,
+                                rating = it.dishRating
                             )
                         },
                         receiptBytes,
@@ -350,7 +353,7 @@ fun DarkGroupedDishReviewScreen(
                         receiptItems
                     )
                 },
-                enabled = !isSubmitting && rating > 0f && selectedRestaurant != null && editableDishes.all { it.name.isNotBlank() },
+                enabled = !isSubmitting && selectedRestaurant != null && editableDishes.all { it.name.isNotBlank() && it.dishRating > 0f },
                 modifier = Modifier.fillMaxWidth().height(54.dp),
                 shape = RoundedCornerShape(99.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = GroupCrimson, contentColor = Color.White)
@@ -444,7 +447,8 @@ private fun DishDraftCard(
     draft: EditableDishDraft,
     currencySymbol: String,
     onNameChange: (String) -> Unit,
-    onPriceChange: (String) -> Unit
+    onPriceChange: (String) -> Unit,
+    onRatingChange: (Float) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -497,6 +501,19 @@ private fun DishDraftCard(
                     shape = RoundedCornerShape(14.dp),
                     colors = reviewTextFieldColors()
                 )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Rate dish", color = GroupWarmMaroon, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                    StarRating(
+                        rating = draft.dishRating,
+                        onRatingChange = onRatingChange,
+                        starSize = 28.dp,
+                        isEditable = true,
+                        allowHalfRating = true
+                    )
+                }
             }
         }
     }

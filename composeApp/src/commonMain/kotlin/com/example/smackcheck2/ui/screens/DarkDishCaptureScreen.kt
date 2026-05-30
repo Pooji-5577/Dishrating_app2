@@ -294,11 +294,16 @@ fun DarkDishCaptureScreen(
                                 .clickable {
                                     showPickerSheet = false
                                     coroutineScope.launch {
-                                        val result = imagePicker?.pickFromGallery()
-                                        if (result != null) {
-                                            if (onImageReady != null) onImageReady(result) else viewModel.onImageCaptured(result)
+                                        val results = imagePicker?.pickMultipleFromGallery(DishCaptureViewModel.MAX_IMAGES).orEmpty()
+                                        if (results.isNotEmpty()) {
+                                            if (onImageReady != null) {
+                                                onImageReady(results.first())
+                                            } else {
+                                                viewModel.onImagesSelected(results)
+                                            }
+                                        } else {
+                                            showPickerSheet = true
                                         }
-                                        else showPickerSheet = true
                                     }
                                 }
                                 .padding(16.dp),
@@ -313,7 +318,7 @@ fun DarkDishCaptureScreen(
                             }
                             Column {
                                 Text("Choose from Gallery", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color(0xFF2D2F2F))
-                                Text("Pick an existing photo", fontSize = 13.sp, color = Color(0xFF888888))
+                                Text("Pick up to 5 photos", fontSize = 13.sp, color = Color(0xFF888888))
                             }
                         }
                     }
