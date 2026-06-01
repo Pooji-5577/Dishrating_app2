@@ -228,7 +228,6 @@ class DatabaseRepository(
             var restaurants = postgrest["restaurants"]
                 .select {
                     filter {
-                        // Use case-insensitive pattern matching for better results
                         ilike("city", "%$city%")
                     }
                     order("average_rating", Order.DESCENDING)

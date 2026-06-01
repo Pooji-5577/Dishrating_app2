@@ -50,8 +50,10 @@ actual fun PlatformMapView(
 
     val markerIcons = remember { mutableStateMapOf<String, BitmapDescriptor>() }
 
-    // Load circular marker images
+    // Load circular marker images, evicting icons for markers no longer present
     LaunchedEffect(markers) {
+        val currentIds = markers.map { it.id }.toSet()
+        markerIcons.keys.retainAll(currentIds)
         markers.forEach { marker ->
             val url = marker.imageUrl
             if (url != null && !markerIcons.containsKey(marker.id)) {

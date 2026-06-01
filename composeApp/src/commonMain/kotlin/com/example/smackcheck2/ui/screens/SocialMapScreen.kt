@@ -60,6 +60,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -128,11 +129,11 @@ fun SocialMapScreen(
     // Sheet state for selected user preview
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     
-    // Request location on first load
-    LaunchedEffect(Unit) {
-        if (uiState.currentLatitude == null) {
-            viewModel.requestCurrentLocation()
-        }
+    // Reload data and restart auto-refresh every time this screen enters composition,
+    // including when navigating back to it from another tab.
+    DisposableEffect(Unit) {
+        viewModel.onScreenEnter()
+        onDispose { viewModel.stopAutoRefresh() }
     }
     
     // Show error messages

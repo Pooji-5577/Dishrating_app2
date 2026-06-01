@@ -230,6 +230,19 @@ class SocialMapViewModel(
     }
 
     /**
+     * Called every time the map screen enters composition (including back-navigation).
+     * Reloads data and restarts the auto-refresh loop.
+     */
+    fun onScreenEnter() {
+        loadNearbyUsers()
+        loadMyRatings()
+        startAutoRefresh()
+        if (_uiState.value.locationPermissionGranted && _uiState.value.currentLatitude == null) {
+            requestCurrentLocation()
+        }
+    }
+
+    /**
      * Manually refresh nearby users
      */
     fun refresh() {

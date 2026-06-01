@@ -58,8 +58,13 @@ class AuthViewModel : ViewModel() {
                         // Keep Unknown state while loading
                     }
                     is SessionStatus.RefreshFailure -> {
-                        println("AuthViewModel: Network error loading session: ${status.cause}")
-                        _authState.value = AuthState.Unauthenticated
+                        println("AuthViewModel: Token refresh failed (${status.cause}), keeping existing state")
+                        // Don't log out on a transient network error — only clear the session
+                        // when we have no authenticated user already. A genuine invalid refresh
+                        // token will eventually produce a NotAuthenticated event instead.
+                        if (_authState.value !is AuthState.Authenticated) {
+                            _authState.value = AuthState.Unauthenticated
+                        }
                     }
                 }
             }
