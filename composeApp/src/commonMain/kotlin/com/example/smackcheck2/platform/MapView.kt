@@ -23,5 +23,8 @@ expect fun PlatformMapView(
     showMyLocation: Boolean = false,
     recenterTrigger: Int = 0,
     fitBoundsTrigger: Int = 0,
+    cameraFocusLatitude: Double? = null,
+    cameraFocusLongitude: Double? = null,
+    cameraFocusTrigger: Int = 0,
     modifier: Modifier = Modifier
 )

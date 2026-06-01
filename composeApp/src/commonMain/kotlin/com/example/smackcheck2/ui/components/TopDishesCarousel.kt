@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -86,7 +87,8 @@ fun TopDishesCarousel(
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(24.dp)
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            modifier = Modifier.clipToBounds()
         ) {
             items(dishes, key = { it.id }) { dish ->
                 TopDishCard(
@@ -113,6 +115,7 @@ private fun TopDishCard(
     Surface(
         modifier = modifier
             .width(280.dp)
+            .clip(RoundedCornerShape(32.dp))
             .clickable { onClick() },
         shape = RoundedCornerShape(32.dp),
         color = Color.White,
@@ -141,7 +144,7 @@ private fun TopDishCard(
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.Restaurant,
-                                    contentDescription = null,
+                                    contentDescription = "No image for ${dish.dishName}",
                                     modifier = Modifier.size(48.dp),
                                     tint = colors.TextTertiary
                                 )
@@ -157,7 +160,7 @@ private fun TopDishCard(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Restaurant,
-                            contentDescription = null,
+                            contentDescription = "No image for ${dish.dishName}",
                             modifier = Modifier.size(48.dp),
                             tint = colors.TextTertiary
                         )
@@ -179,7 +182,7 @@ private fun TopDishCard(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.Star,
-                            contentDescription = null,
+                            contentDescription = "Rating",
                             modifier = Modifier.size(13.dp),
                             tint = BrandRedDark
                         )
@@ -225,7 +228,7 @@ private fun TopDishCard(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.LocationOn,
-                            contentDescription = null,
+                            contentDescription = "Location",
                             modifier = Modifier.size(11.dp),
                             tint = BrandRedDark
                         )
@@ -253,7 +256,7 @@ private fun TopDishCard(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.FavoriteBorder,
-                            contentDescription = null,
+                            contentDescription = "Likes",
                             modifier = Modifier.size(12.dp),
                             tint = BrandRedDark
                         )
@@ -271,7 +274,7 @@ private fun TopDishCard(
                     ) {
                         Icon(
                             imageVector = Icons.Filled.ChatBubbleOutline,
-                            contentDescription = null,
+                            contentDescription = "Comments",
                             modifier = Modifier.size(12.dp),
                             tint = BrandRedDark
                         )

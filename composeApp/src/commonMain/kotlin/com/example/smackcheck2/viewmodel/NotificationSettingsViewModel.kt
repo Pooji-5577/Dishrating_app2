@@ -3,6 +3,7 @@ package com.example.smackcheck2.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.repository.PreferencesRepository
+import com.example.smackcheck2.data.repository.ServerSettingsRepository
 import com.example.smackcheck2.model.NotificationSettings
 import com.example.smackcheck2.model.NotificationSettingsUiState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +13,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class NotificationSettingsViewModel(
-    private val preferencesRepository: PreferencesRepository
+    private val preferencesRepository: PreferencesRepository,
+    private val serverSettingsRepository: ServerSettingsRepository = ServerSettingsRepository()
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(NotificationSettingsUiState())
@@ -26,7 +28,8 @@ class NotificationSettingsViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             try {
-                val settings = preferencesRepository.getAppPreferences().notificationSettings
+                val localSettings = preferencesRepository.getAppPreferences().notificationSettings
+                val settings = serverSettingsRepository.getNotificationSettings().getOrElse { localSettings }
                 _uiState.update { it.copy(settings = settings, isLoading = false) }
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, errorMessage = e.message) }
@@ -39,7 +42,9 @@ class NotificationSettingsViewModel(
         _uiState.update { it.copy(settings = newSettings, isSaving = true) }
 
         viewModelScope.launch {
-            val result = preferencesRepository.saveNotificationSettings(newSettings)
+            val localResult = preferencesRepository.saveNotificationSettings(newSettings)
+            val serverResult = serverSettingsRepository.saveNotificationSettings(newSettings)
+            val result = if (serverResult.isSuccess) localResult else serverResult
             result.fold(
                 onSuccess = { _uiState.update { it.copy(isSaving = false) } },
                 onFailure = { error ->

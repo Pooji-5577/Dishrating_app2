@@ -1,8 +1,6 @@
 package com.example.smackcheck2.data
 
 import com.example.smackcheck2.model.Restaurant
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Columns
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import com.example.smackcheck2.util.Logger
@@ -38,8 +36,6 @@ data class SupabaseRestaurantRow(
  */
 class SearchRepository {
 
-    private val client = SupabaseClient.client
-
     /**
      * Search restaurants from Supabase with optional filters.
      *
@@ -60,56 +56,18 @@ class SearchRepository {
         offset: Int = 0
     ): List<Restaurant> {
         return try {
-            val results = client.from("restaurants")
-                .select() {
-                    // Text search: match name, cuisine, or city
-                    if (query.isNotBlank()) {
-                        filter {
-                            or {
-                                ilike("name", "%$query%")
-                                ilike("cuisine", "%$query%")
-                                ilike("city", "%$query%")
-                            }
-                        }
-                    }
-
-                    // Cuisine filter
-                    if (cuisines.isNotEmpty()) {
-                        filter {
-                            isIn("cuisine", cuisines.toList())
-                        }
-                    }
-
-                    // Minimum rating filter
-                    if (minRating != null) {
-                        filter {
-                            gte("average_rating", minRating)
-                        }
-                    }
-
-                    // City filter
-                    if (!city.isNullOrBlank()) {
-                        filter {
-                            ilike("city", "%$city%")
-                        }
-                    }
-
-                    // Restaurants & Cafes Only filter
-                    if (restaurantsAndCafesOnly) {
-                        filter {
-                            or {
-                                ilike("category", "%restaurant%")
-                                ilike("category", "%cafe%")
-                                ilike("category", "%coffee%")
-                            }
-                        }
-                    }
-
-                    // Bounded query: order by rating desc, limit results
-                    order("average_rating", io.github.jan.supabase.postgrest.query.Order.DESCENDING)
-                    range(offset.toLong(), (offset + limit - 1).toLong())
+            val results = ApiClient.get<List<SupabaseRestaurantRow>>(
+                "restaurants",
+                buildMap {
+                    if (query.isNotBlank()) put("query", query)
+                    if (cuisines.isNotEmpty()) put("cuisines", cuisines.joinToString(","))
+                    if (minRating != null) put("minRating", minRating.toString())
+                    if (!city.isNullOrBlank()) put("city", city)
+                    if (restaurantsAndCafesOnly) put("restaurantsOnly", "true")
+                    put("limit", limit.toString())
+                    put("offset", offset.toString())
                 }
-                .decodeList<SupabaseRestaurantRow>()
+            )
 
             // Map Supabase rows to app model
             results.map { row ->

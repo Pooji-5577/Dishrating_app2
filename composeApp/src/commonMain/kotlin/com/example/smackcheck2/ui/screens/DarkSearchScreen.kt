@@ -371,11 +371,69 @@ fun DarkSearchScreen(
                         }
                     )
                 } else if (uiState.results.isEmpty() && uiState.query.isEmpty()) {
-                    EmptyState(
-                        title = "Search for Restaurants",
-                        message = "Find restaurants by name, cuisine, or location",
-                        icon = Icons.Outlined.Search
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = themeColors.TextTertiary
+                        )
+                        Text(
+                            text = "Search for Restaurants",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = themeColors.TextPrimary
+                        )
+                        Text(
+                            text = "Try one of these popular searches",
+                            fontSize = 14.sp,
+                            color = themeColors.TextSecondary
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        val suggestions = listOf(
+                            "Pizza", "Sushi", "Tacos", "Burgers", "Ramen", "Pho"
+                        )
+                        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                        androidx.compose.foundation.layout.FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            suggestions.forEach { suggestion ->
+                                androidx.compose.material3.SuggestionChip(
+                                    onClick = { viewModel.onQueryChange(suggestion) },
+                                    label = {
+                                        Text(
+                                            text = suggestion,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    icon = {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Search,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    },
+                                    colors = androidx.compose.material3.SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = themeColors.CardBackground,
+                                        labelColor = themeColors.TextPrimary,
+                                        iconContentColor = themeColors.Primary
+                                    ),
+                                    border = androidx.compose.material3.SuggestionChipDefaults.suggestionChipBorder(
+                                        borderColor = themeColors.Primary.copy(alpha = 0.3f),
+                                        enabled = true
+                                    )
+                                )
+                            }
+                        }
+                    }
                 } else {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),

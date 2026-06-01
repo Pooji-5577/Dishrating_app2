@@ -1,26 +1,18 @@
 package com.example.smackcheck2.data.repository
 
+import com.example.smackcheck2.data.ApiClient
 import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.dto.NotificationDto
 import com.example.smackcheck2.model.Notification
-import com.example.smackcheck2.notifications.*
+import com.example.smackcheck2.notifications.NotificationEventType
+import com.example.smackcheck2.notifications.NotificationInsert
+import com.example.smackcheck2.notifications.NotificationRecord
+import com.example.smackcheck2.notifications.TriggerResult
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.postgrest
-import io.github.jan.supabase.postgrest.query.Order
-import io.github.jan.supabase.postgrest.query.filter.FilterOperator
-import io.github.jan.supabase.realtime.RealtimeChannel
-import io.github.jan.supabase.realtime.channel
-import io.github.jan.supabase.realtime.postgresChangeFlow
-import io.github.jan.supabase.realtime.realtime
-import io.github.jan.supabase.realtime.PostgresAction
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.Instant
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -28,50 +20,27 @@ import kotlinx.serialization.json.jsonPrimitive
  * Unified notification service that owns all notification behavior:
  * - Event-trigger inserts (like, comment, post, welcome, etc.)
  * - CRUD and query operations (fetch, mark read, unread count)
- * - Realtime subscriptions
+ * - Polling-based subscription (replaces Realtime; swap for WebSocket/SSE when available)
  * - Push token management
  *
  * All callers should use this single module instead of direct table
  * access or fragmented notification helpers.
  */
-class NotificationService(
-    private val client: io.github.jan.supabase.SupabaseClient = SupabaseClientProvider.client
-) {
+class NotificationService {
 
-    private val postgrest
-        get() = client.postgrest
-    private val realtime = client.realtime
-    private var notificationChannel: RealtimeChannel? = null
-
-    // ─── Generic Insert (via SECURITY DEFINER RPC) ────────────────
+    // ─── Generic Insert (via POST /api/notifications) ────────────────────────
 
     private suspend fun insertNotification(payload: NotificationInsert): TriggerResult {
         return try {
-            val dataJsonb = if (payload.data.isNotEmpty()) {
-                kotlinx.serialization.json.Json.parseToJsonElement(
-                    kotlinx.serialization.json.Json.encodeToString(
-                        kotlinx.serialization.serializer<Map<String, String>>(),
-                        payload.data
-                    )
-                )
-            } else {
-                kotlinx.serialization.json.JsonObject(emptyMap())
-            }
-
-            val result = postgrest.rpc(
-                function = "create_notification",
-                parameters = JsonObject(mapOf(
-                    "p_user_id" to JsonPrimitive(payload.userId),
-                    "p_type" to JsonPrimitive(payload.eventType),
-                    "p_title" to JsonPrimitive(payload.title),
-                    "p_body" to JsonPrimitive(payload.body),
-                    "p_data" to dataJsonb
-                ))
-            ).decodeAs<JsonObject>()
-
-            val success = result["success"]?.jsonPrimitive?.boolean ?: false
-            val id = result["id"]?.jsonPrimitive?.contentOrNull
-            TriggerResult(success = success, notificationId = id)
+            val body = NotificationCreateRequest(
+                userId = payload.userId,
+                eventType = payload.eventType,
+                title = payload.title,
+                body = payload.body,
+                data = payload.data
+            )
+            val result: NotificationCreateResponse = ApiClient.post("notifications", body)
+            TriggerResult(success = true, notificationId = result.id)
         } catch (e: Exception) {
             val message = e.message ?: "Unknown error"
             if (message.contains("23505") || message.contains("duplicate")) {
@@ -82,7 +51,7 @@ class NotificationService(
         }
     }
 
-    // ─── Event-Specific Triggers ─────────────────────────────────
+    // ─── Event-Specific Triggers ──────────────────────────────────────────────
 
     suspend fun notifyReviewLiked(
         reviewOwnerId: String,
@@ -192,9 +161,10 @@ class NotificationService(
         ratingId: String
     ): TriggerResult {
         return try {
-            val followers = postgrest["followers"]
-                .select { filter { eq("following_id", posterId) } }
-                .decodeList<FollowerIdDto>()
+            val followers: List<FollowerIdDto> = ApiClient.get(
+                "followers",
+                mapOf("userId" to posterId)
+            )
 
             if (followers.isEmpty()) return TriggerResult(success = true)
 
@@ -243,18 +213,14 @@ class NotificationService(
         commenterName: String = ""
     ): TriggerResult {
         return try {
-            val rating = postgrest["ratings"]
-                .select { filter { eq("id", ratingId) } }
-                .decodeSingleOrNull<RatingBasicDto>()
-                ?: return TriggerResult(success = false, error = "Rating not found")
+            val rating: RatingBasicDto = ApiClient.get("ratings/$ratingId")
 
             if (rating.userId == commenterId) return TriggerResult(success = true)
 
             val name = commenterName.ifBlank {
                 try {
-                    postgrest["profiles"]
-                        .select { filter { eq("id", commenterId) } }
-                        .decodeSingleOrNull<ProfileBasicDto>()?.name ?: "Someone"
+                    val profile: ProfileBasicDto = ApiClient.get("profiles/$commenterId")
+                    profile.name.ifBlank { "Someone" }
                 } catch (_: Exception) { "Someone" }
             }
 
@@ -298,16 +264,13 @@ class NotificationService(
             )
         )
 
-    // ─── CRUD / Query Operations ─────────────────────────────────
+    // ─── CRUD / Query Operations ──────────────────────────────────────────────
 
     suspend fun getNotifications(userId: String): List<Notification> {
-        val result = postgrest["notifications"]
-            .select {
-                filter { eq("user_id", userId) }
-                order("created_at", Order.DESCENDING)
-                limit(50)
-            }
-            .decodeList<NotificationDto>()
+        val result: List<NotificationDto> = ApiClient.get(
+            "notifications",
+            mapOf("limit" to "50", "offset" to "0", "unreadOnly" to "false")
+        )
         return result.map { toNotification(it) }
     }
 
@@ -318,13 +281,14 @@ class NotificationService(
         unreadOnly: Boolean = false
     ): Result<List<NotificationRecord>> {
         return try {
-            val result = postgrest["notifications"]
-                .select {
-                    order("created_at", Order.DESCENDING)
-                    range(offset.toLong(), (offset + limit - 1).toLong())
-                    if (unreadOnly) filter { eq("is_read", false) }
-                }
-                .decodeList<NotificationRecord>()
+            val result: List<NotificationRecord> = ApiClient.get(
+                "notifications",
+                mapOf(
+                    "limit" to limit.toString(),
+                    "offset" to offset.toString(),
+                    "unreadOnly" to unreadOnly.toString()
+                )
+            )
             Result.success(result)
         } catch (e: Exception) {
             Result.failure(e)
@@ -333,73 +297,77 @@ class NotificationService(
 
     suspend fun markAsRead(notificationId: String) {
         try {
-            postgrest["notifications"]
-                .update({ set("is_read", true) }) {
-                    filter { eq("id", notificationId) }
-                }
+            ApiClient.patch<Unit, SuccessResponse>("notifications/$notificationId/read", Unit)
         } catch (_: Exception) { }
     }
 
     suspend fun markAllAsRead(userId: String) {
         try {
-            postgrest["notifications"]
-                .update({ set("is_read", true) }) {
-                    filter { eq("user_id", userId); eq("is_read", false) }
-                }
+            ApiClient.postEmpty<SuccessResponse>("notifications/read-all")
         } catch (_: Exception) { }
     }
 
     suspend fun getUnreadCount(userId: String): Int {
         return try {
-            postgrest["notifications"]
-                .select { filter { eq("user_id", userId); eq("is_read", false) } }
-                .decodeList<NotificationDto>()
-                .size
+            val response: UnreadCountResponse = ApiClient.get("notifications/unread-count")
+            response.count
         } catch (_: Exception) { 0 }
     }
 
-    // ─── Realtime Subscriptions ──────────────────────────────────
+    // ─── Polling Subscription ─────────────────────────────────────────────────
+    // TODO: Replace with a WebSocket or SSE connection when the backend supports it.
+    // Currently polls GET /api/notifications?unreadOnly=true every 5 seconds and
+    // emits any new unread notifications as they appear.
 
-    suspend fun subscribeToNotifications(userId: String): Flow<Notification> {
-        notificationChannel?.let { realtime.removeChannel(it) }
-
-        val channel = realtime.channel("notifications:$userId")
-        notificationChannel = channel
-
-        val flow: Flow<Notification> = channel
-            .postgresChangeFlow<PostgresAction.Insert>(schema = "public") {
-                table = "notifications"
-                filter("user_id", FilterOperator.EQ, userId)
-            }
-            .map { action ->
-                toNotification(Json.decodeFromJsonElement(NotificationDto.serializer(), action.record))
-            }
-
-        channel.subscribe()
-        return flow
+    fun subscribeToNotifications(userId: String): Flow<Notification> = flow {
+        val seen = mutableSetOf<String>()
+        while (true) {
+            try {
+                val items: List<NotificationRecord> = ApiClient.get(
+                    "notifications",
+                    mapOf("limit" to "50", "offset" to "0", "unreadOnly" to "true")
+                )
+                for (record in items) {
+                    if (record.id.isNotEmpty() && !seen.contains(record.id)) {
+                        seen.add(record.id)
+                        emit(
+                            Notification(
+                                id = record.id,
+                                type = record.eventType,
+                                title = record.title,
+                                body = record.body,
+                                data = runCatching {
+                                    record.data.mapValues { it.value.jsonPrimitive.content }
+                                }.getOrDefault(emptyMap()),
+                                isRead = record.isRead,
+                                createdAt = runCatching {
+                                    Instant.parse(record.createdAt).toEpochMilliseconds()
+                                }.getOrDefault(0L)
+                            )
+                        )
+                    }
+                }
+            } catch (_: Exception) { }
+            delay(5_000)
+        }
     }
 
     suspend fun unsubscribeFromNotifications() {
-        notificationChannel?.let { realtime.removeChannel(it) }
-        notificationChannel = null
+        // No-op: the polling Flow above is cancelled automatically when the
+        // collecting coroutine scope is cancelled. No persistent channel to clean up.
     }
 
-    // ─── Push Token Management ───────────────────────────────────
+    // ─── Push Token Management ────────────────────────────────────────────────
 
     suspend fun savePushToken(token: String): Result<Unit> {
         return try {
-            val user = client.auth.currentUserOrNull()
+            SupabaseClientProvider.client.auth.currentUserOrNull()
                 ?: return Result.failure(Exception("User not authenticated"))
 
-            val profile = postgrest["profiles"]
-                .select { filter { eq("id", user.id) } }
-                .decodeSingleOrNull<ProfilePushToken>()
-
-            if (profile?.pushToken == token) return Result.success(Unit)
-
-            postgrest["profiles"]
-                .update({ set("push_token", token) }) { filter { eq("id", user.id) } }
-
+            ApiClient.put<PushTokenRequest, SuccessResponse>(
+                "auth/push-token",
+                PushTokenRequest(token = token)
+            )
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -408,15 +376,15 @@ class NotificationService(
 
     suspend fun removePushToken() {
         try {
-            val user = client.auth.currentUserOrNull() ?: return
-            postgrest["profiles"]
-                .update({ set("push_token", value = null as String?) }) {
-                    filter { eq("id", user.id) }
-                }
+            SupabaseClientProvider.client.auth.currentUserOrNull() ?: return
+            ApiClient.put<PushTokenRequest, SuccessResponse>(
+                "auth/push-token",
+                PushTokenRequest(token = null)
+            )
         } catch (_: Exception) { }
     }
 
-    // ─── Private Helpers ─────────────────────────────────────────
+    // ─── Private Helpers ─────────────────────────────────────────────────────
 
     private fun toNotification(dto: NotificationDto): Notification = Notification(
         id = dto.id ?: "",
@@ -433,12 +401,36 @@ class NotificationService(
     )
 }
 
-// ─── Private DTOs ────────────────────────────────────────────────
+// ─── Private Request / Response DTOs ─────────────────────────────────────────
 
 @kotlinx.serialization.Serializable
-private data class ProfilePushToken(
-    @kotlinx.serialization.SerialName("push_token")
-    val pushToken: String? = null
+private data class NotificationCreateRequest(
+    @kotlinx.serialization.SerialName("user_id") val userId: String,
+    @kotlinx.serialization.SerialName("event_type") val eventType: String,
+    val title: String,
+    val body: String,
+    val data: Map<String, String> = emptyMap()
+)
+
+@kotlinx.serialization.Serializable
+private data class NotificationCreateResponse(
+    val id: String? = null,
+    val success: Boolean = true
+)
+
+@kotlinx.serialization.Serializable
+private data class SuccessResponse(
+    val success: Boolean = true
+)
+
+@kotlinx.serialization.Serializable
+private data class UnreadCountResponse(
+    val count: Int = 0
+)
+
+@kotlinx.serialization.Serializable
+private data class PushTokenRequest(
+    val token: String?
 )
 
 @kotlinx.serialization.Serializable

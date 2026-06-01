@@ -10,9 +10,9 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.smackcheck2.model.*
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.io.File
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
 
@@ -29,6 +29,7 @@ actual class PreferencesManager(private val context: Context) {
         val DAY1_RETENTION_TRACKED = booleanPreferencesKey("day1_retention_tracked")
         val PERMISSIONS_ONBOARDING_SEEN = booleanPreferencesKey("permissions_onboarding_seen")
         val BOOKMARKS = stringPreferencesKey("bookmarked_ratings")
+        val PENDING_RATINGS = stringPreferencesKey("pending_ratings")
     }
 
     actual suspend fun saveThemePreference(theme: ThemePreference) {
@@ -119,6 +120,19 @@ actual class PreferencesManager(private val context: Context) {
         }
     }
 
+    actual suspend fun hasDismissedProfileSetup(userId: String): Boolean {
+        if (userId.isBlank()) return false
+        val prefs = context.dataStore.data.first()
+        return prefs[profileSetupDismissedKey(userId)] ?: false
+    }
+
+    actual suspend fun setProfileSetupDismissed(userId: String) {
+        if (userId.isBlank()) return
+        context.dataStore.edit { prefs ->
+            prefs[profileSetupDismissedKey(userId)] = true
+        }
+    }
+
     actual suspend fun saveBookmarks(bookmarkIds: Set<String>) {
         context.dataStore.edit { prefs ->
             prefs[BOOKMARKS] = json.encodeToString(bookmarkIds.toList())
@@ -135,7 +149,53 @@ actual class PreferencesManager(private val context: Context) {
         }
     }
 
+    actual suspend fun savePendingRatings(ratings: List<PendingRating>) {
+        context.dataStore.edit { prefs ->
+            prefs[PENDING_RATINGS] = json.encodeToString(ratings)
+        }
+    }
+
+    actual suspend fun getPendingRatings(): List<PendingRating> {
+        val prefs = context.dataStore.data.first()
+        val pendingJson = prefs[PENDING_RATINGS] ?: return emptyList()
+        return try {
+            json.decodeFromString(pendingJson)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    actual suspend fun savePendingRatingImage(localId: String, imageBytes: ByteArray): String? {
+        return try {
+            val dir = File(context.filesDir, "pending_rating_images")
+            dir.mkdirs()
+            val file = File(dir, "$localId.jpg")
+            file.writeBytes(imageBytes)
+            file.absolutePath
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    actual suspend fun readPendingRatingImage(imagePath: String): ByteArray? {
+        return try {
+            File(imagePath).takeIf { it.exists() }?.readBytes()
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    actual suspend fun deletePendingRatingImage(imagePath: String) {
+        try {
+            File(imagePath).delete()
+        } catch (_: Exception) {
+        }
+    }
+
     actual suspend fun clearAll() {
         context.dataStore.edit { it.clear() }
     }
+
+    private fun profileSetupDismissedKey(userId: String) =
+        booleanPreferencesKey("profile_setup_dismissed_$userId")
 }

@@ -14,6 +14,11 @@
 	<string>SmackCheck uses your camera to photograph dishes for rating.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>SmackCheck accesses your photo library to upload dish photos.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 
 	<!-- Google Maps SDK API Key for iOS map rendering -->
 	<!-- For production, use $(GOOGLE_MAPS_API_KEY) from .xcconfig instead of hardcoding -->
@@ -26,6 +31,8 @@
 	<string>$(SUPABASE_URL)</string>
 	<key>SUPABASE_ANON_KEY</key>
 	<string>$(SUPABASE_ANON_KEY)</string>
+	<key>BACKEND_URL</key>
+	<string>$(BACKEND_URL)</string>
 
 	<!-- Force light mode until internal dark mode is introduced -->
 	<key>UIUserInterfaceStyle</key>

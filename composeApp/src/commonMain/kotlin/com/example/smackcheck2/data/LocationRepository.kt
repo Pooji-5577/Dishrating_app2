@@ -1,7 +1,6 @@
 package com.example.smackcheck2.data
 
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.from
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import com.example.smackcheck2.util.Logger
@@ -14,9 +13,9 @@ import com.example.smackcheck2.util.Logger
 data class LocationUpdate(
     @SerialName("last_location")
     val lastLocation: String,
-    @SerialName("current_latitude")
+    @SerialName("latitude")
     val currentLatitude: Double? = null,
-    @SerialName("current_longitude")
+    @SerialName("longitude")
     val currentLongitude: Double? = null
 )
 
@@ -78,7 +77,7 @@ data class SupabaseRestaurant(
  */
 class LocationRepository {
     
-    private val client = SupabaseClient.client
+    private val auth get() = SupabaseClient.client.auth
     
     /**
      * Update the current user's location in the profiles table.
@@ -96,20 +95,18 @@ class LocationRepository {
         longitude: Double? = null
     ): Boolean {
         return try {
-            client.from("profiles")
-                .update(LocationUpdate(
+            ApiClient.put<LocationUpdate, UserProfile>(
+                "auth/profile",
+                LocationUpdate(
                     lastLocation = city,
                     currentLatitude = latitude,
                     currentLongitude = longitude
-                )) {
-                    filter {
-                        eq("id", userId)
-                    }
-                }
-            Logger.d("LocationRepository", "✅ Location updated in Supabase: $city ($latitude, $longitude)")
+                )
+            )
+            Logger.d("LocationRepository", "Location updated via backend: $city ($latitude, $longitude)")
             true
         } catch (e: Exception) {
-            Logger.e("LocationRepository", "❌ Failed to update location in Supabase: ${e.message}", e)
+            Logger.e("LocationRepository", "Failed to update location via backend: ${e.message}", e)
             false
         }
     }
@@ -120,9 +117,9 @@ class LocationRepository {
      */
     suspend fun getCurrentUserId(): String? {
         return try {
-            client.auth.currentUserOrNull()?.id
+            auth.currentUserOrNull()?.id
         } catch (e: Exception) {
-            Logger.e("LocationRepository", "❌ Failed to get current user: ${e.message}", e)
+            Logger.e("LocationRepository", "Failed to get current user: ${e.message}", e)
             null
         }
     }
@@ -132,15 +129,9 @@ class LocationRepository {
      */
     suspend fun getUserProfile(userId: String): UserProfile? {
         return try {
-            client.from("profiles")
-                .select {
-                    filter {
-                        eq("id", userId)
-                    }
-                }
-                .decodeSingleOrNull<UserProfile>()
+            ApiClient.get<UserProfile>("auth/users/$userId")
         } catch (e: Exception) {
-            Logger.e("LocationRepository", "❌ Failed to get user profile: ${e.message}", e)
+            Logger.e("LocationRepository", "Failed to get user profile: ${e.message}", e)
             null
         }
     }
@@ -150,15 +141,12 @@ class LocationRepository {
      */
     suspend fun getRestaurantsByCity(city: String): List<SupabaseRestaurant> {
         return try {
-            client.from("restaurants")
-                .select {
-                    filter {
-                        eq("city", city)
-                    }
-                }
-                .decodeList<SupabaseRestaurant>()
+            ApiClient.get<List<SupabaseRestaurant>>(
+                "restaurants/by-city",
+                mapOf("city" to city)
+            )
         } catch (e: Exception) {
-            Logger.e("LocationRepository", "❌ Failed to get restaurants: ${e.message}", e)
+            Logger.e("LocationRepository", "Failed to get restaurants: ${e.message}", e)
             emptyList()
         }
     }
@@ -168,21 +156,12 @@ class LocationRepository {
      */
     suspend fun getDishes(restaurantId: String? = null): List<SupabaseDish> {
         return try {
-            if (restaurantId != null) {
-                client.from("dishes")
-                    .select {
-                        filter {
-                            eq("restaurant_id", restaurantId)
-                        }
-                    }
-                    .decodeList<SupabaseDish>()
-            } else {
-                client.from("dishes")
-                    .select()
-                    .decodeList<SupabaseDish>()
-            }
+            ApiClient.get<List<SupabaseDish>>(
+                "dishes",
+                mapOf("restaurantId" to restaurantId)
+            )
         } catch (e: Exception) {
-            Logger.e("LocationRepository", "❌ Failed to get dishes: ${e.message}", e)
+            Logger.e("LocationRepository", "Failed to get dishes: ${e.message}", e)
             emptyList()
         }
     }

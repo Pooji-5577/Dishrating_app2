@@ -1,4 +1,4 @@
-# Test script for Gemini API with gemini-3-flash-preview model
+# Test script for Gemini API with gemini-3.1-flash-lite model
 # This tests the API key and model availability
 # Reads API key securely from local.properties
 
@@ -23,8 +23,8 @@ if ([string]::IsNullOrEmpty($API_KEY)) {
     exit 1
 }
 
-$MODEL = "gemini-3-flash-preview"
-$URL = "https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${API_KEY}"
+$MODEL = "gemini-3.1-flash-lite"
+$URL = "https://generativelanguage.googleapis.com/v1alpha/models/${MODEL}:generateContent?key=${API_KEY}"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Testing Gemini API" -ForegroundColor Cyan
@@ -122,11 +122,8 @@ catch {
             }
             404 {
                 Write-Host "404 NOT FOUND - This means:" -ForegroundColor Red
-                Write-Host "  1. The model gemini-3-flash-preview does not exist or is not available" -ForegroundColor Yellow
-                Write-Host "  2. Try using a stable model instead:" -ForegroundColor Yellow
-                Write-Host "     - gemini-1.5-flash (recommended)" -ForegroundColor Cyan
-                Write-Host "     - gemini-1.5-pro" -ForegroundColor Cyan
-                Write-Host "     - gemini-2.0-flash-exp" -ForegroundColor Cyan
+                Write-Host "  1. The model gemini-3.1-flash-lite does not exist or is not available for this API key" -ForegroundColor Yellow
+                Write-Host "  2. Confirm the model name and project access in Google AI Studio" -ForegroundColor Yellow
             }
             429 {
                 Write-Host "429 RATE LIMIT - Too many requests" -ForegroundColor Red

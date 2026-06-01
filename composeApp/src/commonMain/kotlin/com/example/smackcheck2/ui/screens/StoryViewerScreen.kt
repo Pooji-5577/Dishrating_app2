@@ -63,6 +63,11 @@ fun StoryViewerScreen(
     val socialRepository = remember { SocialRepository() }
 
     if (stories.isEmpty()) {
+        LaunchedEffect(Unit) {
+            delay(2000)
+            onNavigateBack()
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -193,6 +198,20 @@ fun StoryViewerScreen(
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
                                 )
+                                val storyContext = listOfNotNull(
+                                    story.dishName,
+                                    story.rating?.let { "${it}/5" },
+                                    story.city
+                                ).joinToString(" - ")
+                                if (storyContext.isNotBlank()) {
+                                    Text(
+                                        text = storyContext,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.White.copy(alpha = 0.86f),
+                                        maxLines = 1
+                                    )
+                                }
                             }
                         }
 

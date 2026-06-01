@@ -7,6 +7,8 @@ import com.example.smackcheck2.model.CapturedImage
 import com.example.smackcheck2.model.DishCaptureUiState
 import com.example.smackcheck2.model.ImageDetectionResult
 import com.example.smackcheck2.platform.ImageResult
+import com.example.smackcheck2.util.PhotoEditState
+import com.example.smackcheck2.util.renderEditedPhoto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -38,6 +40,8 @@ class DishCaptureViewModel : ViewModel() {
             it.copy(
                 imageUri = imageResult.uri,
                 imageBytes = imageResult.bytes,
+                originalImageBytes = imageResult.bytes,
+                imageEditState = PhotoEditState(),
                 isAnalyzing = true,
                 detectedDishName = null,
                 showConfirmation = false,
@@ -50,7 +54,18 @@ class DishCaptureViewModel : ViewModel() {
         }
 
         // Start AI detection for this image
-        runAIDetection(imageResult.uri, imageResult.bytes, imageResult.mimeType)
+        runAIDetection(imageResult.uri, imageResult.aiBytes, imageResult.aiMimeType)
+    }
+
+    /**
+     * Called when the initial gallery selection returns one or more images.
+     * The first image becomes primary; the rest are added as additional images.
+     */
+    fun onImagesSelected(images: List<ImageResult>) {
+        if (images.isEmpty()) return
+
+        onImageCaptured(images.first())
+        onAdditionalImagesSelected(images.drop(1))
     }
 
     /**
@@ -78,7 +93,7 @@ class DishCaptureViewModel : ViewModel() {
         // Take only as many as we have room for
         val imagesToAdd = images.take(remainingSlots)
         val capturedImages = imagesToAdd.map { result ->
-            CapturedImage(uri = result.uri, bytes = result.bytes)
+            CapturedImage(uri = result.uri, bytes = result.bytes, originalBytes = result.bytes)
         }
 
         // Mark new images as analyzing in per-image detections
@@ -109,7 +124,7 @@ class DishCaptureViewModel : ViewModel() {
 
         // Run AI detection for each new image
         for (imageResult in imagesToAdd) {
-            runAIDetection(imageResult.uri, imageResult.bytes, imageResult.mimeType)
+            runAIDetection(imageResult.uri, imageResult.aiBytes, imageResult.aiMimeType)
         }
     }
 
@@ -131,7 +146,7 @@ class DishCaptureViewModel : ViewModel() {
             return
         }
 
-        val newImage = CapturedImage(uri = imageResult.uri, bytes = imageResult.bytes)
+        val newImage = CapturedImage(uri = imageResult.uri, bytes = imageResult.bytes, originalBytes = imageResult.bytes)
 
         _uiState.update {
             it.copy(
@@ -155,7 +170,7 @@ class DishCaptureViewModel : ViewModel() {
         }
 
         // Run AI detection for the new image
-        runAIDetection(imageResult.uri, imageResult.bytes, imageResult.mimeType)
+        runAIDetection(imageResult.uri, imageResult.aiBytes, imageResult.aiMimeType)
     }
 
     /**
@@ -216,6 +231,8 @@ class DishCaptureViewModel : ViewModel() {
                     it.copy(
                         imageUri = newPrimary.uri,
                         imageBytes = newPrimary.bytes,
+                        originalImageBytes = newPrimary.originalBytes,
+                        imageEditState = newPrimary.editState,
                         additionalImages = it.additionalImages.drop(1),
                         selectedImageIndex = 0,
                         perImageDetections = updatedDetections
@@ -257,6 +274,38 @@ class DishCaptureViewModel : ViewModel() {
         return MAX_IMAGES - _uiState.value.totalImages
     }
 
+    fun updatePhotoEdit(editState: PhotoEditState) {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val selected = state.allImages.getOrNull(state.selectedImageIndex) ?: return@launch
+            val sourceBytes = selected.originalBytes
+            val editedBytes = runCatching { renderEditedPhoto(sourceBytes, editState) }.getOrElse { sourceBytes }
+
+            if (state.selectedImageIndex == 0 && state.imageUri != null) {
+                _uiState.update {
+                    it.copy(
+                        imageBytes = editedBytes,
+                        originalImageBytes = it.originalImageBytes ?: sourceBytes,
+                        imageEditState = editState
+                    )
+                }
+            } else {
+                val adjustedIndex = if (state.imageUri != null) state.selectedImageIndex - 1 else state.selectedImageIndex
+                _uiState.update {
+                    it.copy(
+                        additionalImages = it.additionalImages.mapIndexed { index, image ->
+                            if (index == adjustedIndex) {
+                                image.copy(bytes = editedBytes, editState = editState)
+                            } else {
+                                image
+                            }
+                        }
+                    )
+                }
+            }
+        }
+    }
+
     /**
      * Run AI detection for a specific image identified by URI
      */
@@ -295,23 +344,34 @@ class DishCaptureViewModel : ViewModel() {
                     // If this is the currently selected image, update displayed fields too
                     val selectedImage = it.allImages.getOrNull(it.selectedImageIndex)
                     if (selectedImage?.uri == imageUri) {
+                        val manualName = it.editedName.trim()
+                        val shouldKeepManualName = manualName.isNotBlank() &&
+                            (it.isEditingName || it.detectedDishName == manualName)
                         it.copy(
                             perImageDetections = updatedDetections,
                             isAnalyzing = false,
-                            detectedDishName = if (isOutage) null else result.dishName,
+                            detectedDishName = when {
+                                shouldKeepManualName -> manualName
+                                isOutage -> null
+                                else -> result.dishName
+                            },
                             detectedCuisine = result.cuisine,
                             detectionConfidence = result.confidence,
                             alternatives = result.alternatives,
-                            isAIDetected = result.isAIDetected,
+                            isAIDetected = if (shouldKeepManualName) false else result.isAIDetected,
                             itemType = if (isOutage) "food" else result.itemType,
                             detectedRestaurantChain = result.restaurantChain,
                             detectedRestaurantType = result.restaurantType,
-                            editedName = if (isOutage) "" else result.dishName,
+                            editedName = when {
+                                shouldKeepManualName -> manualName
+                                isOutage -> ""
+                                else -> result.dishName
+                            },
                             debugInfo = result.debugInfo,
                             showConfirmation = true,
                             showNotDishError = showNotDish,
                             // On outage, go straight to editing mode so user can type dish name
-                            isEditingName = isOutage,
+                            isEditingName = if (shouldKeepManualName) it.isEditingName else isOutage,
                             errorMessage = if (isOutage) "AI service unavailable. Please enter dish name manually." else null
                         )
                     } else {
@@ -426,7 +486,12 @@ class DishCaptureViewModel : ViewModel() {
      */
     fun getFinalDishName(): String {
         val state = _uiState.value
-        return state.detectedDishName ?: state.editedName
+        val edited = state.editedName.trim()
+        return if (edited.isNotBlank() && (state.isEditingName || state.detectedDishName.isNullOrBlank())) {
+            edited
+        } else {
+            state.detectedDishName ?: edited
+        }
     }
 
     /**

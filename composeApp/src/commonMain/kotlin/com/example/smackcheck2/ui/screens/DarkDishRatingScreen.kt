@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,9 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -66,6 +70,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -83,12 +88,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.Restaurant
+import com.example.smackcheck2.platform.ImagePicker
+import com.example.smackcheck2.service.ReceiptSource
 import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
 import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.PhotoCropMode
+import com.example.smackcheck2.util.PhotoEditState
+import com.example.smackcheck2.util.PhotoFilterPreset
+import com.example.smackcheck2.util.renderEditedPhoto
+import com.example.smackcheck2.util.toColorFilter
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.PI
@@ -96,6 +108,7 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
+import kotlinx.coroutines.launch
 
 private val DeepMaroon = Color(0xFF3B1011)
 private val WarmMaroon = BrandRedDark
@@ -104,6 +117,7 @@ private val RosePink = Color(0xFFBB5B5C)
 private val CreamWhite = Color(0xFFFFF8F0)
 private val WarmBeige = Color(0xFFF5EDE3)
 private val LightBlush = Color(0xFFFDE8E8)
+private const val NOT_DISH_NAME = "__SMACKCHECK_NOT_DISH__"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -120,10 +134,16 @@ fun DarkDishRatingScreen(
     showSuccess: Boolean = false,
     xpEarned: Int? = null,
     errorMessage: String? = null,
+    onDishNameChange: (String) -> Unit = {},
     onNavigateBack: () -> Unit,
+    onTryAgain: () -> Unit = onNavigateBack,
     onRatingComplete: () -> Unit = onNavigateBack,
     onSubmitRating: (rating: Float, comment: String, tags: List<String>, restaurant: Restaurant?) -> Unit,
+    onSubmitRatingWithReceipt: (rating: Float, comment: String, tags: List<String>, restaurant: Restaurant?, receiptBytes: ByteArray?, receiptSource: ReceiptSource?) -> Unit = { r, c, t, restaurant, _, _ ->
+        onSubmitRating(r, c, t, restaurant)
+    },
     onPriceChange: (String) -> Unit = {},
+    onImageEdited: (ByteArray) -> Unit = {},
     onDismissError: () -> Unit = {},
     onAddRestaurantManually: (() -> Unit)? = null,
     onSearchRestaurants: ((String) -> Unit)? = null,
@@ -131,7 +151,8 @@ fun DarkDishRatingScreen(
     currentLongitude: Double? = null,
     detectedChain: String? = null,
     detectedType: String? = null,
-    currencySymbol: String = "\u20B9 "
+    currencySymbol: String = "\u20B9 ",
+    imagePicker: ImagePicker? = null
 ) {
     var rating by remember { mutableFloatStateOf(0f) }
     var comment by remember { mutableStateOf("") }
@@ -140,6 +161,11 @@ fun DarkDishRatingScreen(
     var selectedTags by remember { mutableStateOf(setOf<String>()) }
     var showRestaurantPicker by remember { mutableStateOf(false) }
     var restaurantSearchQuery by remember { mutableStateOf("") }
+    var receiptBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var receiptSource by remember { mutableStateOf<ReceiptSource?>(null) }
+    var showPhotoEditor by remember { mutableStateOf(false) }
+    var photoEditState by remember(imageUri) { mutableStateOf(PhotoEditState()) }
+    val originalImageBytes = remember(imageUri, imageBytes != null) { imageBytes }
 
     var showEditorialSheet by remember { mutableStateOf(false) }
     var editorialSuggestion by remember { mutableStateOf("") }
@@ -154,6 +180,7 @@ fun DarkDishRatingScreen(
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
@@ -223,6 +250,54 @@ fun DarkDishRatingScreen(
         return
     }
 
+    val isNotDish = dishName == NOT_DISH_NAME
+    val canSubmitDishName = dishName.isNotBlank() && dishName != "Identifying..." && !isNotDish
+
+    if (isNotDish) {
+        AlertDialog(
+            onDismissRequest = onTryAgain,
+            containerColor = CreamWhite,
+            icon = {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = CrimsonRed,
+                    modifier = Modifier.size(44.dp)
+                )
+            },
+            title = {
+                Text(
+                    text = "Uploaded picture is not a dish",
+                    color = DeepMaroon,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Text(
+                    text = "The uploaded picture is not of a dish. Try again with a clear photo of the dish you want to rate.",
+                    color = WarmMaroon,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = onTryAgain,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CrimsonRed,
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Try Again", modifier = Modifier.padding(vertical = 4.dp))
+                }
+            }
+        )
+    }
+
     Scaffold(
         containerColor = CreamWhite,
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -283,11 +358,42 @@ fun DarkDishRatingScreen(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(12.dp)
-                        .size(36.dp)
-                        .background(CrimsonRed, CircleShape),
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(CrimsonRed),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.CameraAlt, contentDescription = "Re-shoot", tint = Color.White, modifier = Modifier.size(18.dp))
+                    IconButton(
+                        onClick = { if (imageBytes != null) showPhotoEditor = true },
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = "Edit",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
+
+            if (showPhotoEditor && originalImageBytes != null) {
+                ModalBottomSheet(
+                    onDismissRequest = { showPhotoEditor = false },
+                    sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                    containerColor = CreamWhite
+                ) {
+                    DishPhotoEditorSheet(
+                        previewBytes = imageBytes ?: originalImageBytes,
+                        editState = photoEditState,
+                        onEditStateChange = { photoEditState = it },
+                        onApply = {
+                            scope.launch {
+                                val edited = renderEditedPhoto(originalImageBytes, photoEditState)
+                                onImageEdited(edited)
+                                showPhotoEditor = false
+                            }
+                        }
+                    )
                 }
             }
 
@@ -307,14 +413,31 @@ fun DarkDishRatingScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             // Dish name
-            Text(
-                text = dishName,
-                color = DeepMaroon,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                fontStyle = FontStyle.Italic,
-                modifier = Modifier.fillMaxWidth(),
-                textAlign = TextAlign.Center
+            OutlinedTextField(
+                value = dishName,
+                onValueChange = onDishNameChange,
+                singleLine = true,
+                placeholder = { Text("Dish name", color = RosePink) },
+                leadingIcon = {
+                    if (dishName == "Identifying...") {
+                        CircularProgressIndicator(color = CrimsonRed, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(18.dp))
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = CrimsonRed,
+                    unfocusedBorderColor = RosePink.copy(alpha = 0.25f),
+                    cursorColor = CrimsonRed,
+                    focusedTextColor = DeepMaroon,
+                    unfocusedTextColor = DeepMaroon,
+                    focusedContainerColor = LightBlush,
+                    unfocusedContainerColor = LightBlush
+                ),
+                shape = RoundedCornerShape(16.dp)
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -584,10 +707,34 @@ fun DarkDishRatingScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
+            ReceiptAttachmentCard(
+                receiptBytes = receiptBytes,
+                imagePicker = imagePicker,
+                onReceiptSelected = { bytes, source ->
+                    receiptBytes = bytes
+                    receiptSource = source
+                },
+                onRemoveReceipt = {
+                    receiptBytes = null
+                    receiptSource = null
+                }
+            )
+
+            Spacer(modifier = Modifier.height(24.dp))
+
             // Submit button - gradient style
             Button(
-                onClick = { onSubmitRating(rating, comment, selectedTags.toList(), selectedRestaurant) },
-                enabled = rating > 0 && (selectedRestaurant != null || (showSkipInput && skipRestaurantName.isNotBlank())) && !isSubmitting,
+                onClick = {
+                    onSubmitRatingWithReceipt(
+                        rating,
+                        comment,
+                        selectedTags.toList(),
+                        selectedRestaurant,
+                        receiptBytes,
+                        receiptSource
+                    )
+                },
+                enabled = canSubmitDishName && rating > 0 && (selectedRestaurant != null || (showSkipInput && skipRestaurantName.isNotBlank())) && !isSubmitting,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 24.dp)
@@ -602,7 +749,7 @@ fun DarkDishRatingScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(
-                            if (rating > 0 && (selectedRestaurant != null || (showSkipInput && skipRestaurantName.isNotBlank())) && !isSubmitting)
+                            if (canSubmitDishName && rating > 0 && (selectedRestaurant != null || (showSkipInput && skipRestaurantName.isNotBlank())) && !isSubmitting)
                                 Brush.horizontalGradient(listOf(WarmMaroon, CrimsonRed, WarmMaroon))
                             else
                                 Brush.horizontalGradient(listOf(RosePink.copy(alpha = 0.3f), RosePink.copy(alpha = 0.3f))),
@@ -1088,6 +1235,239 @@ private fun StarRatingInput(
                     .clickable { onRatingChange(i.toFloat()) }
                     .padding(4.dp)
             )
+        }
+    }
+}
+
+@Composable
+private fun ReceiptAttachmentCard(
+    receiptBytes: ByteArray?,
+    imagePicker: ImagePicker?,
+    onReceiptSelected: (ByteArray, ReceiptSource) -> Unit,
+    onRemoveReceipt: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = LightBlush)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Check, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Receipt validation",
+                        color = DeepMaroon,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "+15 points after attaching a receipt or screenshot",
+                        color = WarmMaroon,
+                        fontSize = 12.sp
+                    )
+                }
+                if (receiptBytes != null) {
+                    TextButton(onClick = onRemoveReceipt) {
+                        Text("Remove", color = CrimsonRed, fontSize = 12.sp)
+                    }
+                }
+            }
+
+            if (receiptBytes != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.White),
+                    contentAlignment = Alignment.Center
+                ) {
+                    ByteArrayImage(
+                        imageBytes = receiptBytes,
+                        contentDescription = "Receipt preview",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ReceiptActionButton(
+                        label = "Scan",
+                        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(18.dp)) },
+                        enabled = imagePicker != null,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        scope.launch {
+                            imagePicker?.captureImage()?.let {
+                                onReceiptSelected(it.bytes, ReceiptSource.CAMERA)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DishPhotoEditorSheet(
+    previewBytes: ByteArray,
+    editState: PhotoEditState,
+    onEditStateChange: (PhotoEditState) -> Unit,
+    onApply: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.CameraAlt, contentDescription = null, tint = CrimsonRed, modifier = Modifier.size(20.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Edit photo", color = DeepMaroon, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(220.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(WarmBeige),
+            contentAlignment = Alignment.Center
+        ) {
+            ByteArrayImage(
+                imageBytes = previewBytes,
+                contentDescription = "Dish photo preview",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit,
+                colorFilter = editState.toColorFilter()
+            )
+        }
+
+        PhotoEditorSection(title = "Crop") {
+            PhotoCropMode.entries.forEach { mode ->
+                EditorChip(
+                    label = mode.label,
+                    selected = editState.cropMode == mode,
+                    onClick = { onEditStateChange(editState.copy(cropMode = mode)) }
+                )
+            }
+        }
+
+        PhotoEditorSection(title = "Filter") {
+            PhotoFilterPreset.entries.forEach { preset ->
+                EditorChip(
+                    label = preset.label,
+                    selected = editState.filterPreset == preset,
+                    onClick = { onEditStateChange(editState.copy(filterPreset = preset)) }
+                )
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = {
+                    onEditStateChange(
+                        editState.copy(rotationDegrees = (editState.rotationDegrees + 90) % 360)
+                    )
+                },
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = LightBlush, contentColor = CrimsonRed)
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Rotate", fontWeight = FontWeight.SemiBold)
+            }
+
+            Button(
+                onClick = onApply,
+                modifier = Modifier.weight(1f).height(48.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CrimsonRed, contentColor = Color.White)
+            ) {
+                Text("Apply", fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PhotoEditorSection(
+    title: String,
+    content: @Composable () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = DeepMaroon, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            content()
+        }
+    }
+}
+
+@Composable
+private fun EditorChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) CrimsonRed else LightBlush)
+            .border(1.dp, if (selected) CrimsonRed else RosePink.copy(alpha = 0.25f), RoundedCornerShape(999.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else WarmMaroon,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        )
+    }
+}
+
+@Composable
+private fun ReceiptActionButton(
+    label: String,
+    icon: @Composable () -> Unit,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (enabled) Color.White else Color.White.copy(alpha = 0.5f))
+            .border(1.dp, RosePink.copy(alpha = 0.25f), RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled) { onClick() }
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            icon()
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(label, color = WarmMaroon, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 }

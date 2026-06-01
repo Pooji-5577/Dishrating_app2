@@ -16,6 +16,7 @@ import com.example.smackcheck2.model.FeedItem
 import com.example.smackcheck2.model.SocialFeedUiState
 import com.example.smackcheck2.model.UserSummary
 import com.example.smackcheck2.data.repository.NotificationService
+import com.example.smackcheck2.service.DishRatingSubmissionService
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CancellationException
@@ -38,6 +39,9 @@ class SocialFeedViewModel(
     private val databaseRepository = DatabaseRepository()
     private val realtimeFeedRepository = RealtimeFeedRepository()
     private val notificationService = NotificationService()
+    private val ratingSubmissionService = DishRatingSubmissionService(
+        preferencesRepository = preferencesRepository
+    )
 
     private val crashGuard = CoroutineExceptionHandler { _, throwable ->
         Logger.e("SocialFeedViewModel", "SocialFeedViewModel: Uncaught coroutine error: ${throwable::class.simpleName} - ${throwable.message}", throwable)
@@ -83,6 +87,8 @@ class SocialFeedViewModel(
 
     fun onSocialFeedScreenVisible() {
         preloadExploreFromHome()
+        refreshPendingRatings()
+        ratingSubmissionService.kickPendingSubmissionSync()
         subscribeToRealtimeUpdates()
     }
 
@@ -350,8 +356,7 @@ class SocialFeedViewModel(
 
                 result.fold(
                     onSuccess = { feedItems ->
-                        // Dedupe by id to protect LazyColumn from duplicate keys
-                        val deduped = feedItems.distinctBy { it.id }
+                        val deduped = mergePendingRatings(feedItems)
                         val targetId = _uiState.value.scrollToRatingId
                         val scrollIndex = if (targetId != null) {
                             deduped.indexOfFirst { it.id == targetId }.takeIf { it >= 0 }
@@ -429,6 +434,31 @@ class SocialFeedViewModel(
                 _uiState.update { it.copy(isLoadingMore = false, errorMessage = e.message ?: "Failed to load more") }
             }
         }
+    }
+
+    private fun refreshPendingRatings() {
+        viewModelScope.launch(crashGuard) {
+            val merged = mergePendingRatings(_uiState.value.feedItems)
+            _uiState.update { current ->
+                current.copy(feedItems = merged)
+            }
+        }
+    }
+
+    private suspend fun mergePendingRatings(items: List<FeedItem>): List<FeedItem> {
+        val pendingItems = pendingFeedItemsForCurrentFilter()
+        return (pendingItems + items)
+            .distinctBy { it.id }
+            .sortedByDescending { it.timestamp }
+    }
+
+    private suspend fun pendingFeedItemsForCurrentFilter(): List<FeedItem> {
+        val userId = authRepository.getCurrentUserId()
+        return preferencesRepository.getPendingRatings()
+            .filter { pending ->
+                pending.userId == userId && _uiState.value.filter != FeedFilter.FOLLOWING
+            }
+            .map { it.toFeedItem() }
     }
 
     private suspend fun fetchPage(cursor: FeedCursor?, userId: String?): Result<List<FeedItem>> {
@@ -610,6 +640,43 @@ class SocialFeedViewModel(
                 }
                 state.copy(feedItems = updatedItems)
             }
+        }
+    }
+
+    fun reportPost(itemId: String, reason: String = "Inappropriate content") {
+        viewModelScope.launch(crashGuard) {
+            socialRepository.reportContent(
+                targetType = "rating",
+                targetId = itemId,
+                reason = reason
+            ).fold(
+                onSuccess = {
+                    _uiState.update { state ->
+                        state.copy(feedItems = state.feedItems.filterNot { it.id == itemId })
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(errorMessage = error.message ?: "Failed to report post") }
+                }
+            )
+        }
+    }
+
+    fun blockUser(userId: String) {
+        val currentUserId = authRepository.getCurrentUserId()
+        if (currentUserId == null || currentUserId == userId) return
+
+        viewModelScope.launch(crashGuard) {
+            socialRepository.blockUser(userId).fold(
+                onSuccess = {
+                    _uiState.update { state ->
+                        state.copy(feedItems = state.feedItems.filterNot { it.userId == userId })
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update { it.copy(errorMessage = error.message ?: "Failed to block user") }
+                }
+            )
         }
     }
 

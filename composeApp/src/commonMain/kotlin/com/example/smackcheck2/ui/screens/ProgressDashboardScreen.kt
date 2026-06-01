@@ -68,6 +68,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -311,12 +312,25 @@ fun ProgressDashboardScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(userName.ifBlank { "SmackChecker" }, color = Color.Black, fontSize = 26.sp, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = userName.ifBlank { "SmackChecker" },
+                            color = Color.Black,
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 12.dp)
+                        )
                         Text(
                             buildAnnotatedString {
                                 withStyle(SpanStyle(color = Color.Black, fontSize = 20.sp / 1.6f, fontWeight = FontWeight.Bold)) { append("Next: ") }
                                 withStyle(SpanStyle(color = PWarmMaroon, fontSize = 20.sp / 1.6f, fontWeight = FontWeight.Bold)) { append(progLevelTitle(level + 1)) }
-                            }
+                            },
+                            textAlign = TextAlign.End,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 

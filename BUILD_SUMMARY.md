@@ -11,8 +11,8 @@
 ## 📦 APK Information
 
 ### File Details
-- **Filename:** `SmackCheck_Fixed.apk`
-- **Location:** `C:\Users\manas\Desktop\smackcheck3\SmackCheck_Fixed.apk`
+- **Filename:** `composeApp-debug.apk`
+- **Location:** `composeApp/build/outputs/apk/debug/composeApp-debug.apk`
 - **Size:** 24 MB
 - **Build Configuration:** Debug
 - **Package Name:** com.example.smackcheck2
@@ -116,18 +116,18 @@ BUILD SUCCESSFUL in 17m
 
 ### Method 1: Direct Install (USB Debugging)
 ```bash
-adb install SmackCheck_Fixed.apk
+adb install composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ```
 
 ### Method 2: Transfer to Device
-1. Copy `SmackCheck_Fixed.apk` to your Android device
+1. Build a fresh APK with Gradle and use `composeApp/build/outputs/apk/debug/composeApp-debug.apk`
 2. Enable "Install from Unknown Sources" in device settings
 3. Open the APK file on device
 4. Follow installation prompts
 
 ### Method 3: Replace Existing Installation
 ```bash
-adb install -r SmackCheck_Fixed.apk
+adb install -r composeApp/build/outputs/apk/debug/composeApp-debug.apk
 ```
 *Note: This will replace the existing app while preserving data*
 

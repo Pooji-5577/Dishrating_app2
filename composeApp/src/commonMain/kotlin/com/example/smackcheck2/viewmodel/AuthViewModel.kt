@@ -7,8 +7,8 @@ import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.model.User
-import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,17 +35,29 @@ class AuthViewModel : ViewModel() {
                 when (status) {
                     is SessionStatus.Authenticated -> {
                         try {
-                            val user = authRepository.getCurrentUser()
-                            if (user != null) {
-                                Logger.d("AuthViewModel", "Session authenticated, user: ${user.email}")
-                                Analytics.identify(user.id)
-                                Analytics.track("app_opened", mapOf("email" to user.email))
-                                _authState.value = AuthState.Authenticated(user)
-                            } else {
-                                _authState.value = AuthState.Unauthenticated
-                            }
+                            val result = authRepository.restorePersistedUser()
+                            result.fold(
+                                onSuccess = { user ->
+                                    if (user != null) {
+                                        Logger.d("AuthViewModel", "Session authenticated, user: ${user.email}")
+                                        Analytics.identify(user.id)
+                                        Analytics.track("app_opened", mapOf("email" to user.email))
+                                        _authState.value = AuthState.Authenticated(user)
+                                    } else {
+                                        _authState.value = AuthState.Unauthenticated
+                                    }
+                                },
+                                onFailure = { error ->
+                                    Logger.w("AuthViewModel", "Stored session could not load profile: ${error.message}")
+                                    authRepository.signOut()
+                                    Analytics.reset()
+                                    _authState.value = AuthState.Unauthenticated
+                                }
+                            )
                         } catch (e: Exception) {
-                            Logger.e("AuthViewModel", "Error getting user after auth: ${e.message}", e)
+                            Logger.e("AuthViewModel", "Error restoring authenticated session: ${e.message}", e)
+                            authRepository.signOut()
+                            Analytics.reset()
                             _authState.value = AuthState.Unauthenticated
                         }
                     }
@@ -60,6 +72,8 @@ class AuthViewModel : ViewModel() {
                     }
                     is SessionStatus.RefreshFailure -> {
                         Logger.w("AuthViewModel", "Network error loading session: ${status.cause}")
+                        authRepository.signOut()
+                        Analytics.reset()
                         _authState.value = AuthState.Unauthenticated
                     }
                 }

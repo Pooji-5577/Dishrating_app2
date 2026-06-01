@@ -2,15 +2,14 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.smackcheck2.data.SupabaseClientProvider
-import com.example.smackcheck2.data.dto.RestaurantVisitDto
+import com.example.smackcheck2.data.ApiClient
 import com.example.smackcheck2.platform.GeofenceRegion
 import com.example.smackcheck2.platform.GeofencingService
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 data class VisitTrackingUiState(
     val isTracking: Boolean = false,
@@ -56,16 +55,24 @@ class VisitTrackingViewModel : ViewModel() {
     fun recordVisit(restaurantId: String) {
         viewModelScope.launch {
             try {
-                val userId = SupabaseClientProvider.client.auth.currentUserOrNull()?.id ?: return@launch
-                val dto = RestaurantVisitDto(
-                    userId = userId,
-                    restaurantId = restaurantId
+                ApiClient.post<VisitRecordRequest, VisitRecordResponse>(
+                    "visits",
+                    VisitRecordRequest(restaurantId = restaurantId)
                 )
-                SupabaseClientProvider.client.postgrest["restaurant_visits"].insert(dto)
             } catch (_: Exception) {}
         }
     }
 }
+
+@Serializable
+private data class VisitRecordRequest(
+    @SerialName("restaurant_id") val restaurantId: String
+)
+
+@Serializable
+private data class VisitRecordResponse(
+    val id: String? = null
+)
 
 data class RestaurantInfo(
     val id: String,

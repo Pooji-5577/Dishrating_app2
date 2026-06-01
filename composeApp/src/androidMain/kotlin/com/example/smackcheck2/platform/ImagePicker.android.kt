@@ -149,10 +149,12 @@ actual class ImagePicker(
                         try {
                             val results = uris.take(maxImages).mapNotNull { uri ->
                                 try {
-                                    val bytes = readBytesFromUri(uri)
-                                    val mimeType = context.contentResolver.getType(uri) ?: "image/jpeg"
-                                    Log.d(TAG, "Image picked: ${bytes.size} bytes, mimeType=$mimeType")
-                                    ImageResult(uri.toString(), bytes, mimeType)
+                                    val normalized = normalizeImageResult(uri, forcePortrait = false)
+                                    Log.d(
+                                        TAG,
+                                        "Image picked+normalized: ${normalized.bytes.size} bytes, aiBytes=${normalized.aiBytes.size}, mimeType=${normalized.mimeType}"
+                                    )
+                                    normalized
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Error reading picked image: $uri", e)
                                     null
@@ -217,17 +219,25 @@ actual class ImagePicker(
             } else {
                 rotatedBitmap
             }
+            var aiBitmap: android.graphics.Bitmap? = null
             try {
                 val bytes = ImageOrientationHelper.bitmapToJpegBytes(normalizedBitmap)
+                aiBitmap = ImageOrientationHelper.scaleToMaxDimension(normalizedBitmap, 512)
+                val aiBytes = ImageOrientationHelper.bitmapToJpegBytes(aiBitmap, quality = 58)
                 val normalizedFile = File(context.cacheDir, "images/normalized_${System.currentTimeMillis()}.jpg")
                 normalizedFile.parentFile?.mkdirs()
                 normalizedFile.writeBytes(bytes)
                 return ImageResult(
                     uri = Uri.fromFile(normalizedFile).toString(),
                     bytes = bytes,
-                    mimeType = "image/jpeg"
+                    mimeType = "image/jpeg",
+                    aiBytes = aiBytes,
+                    aiMimeType = "image/jpeg"
                 )
             } finally {
+                aiBitmap?.let {
+                    if (it !== normalizedBitmap && !it.isRecycled) it.recycle()
+                }
                 if (normalizedBitmap !== rotatedBitmap && !normalizedBitmap.isRecycled) {
                     normalizedBitmap.recycle()
                 }

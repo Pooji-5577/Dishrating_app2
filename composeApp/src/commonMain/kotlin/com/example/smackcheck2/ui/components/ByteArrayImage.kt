@@ -2,6 +2,7 @@ package com.example.smackcheck2.ui.components
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.layout.ContentScale
 
 /**
@@ -12,5 +13,6 @@ expect fun ByteArrayImage(
     imageBytes: ByteArray,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop
+    contentScale: ContentScale = ContentScale.Crop,
+    colorFilter: ColorFilter? = null
 )

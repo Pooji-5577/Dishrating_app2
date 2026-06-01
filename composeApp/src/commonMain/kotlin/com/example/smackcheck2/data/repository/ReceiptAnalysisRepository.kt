@@ -1,23 +1,8 @@
 package com.example.smackcheck2.data.repository
 
-import com.example.smackcheck2.data.SupabaseClientProvider
-import com.example.smackcheck2.data.SupabaseConfig
+import com.example.smackcheck2.data.ApiClient
 import com.example.smackcheck2.util.Logger
-import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.functions.functions
-import io.github.jan.supabase.auth.status.SessionStatus
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.contentType
-import kotlinx.coroutines.delay
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -30,14 +15,12 @@ data class ReceiptPriceSuggestion(
 data class ReceiptAnalysisResult(
     val suggestions: List<ReceiptPriceSuggestion> = emptyList(),
     val rawItems: List<String> = emptyList(),
-    val summary: String? = null
+    val summary: String? = null,
+    val currencyCode: String? = null,
+    val currencySymbol: String? = null
 )
 
 class ReceiptAnalysisRepository {
-    private val supabase = SupabaseClientProvider.client
-    private val json = Json { ignoreUnknownKeys = true }
-    private val httpClient = HttpClient()
-
     @OptIn(ExperimentalEncodingApi::class)
     suspend fun analyzeReceipt(
         receiptBytes: ByteArray,
@@ -47,96 +30,27 @@ class ReceiptAnalysisRepository {
         if (receiptBytes.isEmpty()) return Result.success(ReceiptAnalysisResult())
 
         return try {
-            val accessToken = currentAccessToken()
-                ?: return Result.success(ReceiptAnalysisResult())
-
             val requestBody = ReceiptAnalysisRequest(
                 imageBase64 = Base64.encode(receiptBytes),
                 mimeType = mimeType,
                 dishNames = dishNames
             )
-            val backendResult = analyzeReceiptWithBackend(requestBody, accessToken)
-            if (backendResult.isSuccess) {
-                backendResult
-            } else {
-                val backendError = backendResult.exceptionOrNull()
-                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend unavailable or empty, trying edge fallback: ${backendError?.message}", backendError)
-                analyzeReceiptWithEdgeFunction(requestBody)
-            }
+            val response = ApiClient.post<ReceiptAnalysisRequest, ReceiptAnalysisResponse>(
+                "ai/analyze-receipt",
+                requestBody
+            )
+            Result.success(response.toResult())
         } catch (e: Exception) {
             Logger.e("ReceiptAnalysisRepository", "Receipt analysis failed: ${e.message}", e)
-            analyzeReceiptWithEdgeFunction(
-                ReceiptAnalysisRequest(
-                    imageBase64 = Base64.encode(receiptBytes),
-                    mimeType = mimeType,
-                    dishNames = dishNames
-                )
-            )
+            Result.success(ReceiptAnalysisResult())
         }
     }
 
-    private suspend fun analyzeReceiptWithBackend(
-        requestBody: ReceiptAnalysisRequest,
-        accessToken: String
-    ): Result<ReceiptAnalysisResult> {
-        repeat(2) { attempt ->
-            try {
-                val response = httpClient.post("${SupabaseConfig.BACKEND_URL.trimEnd('/')}/api/ai/analyze-receipt") {
-                    contentType(ContentType.Application.Json)
-                    header(HttpHeaders.Authorization, "Bearer $accessToken")
-                    setBody(json.encodeToString(requestBody))
-                }
-                val responseText = response.body<String>()
-                Logger.d("ReceiptAnalysisRepository", "Receipt analysis backend status ${response.status.value}, response: ${responseText.take(500)}")
-                if (response.status.value in 200..299) {
-                    val parsedResult = parseReceiptAnalysis(responseText)
-                    if (parsedResult.suggestions.isNotEmpty() || parsedResult.rawItems.isNotEmpty()) {
-                        return Result.success(parsedResult)
-                    }
-                    Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend returned no prices or line items")
-                } else if (response.status.value !in listOf(429, 500, 502, 503, 504)) {
-                    return Result.failure(IllegalStateException("Backend receipt analysis failed ${response.status.value}: ${responseText.take(160)}"))
-                }
-            } catch (e: Exception) {
-                Logger.e("ReceiptAnalysisRepository", "Receipt analysis backend attempt ${attempt + 1} failed: ${e.message}", e)
-            }
-            delay(350L)
-        }
-        return Result.failure(IllegalStateException("Backend receipt analysis returned no usable result"))
-    }
-
-    private suspend fun analyzeReceiptWithEdgeFunction(
-        requestBody: ReceiptAnalysisRequest
-    ): Result<ReceiptAnalysisResult> {
-        repeat(2) { attempt ->
-            try {
-                val response = supabase.functions.invoke(
-                    function = "analyze-receipt",
-                    body = requestBody
-                )
-                val responseText = response.body<String>()
-                Logger.d("ReceiptAnalysisRepository", "Receipt analysis edge status ${response.status.value}, response: ${responseText.take(500)}")
-                if (response.status.value in 200..299) {
-                    val parsedResult = parseReceiptAnalysis(responseText)
-                    if (parsedResult.suggestions.isNotEmpty() || parsedResult.rawItems.isNotEmpty()) {
-                        return Result.success(parsedResult)
-                    }
-                    Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge returned no prices or line items")
-                } else if (response.status.value !in listOf(429, 500, 502, 503, 504)) {
-                    return Result.success(ReceiptAnalysisResult())
-                }
-            } catch (e: Exception) {
-                Logger.e("ReceiptAnalysisRepository", "Receipt analysis edge attempt ${attempt + 1} failed: ${e.message}", e)
-            }
-            delay(350L)
-        }
-        return Result.success(ReceiptAnalysisResult())
-    }
-
-    private fun parseReceiptAnalysis(responseText: String): ReceiptAnalysisResult {
-        val parsed = json.decodeFromString<ReceiptAnalysisResponse>(responseText)
-        val matches = parsed.matches.ifEmpty { parsed.suggestions }
-        val rawItems = parsed.receiptItems.ifEmpty { parsed.rawItems }
+    private fun ReceiptAnalysisResponse.toResult(): ReceiptAnalysisResult {
+        val matches = matches.ifEmpty { suggestions }
+        val rawItems = receiptItems.ifEmpty { this.rawItems }
+        val detectedCurrencyCode = currencyCode ?: currency_code
+        val detectedCurrencySymbol = currencySymbol ?: currency_symbol
         return ReceiptAnalysisResult(
             suggestions = matches.mapNotNull { match ->
                 val price = match.price ?: return@mapNotNull null
@@ -149,13 +63,10 @@ class ReceiptAnalysisRepository {
                 )
             },
             rawItems = rawItems,
-            summary = parsed.summary
+            summary = summary,
+            currencyCode = detectedCurrencyCode,
+            currencySymbol = detectedCurrencySymbol
         )
-    }
-
-    private fun currentAccessToken(): String? {
-        val status = supabase.auth.sessionStatus.value
-        return (status as? SessionStatus.Authenticated)?.session?.accessToken
     }
 }
 
@@ -172,7 +83,11 @@ private data class ReceiptAnalysisResponse(
     val suggestions: List<ReceiptMatchResponse> = emptyList(),
     val receiptItems: List<String> = emptyList(),
     val rawItems: List<String> = emptyList(),
-    val summary: String? = null
+    val summary: String? = null,
+    val currencyCode: String? = null,
+    val currency_code: String? = null,
+    val currencySymbol: String? = null,
+    val currency_symbol: String? = null
 )
 
 @Serializable

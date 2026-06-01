@@ -1,10 +1,22 @@
 package com.example.smackcheck2.platform
 
 import com.example.smackcheck2.model.*
+import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.usePinned
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import platform.Foundation.NSData
+import platform.Foundation.NSFileManager
+import platform.Foundation.NSSearchPathForDirectoriesInDomains
+import platform.Foundation.NSDocumentDirectory
 import platform.Foundation.NSNumber
+import platform.Foundation.NSUserDomainMask
 import platform.Foundation.NSUserDefaults
+import platform.Foundation.create
+import platform.Foundation.dataWithContentsOfFile
+import platform.Foundation.writeToFile
+import platform.posix.memcpy
 
 actual class PreferencesManager {
 
@@ -20,6 +32,7 @@ actual class PreferencesManager {
         const val DAY1_RETENTION_TRACKED = "day1_retention_tracked"
         const val PERMISSIONS_ONBOARDING_SEEN = "permissions_onboarding_seen"
         const val BOOKMARKS = "bookmarked_ratings"
+        const val PENDING_RATINGS = "pending_ratings"
     }
 
     actual suspend fun saveThemePreference(theme: ThemePreference) {
@@ -99,6 +112,17 @@ actual class PreferencesManager {
         userDefaults.synchronize()
     }
 
+    actual suspend fun hasDismissedProfileSetup(userId: String): Boolean {
+        if (userId.isBlank()) return false
+        return userDefaults.boolForKey(profileSetupDismissedKey(userId))
+    }
+
+    actual suspend fun setProfileSetupDismissed(userId: String) {
+        if (userId.isBlank()) return
+        userDefaults.setBool(true, forKey = profileSetupDismissedKey(userId))
+        userDefaults.synchronize()
+    }
+
     actual suspend fun saveBookmarks(bookmarkIds: Set<String>) {
         val bookmarksJson = json.encodeToString(bookmarkIds.toList())
         userDefaults.setObject(bookmarksJson, forKey = BOOKMARKS)
@@ -114,8 +138,80 @@ actual class PreferencesManager {
         }
     }
 
+    actual suspend fun savePendingRatings(ratings: List<PendingRating>) {
+        val pendingJson = json.encodeToString(ratings)
+        userDefaults.setObject(pendingJson, forKey = PENDING_RATINGS)
+        userDefaults.synchronize()
+    }
+
+    actual suspend fun getPendingRatings(): List<PendingRating> {
+        val pendingJson = userDefaults.stringForKey(PENDING_RATINGS) ?: return emptyList()
+        return try {
+            json.decodeFromString(pendingJson)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    actual suspend fun savePendingRatingImage(localId: String, imageBytes: ByteArray): String? {
+        return try {
+            val dir = pendingImagesDirectory() ?: return null
+            NSFileManager.defaultManager.createDirectoryAtPath(
+                path = dir,
+                withIntermediateDirectories = true,
+                attributes = null,
+                error = null
+            )
+            val path = "$dir/$localId.jpg"
+            val data = imageBytes.usePinned { pinned ->
+                NSData.create(bytes = pinned.addressOf(0), length = imageBytes.size.toULong())
+            }
+            if (data.writeToFile(path, atomically = true)) path else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    actual suspend fun readPendingRatingImage(imagePath: String): ByteArray? {
+        return try {
+            val data = NSData.dataWithContentsOfFile(imagePath) ?: return null
+            val length = data.length.toInt()
+            if (length == 0) return null
+            val bytes = ByteArray(length)
+            bytes.usePinned { pinned ->
+                memcpy(pinned.addressOf(0), data.bytes, data.length)
+            }
+            bytes
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    @OptIn(ExperimentalForeignApi::class)
+    actual suspend fun deletePendingRatingImage(imagePath: String) {
+        try {
+            NSFileManager.defaultManager.removeItemAtPath(imagePath, error = null)
+        } catch (_: Exception) {
+        }
+    }
+
     actual suspend fun clearAll() {
         userDefaults.removePersistentDomainForName(userDefaults.dictionaryRepresentation().toString())
         userDefaults.synchronize()
+    }
+
+    private fun profileSetupDismissedKey(userId: String): String =
+        "profile_setup_dismissed_$userId"
+
+    private fun pendingImagesDirectory(): String? {
+        val paths = NSSearchPathForDirectoriesInDomains(
+            directory = NSDocumentDirectory,
+            domainMask = NSUserDomainMask,
+            expandTilde = true
+        )
+        val documents = paths.firstOrNull() as? String ?: return null
+        return "$documents/pending_rating_images"
     }
 }

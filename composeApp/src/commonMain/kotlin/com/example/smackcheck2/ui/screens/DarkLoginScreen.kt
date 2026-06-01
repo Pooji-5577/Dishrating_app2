@@ -139,12 +139,12 @@ fun DarkLoginScreen(
                 (radius * radius - halfWidth * halfWidth).coerceAtLeast(0f)
             )
             val edgeY = circleCenterY - verticalOffset
-            val startAngle = Math.toDegrees(
-                kotlin.math.atan2(edgeY - circleCenterY, -halfWidth).toDouble()
-            ).toFloat()
-            val endAngle = Math.toDegrees(
-                kotlin.math.atan2(edgeY - circleCenterY, halfWidth).toDouble()
-            ).toFloat()
+            val startAngle = (
+                kotlin.math.atan2(edgeY - circleCenterY, -halfWidth) * 180f / kotlin.math.PI.toFloat()
+            )
+            val endAngle = (
+                kotlin.math.atan2(edgeY - circleCenterY, halfWidth) * 180f / kotlin.math.PI.toFloat()
+            )
 
             val path = Path().apply {
                 moveTo(0f, edgeY)

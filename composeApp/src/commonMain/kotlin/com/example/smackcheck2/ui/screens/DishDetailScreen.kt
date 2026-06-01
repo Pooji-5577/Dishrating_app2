@@ -1,6 +1,7 @@
 package com.example.smackcheck2.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,10 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
@@ -34,6 +39,8 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -41,6 +48,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,15 +58,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.data.ImageDelivery
 import com.example.smackcheck2.model.Dish
+import com.example.smackcheck2.model.Comment
+import com.example.smackcheck2.model.GroupedReviewDish
 import com.example.smackcheck2.model.Review
 import com.example.smackcheck2.ui.components.NetworkImage
+import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishDetailViewModel
+import kotlinx.coroutines.launch
+
+private data class DishDetailHeroPage(
+    val dishId: String,
+    val ratingId: String?,
+    val dishName: String,
+    val imageUrl: String?
+)
 
 /**
  * Dish Detail Screen - displays real dish data loaded from Supabase
@@ -121,6 +142,25 @@ fun DishDetailScreen(
             uiState.dish != null -> {
                 val dish = uiState.dish!!
                 val restaurant = uiState.restaurant
+                val heroPages = remember(uiState.groupedReviewDishes, uiState.featuredReview, dish) {
+                    buildHeroPages(
+                        dish = dish,
+                        featuredReview = uiState.featuredReview,
+                        groupedDishes = uiState.groupedReviewDishes
+                    )
+                }
+                val initialHeroPage = remember(dishId, dish.id, heroPages) {
+                    heroPages.indexOfFirst { it.ratingId == dishId || it.dishId == dishId || it.dishId == dish.id }
+                        .takeIf { it >= 0 }
+                        ?: 0
+                }
+                val pagerState = rememberPagerState(initialPage = initialHeroPage, pageCount = { heroPages.size })
+                LaunchedEffect(dishId, initialHeroPage, heroPages.size) {
+                    if (heroPages.isNotEmpty() && pagerState.currentPage != initialHeroPage) {
+                        pagerState.scrollToPage(initialHeroPage)
+                    }
+                }
+                val currentPage = heroPages.getOrNull(pagerState.currentPage) ?: heroPages.first()
 
                 LazyColumn(
                     modifier = Modifier
@@ -129,51 +169,54 @@ fun DishDetailScreen(
                 ) {
                     // Hero Image with overlays
                     item {
-                        val heroImageUrl = uiState.featuredReview?.dishImageUrl
-                            ?: dish.imageUrl
+                        val scope = rememberCoroutineScope()
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(300.dp)
                         ) {
-                            // Actual dish image
-                            if (!heroImageUrl.isNullOrBlank()) {
-                                NetworkImage(
-                                    imageUrl = heroImageUrl,
-                                    contentDescription = dish.name,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                                // Gradient overlay for readability
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color.Black.copy(alpha = 0.25f),
-                                                    Color.Transparent,
-                                                    Color.Black.copy(alpha = 0.55f)
-                                                )
-                                            )
-                                        )
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(appColors().SurfaceVariant),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Restaurant,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(80.dp),
-                                        tint = appColors().TextTertiary
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize()
+                            ) { page ->
+                                val heroPage = heroPages[page]
+                                if (!heroPage.imageUrl.isNullOrBlank()) {
+                                    NetworkImage(
+                                        imageUrl = heroPage.imageUrl,
+                                        contentDescription = heroPage.dishName,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
                                     )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(appColors().SurfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Restaurant,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(80.dp),
+                                            tint = appColors().TextTertiary
+                                        )
+                                    }
                                 }
                             }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = 0.25f),
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.55f)
+                                            )
+                                        )
+                                    )
+                            )
 
                             // Top bar with back, favorite, share
                             Row(
@@ -281,11 +324,70 @@ fun DishDetailScreen(
                                     }
                                 }
                             }
+
+                            if (heroPages.size > 1) {
+                                IconButton(
+                                    onClick = {
+                                        val target = (pagerState.currentPage - 1).coerceAtLeast(0)
+                                        scope.launch { pagerState.animateScrollToPage(target) }
+                                    },
+                                    enabled = pagerState.currentPage > 0,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(start = 12.dp)
+                                        .size(36.dp)
+                                        .background(Color.White.copy(alpha = 0.72f), CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronLeft,
+                                        contentDescription = "Previous dish",
+                                        tint = BrandRedDark
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        val target = (pagerState.currentPage + 1).coerceAtMost(heroPages.lastIndex)
+                                        scope.launch { pagerState.animateScrollToPage(target) }
+                                    },
+                                    enabled = pagerState.currentPage < heroPages.lastIndex,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 12.dp)
+                                        .size(36.dp)
+                                        .background(Color.White.copy(alpha = 0.72f), CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = "Next dish",
+                                        tint = BrandRedDark
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    heroPages.forEachIndexed { index, _ ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(if (index == pagerState.currentPage) 8.dp else 7.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (index == pagerState.currentPage) Color.White
+                                                    else Color.White.copy(alpha = 0.55f)
+                                                )
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
                     // Dish Info Section
                     item {
+                        val newsreader = NewsreaderFontFamily()
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -293,11 +395,25 @@ fun DishDetailScreen(
                         ) {
                             // Name
                             Text(
-                                text = dish.name,
+                                text = currentPage.dishName,
                                 color = appColors().TextPrimary,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold
                             )
+
+                            val posterDescription = uiState.featuredReview?.comment?.trim().orEmpty()
+                            if (posterDescription.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "\"$posterDescription\"",
+                                    color = BrandRedDark,
+                                    fontSize = 20.sp,
+                                    fontFamily = newsreader,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 3,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(8.dp))
 
@@ -458,12 +574,87 @@ fun DishDetailScreen(
                             )
                         }
 
-                        items(uiState.reviews, key = { it.id }) { review ->
-                            ReviewItem(review = review)
-                            HorizontalDivider(
-                                color = appColors().Surface,
-                                modifier = Modifier.padding(horizontal = 16.dp)
-                            )
+                        item {
+                            val hasAnchorReview = uiState.featuredReview != null || uiState.reviews.isNotEmpty()
+                            val inputShape = RoundedCornerShape(16.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = uiState.commentDraft,
+                                    onValueChange = viewModel::onCommentDraftChange,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .border(
+                                            width = 2.dp,
+                                            color = BrandRedDark,
+                                            shape = inputShape
+                                        ),
+                                    placeholder = { Text("Write a comment") },
+                                    singleLine = false,
+                                    maxLines = 3,
+                                    enabled = hasAnchorReview && !uiState.isCommentSubmitting,
+                                    shape = inputShape,
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedBorderColor = Color.Transparent,
+                                        unfocusedBorderColor = Color.Transparent,
+                                        cursorColor = BrandRedDark,
+                                        focusedTextColor = appColors().TextPrimary,
+                                        unfocusedTextColor = appColors().TextPrimary
+                                    ),
+                                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                        imeAction = ImeAction.Send
+                                    ),
+                                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(
+                                        onSend = { viewModel.submitComment() }
+                                    )
+                                )
+
+                                Button(
+                                    onClick = { viewModel.submitComment() },
+                                    enabled = hasAnchorReview &&
+                                        !uiState.isCommentSubmitting &&
+                                        uiState.commentDraft.isNotBlank(),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = BrandRedDark)
+                                ) {
+                                    Text(if (uiState.isCommentSubmitting) "..." else "Post")
+                                }
+                            }
+                        }
+
+                        if (!uiState.commentErrorMessage.isNullOrBlank()) {
+                            item {
+                                Text(
+                                    text = uiState.commentErrorMessage ?: "",
+                                    color = appColors().Error,
+                                    fontSize = 12.sp,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+
+                        if (uiState.comments.isEmpty()) {
+                            item {
+                                Text(
+                                    text = "No comments yet. Be the first to comment!",
+                                    color = appColors().TextSecondary,
+                                    fontSize = 14.sp,
+                                    modifier = Modifier.padding(16.dp)
+                                )
+                            }
+                        } else {
+                            items(uiState.comments, key = { it.id }) { comment ->
+                                DishCommentItem(comment = comment, featuredRating = uiState.featuredReview?.rating)
+                                HorizontalDivider(
+                                    color = appColors().Surface,
+                                    modifier = Modifier.padding(horizontal = 16.dp)
+                                )
+                            }
                         }
                     } else if (!uiState.isLoading) {
                         item {
@@ -593,6 +784,75 @@ private fun ReviewItem(review: Review) {
     }
 }
 
+@Composable
+private fun DishCommentItem(
+    comment: Comment,
+    featuredRating: Float?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(appColors().SurfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = comment.userName.firstOrNull()?.toString() ?: "?",
+                color = appColors().Primary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = comment.userName,
+                    color = appColors().TextPrimary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                if ((featuredRating ?: 0f) > 0f) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.Star,
+                            contentDescription = null,
+                            tint = appColors().StarYellow,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = formatRatingValue(featuredRating ?: 0f),
+                            color = appColors().TextPrimary,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = comment.content,
+                color = appColors().TextSecondary,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
+            )
+        }
+    }
+}
+
 /**
  * Single related dish item
  */
@@ -672,4 +932,32 @@ private fun formatRatingValue(value: Float): String {
     val intPart = value.toInt()
     val decimalPart = ((value - intPart) * 10).toInt()
     return "$intPart.$decimalPart"
+}
+
+private fun buildHeroPages(
+    dish: Dish,
+    featuredReview: Review?,
+    groupedDishes: List<GroupedReviewDish>
+): List<DishDetailHeroPage> {
+    val groupedPages = groupedDishes
+        .filter { !it.imageUrl.isNullOrBlank() || it.dishName.isNotBlank() }
+        .map {
+            DishDetailHeroPage(
+                dishId = it.dishId,
+                ratingId = it.ratingId,
+                dishName = it.dishName.ifBlank { dish.name },
+                imageUrl = it.imageUrl
+            )
+        }
+
+    if (groupedPages.isNotEmpty()) return groupedPages
+
+    return listOf(
+        DishDetailHeroPage(
+            dishId = dish.id,
+            ratingId = featuredReview?.id,
+            dishName = dish.name,
+            imageUrl = featuredReview?.dishImageUrl ?: dish.imageUrl
+        )
+    )
 }

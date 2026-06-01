@@ -2,10 +2,13 @@ package com.example.smackcheck2.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.model.DishRatingUiState
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.service.DishRatingSubmissionRequest
 import com.example.smackcheck2.service.DishRatingSubmissionService
+import com.example.smackcheck2.service.ReceiptAttachment
+import com.example.smackcheck2.service.ReceiptSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,9 +21,13 @@ import kotlinx.coroutines.launch
  * Delegates submission orchestration to [DishRatingSubmissionService],
  * keeping only UI state management and input handling.
  */
-class DishRatingViewModel : ViewModel() {
+class DishRatingViewModel(
+    private val preferencesRepository: PreferencesRepository? = null
+) : ViewModel() {
 
-    private val submissionService = DishRatingSubmissionService()
+    private val submissionService = DishRatingSubmissionService(
+        preferencesRepository = preferencesRepository
+    )
 
     private val _uiState = MutableStateFlow(DishRatingUiState())
     val uiState: StateFlow<DishRatingUiState> = _uiState.asStateFlow()
@@ -29,15 +36,30 @@ class DishRatingViewModel : ViewModel() {
     private var selectedRestaurant: Restaurant? = null
     private var ratingLatitude: Double? = null
     private var ratingLongitude: Double? = null
+    private var initializedImageUri: String? = null
+    private var hasUserEditedDishName = false
 
     fun initialize(dishName: String, imageUri: String, restaurantId: String = "") {
         this.restaurantId = restaurantId
+        if (initializedImageUri != imageUri) {
+            initializedImageUri = imageUri
+            hasUserEditedDishName = false
+        }
+        val currentDishName = _uiState.value.dishName
+        val shouldApplyName = currentDishName.isBlank() ||
+            currentDishName == "Identifying..." ||
+            (!hasUserEditedDishName && dishName != "Identifying...")
         _uiState.update {
             it.copy(
-                dishName = dishName,
+                dishName = if (shouldApplyName) dishName else it.dishName,
                 imageUri = imageUri
             )
         }
+    }
+
+    fun onDishNameChange(name: String) {
+        hasUserEditedDishName = true
+        _uiState.update { it.copy(dishName = name) }
     }
 
     fun setImageBytes(bytes: ByteArray) {
@@ -77,6 +99,14 @@ class DishRatingViewModel : ViewModel() {
     }
 
     fun submitRating(onSuccess: (String) -> Unit) {
+        submitRating(receiptBytes = null, receiptSource = null, onSuccess = onSuccess)
+    }
+
+    fun submitRating(
+        receiptBytes: ByteArray?,
+        receiptSource: ReceiptSource?,
+        onSuccess: (String) -> Unit
+    ) {
         val currentState = _uiState.value
 
         if (currentState.dishName.isBlank()) {
@@ -107,23 +137,34 @@ class DishRatingViewModel : ViewModel() {
                 restaurantId = this@DishRatingViewModel.restaurantId,
                 selectedRestaurant = this@DishRatingViewModel.selectedRestaurant,
                 latitude = this@DishRatingViewModel.ratingLatitude,
-                longitude = this@DishRatingViewModel.ratingLongitude
+                longitude = this@DishRatingViewModel.ratingLongitude,
+                receiptAttachment = if (receiptBytes != null && receiptSource != null) {
+                    ReceiptAttachment(receiptBytes, receiptSource)
+                } else {
+                    null
+                }
             )
 
-            val result = submissionService.submit(request)
+            val result = if (preferencesRepository != null) {
+                submissionService.enqueueForBackgroundSubmission(request)
+                    .map { pending -> pending.localId }
+            } else {
+                submissionService.submit(request)
+                    .map { submission -> submission.ratingId }
+            }
 
             result.fold(
-                onSuccess = { submissionResult ->
+                onSuccess = { ratingId ->
                     _uiState.update {
                         it.copy(
                             isSubmitting = false,
-                            isSuccess = true,
-                            xpEarned = submissionResult.xpEarned,
-                            showXpNotification = true,
-                            submittedRatingId = submissionResult.ratingId
+                            isSuccess = preferencesRepository == null,
+                            xpEarned = null,
+                            showXpNotification = false,
+                            submittedRatingId = ratingId
                         )
                     }
-                    onSuccess(submissionResult.ratingId)
+                    onSuccess(ratingId)
                 },
                 onFailure = { error ->
                     val message = when (error) {
@@ -156,5 +197,7 @@ class DishRatingViewModel : ViewModel() {
         selectedRestaurant = null
         ratingLatitude = null
         ratingLongitude = null
+        initializedImageUri = null
+        hasUserEditedDishName = false
     }
 }

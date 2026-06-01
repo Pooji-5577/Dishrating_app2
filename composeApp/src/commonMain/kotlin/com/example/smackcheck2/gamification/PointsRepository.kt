@@ -1,36 +1,35 @@
 package com.example.smackcheck2.gamification
 
-import com.example.smackcheck2.data.SupabaseClient
+import com.example.smackcheck2.data.ApiClient
+import com.example.smackcheck2.data.SupabaseClientProvider
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.postgrest.from
-import io.github.jan.supabase.postgrest.query.Order
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.decodeFromJsonElement
 import com.example.smackcheck2.util.Logger
 
 /**
- * Repository that handles all point-earning operations against Supabase.
+ * Repository that handles all point-earning operations against the custom backend.
  *
  * Responsibilities:
- *  • Record user actions in `user_actions`
- *  • Increment `total_points` on the `profiles` row
- *  • Fetch leaderboard (top N profiles by total_points)
- *  • Query action counts for challenge progress
+ *  • Record user actions via POST /api/gamification/record-action
+ *  • Fetch leaderboard via GET /api/gamification/leaderboard
+ *  • Query action counts via GET /api/gamification/actions/count
  */
 object PointsRepository {
-
-    private val client get() = SupabaseClient.client
 
     // ── Current user helper ────────────────────────────────────────
     /** Returns the authenticated user's UUID, or null if not signed in. */
     suspend fun currentUserId(): String? {
         return try {
-            client.auth.currentUserOrNull()?.id
+            SupabaseClientProvider.client.auth.currentUserOrNull()?.id
         } catch (_: Exception) {
             null
         }
@@ -41,55 +40,30 @@ object PointsRepository {
     /**
      * Record a point-earning action.
      *
-     * 1. Inserts a row into `user_actions`
-     * 2. Increments `profiles.total_points`
+     * POSTs to /api/gamification/record-action with {action_type, points_earned, metadata}.
      *
      * @param actionType One of [PointsConfig] ACTION_* constants
-     * @param metadata   Optional JSON metadata (e.g. dish name)
+     * @param metadata   Optional metadata (e.g. dish name)
      * @return The number of points earned, or 0 on failure
      */
     suspend fun recordAction(
         actionType: String,
         metadata: Map<String, String> = emptyMap()
     ): Int {
-        val userId = currentUserId() ?: return 0
+        currentUserId() ?: return 0
         val points = PointsConfig.pointsFor(actionType)
         if (points == 0) return 0
 
         return try {
-            // Build metadata JSON string
-            val metaJson = buildJsonObject {
-                metadata.forEach { (k, v) -> put(k, v) }
-            }.toString()
-
-            // 1. Insert action row
-            client.from("user_actions").insert(
-                UserActionRow(
-                    userId = userId,
+            val response: RecordActionResponse = ApiClient.post(
+                path = "gamification/record-action",
+                body = RecordActionRequest(
                     actionType = actionType,
                     pointsEarned = points,
-                    metadata = metaJson
+                    metadata = metadata
                 )
             )
-
-            // 2. Fetch current total_points, increment, and update
-            val profile = client.from("profiles")
-                .select { filter { eq("id", userId) } }
-                .decodeSingleOrNull<LeaderboardProfileRow>()
-
-            val newTotal = (profile?.totalPoints ?: 0) + points
-            val today = currentDateString()
-
-            client.from("profiles").update(
-                ProfilePointsUpdate(
-                    totalPoints = newTotal,
-                    currentStreak = profile?.currentStreak ?: 0,
-                    longestStreak = 0,  // will be fixed by StreakManager
-                    lastActiveDate = today
-                )
-            ) { filter { eq("id", userId) } }
-
-            points
+            response.pointsEarned ?: points
         } catch (e: Exception) {
             Logger.e("PointsRepository", "PointsRepository.recordAction error: ${e.message}", e)
             0
@@ -100,35 +74,14 @@ object PointsRepository {
 
     /**
      * Award the one-time +50 XP bonus for uploading a profile picture.
-     * Checks `profile_picture_uploaded` flag to prevent double-awarding.
+     * The backend checks the flag to prevent double-awarding.
      *
      * @return points earned (50 or 0)
      */
     suspend fun awardFirstProfilePicBonus(): Int {
-        val userId = currentUserId() ?: return 0
-
+        currentUserId() ?: return 0
         return try {
-            // Check if already awarded
-            @kotlinx.serialization.Serializable
-            data class PicFlag(
-                @kotlinx.serialization.SerialName("profile_picture_uploaded")
-                val profilePictureUploaded: Boolean? = false
-            )
-            val flag = client.from("profiles")
-                .select { filter { eq("id", userId) } }
-                .decodeSingleOrNull<PicFlag>()
-
-            if (flag?.profilePictureUploaded == true) return 0
-
-            // Record the action
-            val pts = recordAction(PointsConfig.ACTION_FIRST_PROFILE_PIC)
-
-            // Set the flag so it's not awarded again
-            client.from("profiles").update(
-                ProfilePicFlagUpdate(profilePictureUploaded = true)
-            ) { filter { eq("id", userId) } }
-
-            pts
+            recordAction(PointsConfig.ACTION_FIRST_PROFILE_PIC)
         } catch (e: Exception) {
             Logger.e("PointsRepository", "PointsRepository.awardFirstProfilePicBonus error: ${e.message}", e)
             0
@@ -142,12 +95,23 @@ object PointsRepository {
      */
     suspend fun fetchLeaderboard(limit: Int = 20): List<LeaderboardProfileRow> {
         return try {
-            client.from("profiles")
-                .select()  {
-                    order("total_points", Order.DESCENDING)
-                    limit(limit.toLong())
+            val response = ApiClient.getJsonElement(
+                path = "gamification/leaderboard",
+                params = mapOf("limit" to limit.toString())
+            )
+            val items = when (response) {
+                is JsonArray -> response
+                is JsonObject -> {
+                    response["leaderboard"] as? JsonArray
+                        ?: response["profiles"] as? JsonArray
+                        ?: response["users"] as? JsonArray
+                        ?: response["items"] as? JsonArray
+                        ?: response["data"] as? JsonArray
+                        ?: JsonArray(emptyList())
                 }
-                .decodeList<LeaderboardProfileRow>()
+                else -> JsonArray(emptyList())
+            }
+            ApiClient.json.decodeFromJsonElement<List<LeaderboardProfileRow>>(items)
         } catch (e: Exception) {
             Logger.e("PointsRepository", "PointsRepository.fetchLeaderboard error: ${e.message}", e)
             emptyList()
@@ -158,11 +122,10 @@ object PointsRepository {
      * Get the current user's rank (1-based) on the leaderboard.
      */
     suspend fun fetchCurrentUserRank(): Int {
-        val userId = currentUserId() ?: return 0
+        currentUserId() ?: return 0
         return try {
-            val leaderboard = fetchLeaderboard(limit = 200)
-            val index = leaderboard.indexOfFirst { it.id == userId }
-            if (index >= 0) index + 1 else 0
+            val response: RankResponse = ApiClient.get("gamification/my-rank")
+            response.rank ?: 0
         } catch (_: Exception) {
             0
         }
@@ -172,11 +135,11 @@ object PointsRepository {
      * Get the current user's profile (for points, streak, level display).
      */
     suspend fun fetchCurrentUserProfile(): LeaderboardProfileRow? {
-        val userId = currentUserId() ?: return null
+        currentUserId() ?: return null
         return try {
-            client.from("profiles")
-                .select { filter { eq("id", userId) } }
-                .decodeSingleOrNull<LeaderboardProfileRow>()
+            val leaderboard = fetchLeaderboard(limit = 200)
+            val userId = currentUserId() ?: return null
+            leaderboard.firstOrNull { it.id == userId }
         } catch (e: Exception) {
             Logger.e("PointsRepository", "PointsRepository.fetchCurrentUserProfile error: ${e.message}", e)
             null
@@ -190,25 +153,23 @@ object PointsRepository {
      * on or after [sinceDate] (inclusive, "YYYY-MM-DD").
      */
     suspend fun countActionsSince(actionType: String, sinceDate: String): Int {
-        val userId = currentUserId() ?: return 0
+        currentUserId() ?: return 0
         return try {
-            val rows = client.from("user_actions")
-                .select {
-                    filter {
-                        eq("user_id", userId)
-                        eq("action_type", actionType)
-                        gte("created_at", "${sinceDate}T00:00:00Z")
-                    }
-                }
-                .decodeList<UserActionRow>()
-            rows.size
+            val response: ActionCountResponse = ApiClient.get(
+                path = "gamification/actions/count",
+                params = mapOf(
+                    "actionType" to actionType,
+                    "since" to sinceDate
+                )
+            )
+            response.count ?: 0
         } catch (e: Exception) {
             Logger.e("PointsRepository", "PointsRepository.countActionsSince error: ${e.message}", e)
             0
         }
     }
 
-    // ── Date helper ────────────────────────────────────────────────
+    // ── Date helpers ────────────────────────────────────────────────
     /**
      * Returns today's date as "YYYY-MM-DD" in a platform-agnostic way.
      */
@@ -229,3 +190,30 @@ object PointsRepository {
         return monday.toString()
     }
 }
+
+// ── Internal request/response DTOs ────────────────────────────────
+
+@Serializable
+private data class RecordActionRequest(
+    @SerialName("action_type")
+    val actionType: String,
+    @SerialName("points_earned")
+    val pointsEarned: Int,
+    val metadata: Map<String, String> = emptyMap()
+)
+
+@Serializable
+private data class RecordActionResponse(
+    @SerialName("points_earned")
+    val pointsEarned: Int? = null
+)
+
+@Serializable
+private data class RankResponse(
+    val rank: Int? = null
+)
+
+@Serializable
+private data class ActionCountResponse(
+    val count: Int? = null
+)

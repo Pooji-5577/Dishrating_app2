@@ -1,6 +1,7 @@
 package com.example.smackcheck2.platform
 
 import com.example.smackcheck2.model.NotificationSettings
+import com.example.smackcheck2.model.PendingRating
 import com.example.smackcheck2.model.PrivacySettings
 import com.example.smackcheck2.model.ThemePreference
 
@@ -30,8 +31,17 @@ expect class PreferencesManager {
     suspend fun hasSeenPermissionsOnboarding(): Boolean
     suspend fun setPermissionsOnboardingSeen()
 
+    suspend fun hasDismissedProfileSetup(userId: String): Boolean
+    suspend fun setProfileSetupDismissed(userId: String)
+
     suspend fun saveBookmarks(bookmarkIds: Set<String>)
     suspend fun getBookmarks(): Set<String>
+
+    suspend fun savePendingRatings(ratings: List<PendingRating>)
+    suspend fun getPendingRatings(): List<PendingRating>
+    suspend fun savePendingRatingImage(localId: String, imageBytes: ByteArray): String?
+    suspend fun readPendingRatingImage(imagePath: String): ByteArray?
+    suspend fun deletePendingRatingImage(imagePath: String)
 
     suspend fun clearAll()
 }

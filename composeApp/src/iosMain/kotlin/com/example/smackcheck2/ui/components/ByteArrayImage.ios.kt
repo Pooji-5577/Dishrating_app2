@@ -1,24 +1,38 @@
 package com.example.smackcheck2.ui.components
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import org.jetbrains.skia.Image
 
 /**
  * iOS implementation of ByteArrayImage
- * Stub - requires native implementation
  */
 @Composable
 actual fun ByteArrayImage(
     imageBytes: ByteArray,
     contentDescription: String?,
     modifier: Modifier,
-    contentScale: ContentScale
+    contentScale: ContentScale,
+    colorFilter: ColorFilter?
 ) {
-    // iOS implementation requires native code to convert bytes to UIImage
-    // For now, show placeholder
-    Box(modifier = modifier.background(Color.DarkGray))
+    val imageBitmap = remember(imageBytes) {
+        runCatching {
+            Image.makeFromEncoded(imageBytes).toComposeImageBitmap()
+        }.getOrNull()
+    }
+
+    if (imageBitmap != null) {
+        Image(
+            bitmap = imageBitmap,
+            contentDescription = contentDescription,
+            modifier = modifier,
+            contentScale = contentScale,
+            colorFilter = colorFilter
+        )
+    }
 }

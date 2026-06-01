@@ -1,5 +1,7 @@
 package com.example.smackcheck2.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * User data model
  */
@@ -16,7 +18,8 @@ data class User(
     val bio: String? = null,
     val badges: List<Badge> = emptyList(),
     val followersCount: Int = 0,
-    val followingCount: Int = 0
+    val followingCount: Int = 0,
+    val profileSetupCompleted: Boolean = false
 )
 
 /**
@@ -48,7 +51,8 @@ data class Dish(
     val uploaderProfileUrl: String? = null,
     val userId: String = "",
     val createdAt: Long = 0L,
-    val price: Double? = null
+    val price: Double? = null,
+    val currencyCode: String? = null
 )
 
 /**
@@ -89,7 +93,8 @@ data class Review(
     val commentsCount: Int = 0,
     val isLiked: Boolean = false,
     val createdAt: Long = 0L,
-    val price: Double? = null
+    val price: Double? = null,
+    val currencyCode: String? = null
 )
 
 /**
@@ -115,6 +120,8 @@ data class FeedItem(
     val comment: String = "",
     val imageUrls: List<String> = emptyList(),
     val price: Double? = null,
+    val currencyCode: String? = null,
+    val syncStatus: PendingRatingSyncStatus? = null,
     val isGrouped: Boolean = false,
     val groupId: String? = null,
     val groupedDishes: List<GroupedFeedDish> = emptyList()
@@ -125,8 +132,74 @@ data class GroupedFeedDish(
     val dishName: String,
     val imageUrl: String?,
     val price: Double? = null,
+    val currencyCode: String? = null,
     val ratingId: String? = null
 )
+
+data class GroupedReviewDish(
+    val ratingId: String,
+    val dishId: String,
+    val dishName: String,
+    val imageUrl: String?,
+    val price: Double? = null,
+    val currencyCode: String? = null
+)
+
+@Serializable
+enum class PendingRatingSyncStatus {
+    PENDING,
+    SYNCING,
+    FAILED
+}
+
+@Serializable
+data class PendingRating(
+    val localId: String,
+    val userId: String,
+    val userName: String,
+    val userProfilePhotoUrl: String? = null,
+    val dishName: String,
+    val rating: Float,
+    val comment: String = "",
+    val tags: List<String> = emptyList(),
+    val price: Double? = null,
+    val currencyCode: String? = null,
+    val imagePath: String? = null,
+    val restaurantId: String,
+    val restaurantName: String,
+    val restaurantCity: String = "",
+    val restaurantCuisine: String = "",
+    val restaurantLatitude: Double? = null,
+    val restaurantLongitude: Double? = null,
+    val restaurantGooglePlaceId: String? = null,
+    val restaurantPhotoUrl: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val createdAt: Long,
+    val status: PendingRatingSyncStatus = PendingRatingSyncStatus.PENDING,
+    val lastError: String? = null
+) {
+    fun toFeedItem(): FeedItem = FeedItem(
+        id = localId,
+        userId = userId,
+        userProfileImageUrl = userProfilePhotoUrl,
+        userName = userName.ifBlank { "You" },
+        dishImageUrl = imagePath?.let { "file://$it" },
+        dishName = dishName,
+        restaurantName = restaurantName,
+        restaurantCity = restaurantCity,
+        rating = rating,
+        likesCount = 0,
+        commentsCount = 0,
+        isLiked = false,
+        timestamp = createdAt,
+        comment = comment,
+        imageUrls = imagePath?.let { listOf("file://$it") } ?: emptyList(),
+        price = price,
+        currencyCode = currencyCode,
+        syncStatus = status
+    )
+}
 
 /**
  * Comment data model for rating comments
@@ -233,6 +306,9 @@ data class Story(
     val userName: String = "",
     val userProfileUrl: String? = null,
     val imageUrl: String = "",
+    val dishName: String? = null,
+    val rating: Float? = null,
+    val city: String? = null,
     val createdAt: Long = 0L,
     val expiresAt: Long = 0L
 )
@@ -255,8 +331,10 @@ data class SocialMapUiState(
     val isRefreshing: Boolean = false,
     val lastRefreshTime: Long = 0L,
     val locationPermissionGranted: Boolean = false,
-    val mapMode: MapMode = MapMode.NEARBY,
+    val mapMode: MapMode = MapMode.MY_RATINGS,
     val recenterTrigger: Int = 0,
-    val fitBoundsTrigger: Int = 0
+    val fitBoundsTrigger: Int = 0,
+    val cameraFocusLatitude: Double? = null,
+    val cameraFocusLongitude: Double? = null,
+    val cameraFocusTrigger: Int = 0
 )
-

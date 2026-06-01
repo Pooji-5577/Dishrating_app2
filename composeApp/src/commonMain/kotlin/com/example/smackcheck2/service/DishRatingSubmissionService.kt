@@ -3,15 +3,19 @@ package com.example.smackcheck2.service
 import com.example.smackcheck2.analytics.Analytics
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.data.repository.DatabaseRepository
+import com.example.smackcheck2.data.repository.PreferencesRepository
 import com.example.smackcheck2.data.repository.SocialRepository
 import com.example.smackcheck2.data.repository.StorageRepository
 import com.example.smackcheck2.model.Dish
+import com.example.smackcheck2.model.PendingRating
+import com.example.smackcheck2.model.PendingRatingSyncStatus
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.data.repository.NotificationService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
 import com.example.smackcheck2.util.Logger
 
 /**
@@ -28,7 +32,8 @@ data class DishRatingSubmissionRequest(
     val restaurantId: String,
     val selectedRestaurant: Restaurant? = null,
     val latitude: Double? = null,
-    val longitude: Double? = null
+    val longitude: Double? = null,
+    val receiptAttachment: ReceiptAttachment? = null
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -42,7 +47,8 @@ data class DishRatingSubmissionRequest(
             restaurantId == other.restaurantId &&
             selectedRestaurant == other.selectedRestaurant &&
             latitude == other.latitude &&
-            longitude == other.longitude
+            longitude == other.longitude &&
+            receiptAttachment == other.receiptAttachment
     }
 
     override fun hashCode(): Int {
@@ -56,8 +62,33 @@ data class DishRatingSubmissionRequest(
         result = 31 * result + (selectedRestaurant?.hashCode() ?: 0)
         result = 31 * result + (latitude?.hashCode() ?: 0)
         result = 31 * result + (longitude?.hashCode() ?: 0)
+        result = 31 * result + (receiptAttachment?.hashCode() ?: 0)
         return result
     }
+}
+
+data class ReceiptAttachment(
+    val imageBytes: ByteArray,
+    val source: ReceiptSource
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ReceiptAttachment) return false
+        if (!imageBytes.contentEquals(other.imageBytes)) return false
+        return source == other.source
+    }
+
+    override fun hashCode(): Int {
+        var result = imageBytes.contentHashCode()
+        result = 31 * result + source.hashCode()
+        return result
+    }
+}
+
+enum class ReceiptSource {
+    CAMERA,
+    GALLERY,
+    SCREENSHOT
 }
 
 /**
@@ -73,7 +104,8 @@ data class DishRatingSubmissionResult(
 
 internal data class SubmissionRestaurant(
     val id: String,
-    val name: String
+    val name: String,
+    val city: String = ""
 )
 
 /**
@@ -102,6 +134,7 @@ class DishRatingSubmissionService(
     private val achievementService: AchievementService = AchievementService(),
     private val notificationService: NotificationService = NotificationService(),
     private val socialRepository: SocialRepository = SocialRepository(),
+    private val preferencesRepository: PreferencesRepository? = null,
     private val sideEffectScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 ) {
 
@@ -132,7 +165,13 @@ class DishRatingSubmissionService(
         val ratingId = insertRating(request, dish.id, restaurant.id, userId, imageUrl)
             .getOrElse { return Result.failure(it) }
 
-        val xpEarned = calculateXp(request, imageUrl)
+        val receiptResult = uploadAndValidateReceiptIfPresent(
+            request = request,
+            userId = userId,
+            ratingId = ratingId
+        ).getOrElse { return Result.failure(it) }
+
+        val xpEarned = calculateXp(request, imageUrl, receiptResult != null)
         trackAnalytics(request, imageUrl, xpEarned)
         runPostSubmissionSideEffects(
             userId = userId,
@@ -151,6 +190,91 @@ class DishRatingSubmissionService(
                 imageUrl = imageUrl
             )
         )
+    }
+
+    suspend fun enqueueForBackgroundSubmission(
+        request: DishRatingSubmissionRequest
+    ): Result<PendingRating> {
+        val store = preferencesRepository
+            ?: return Result.failure(IllegalStateException("Pending rating storage is not configured"))
+
+        val validationError = validate(request)
+        if (validationError != null) {
+            return Result.failure(IllegalArgumentException(validationError))
+        }
+
+        val user = authRepository.getCurrentUser()
+            ?: return Result.failure(IllegalStateException("User not authenticated"))
+
+        val now = Clock.System.now().toEpochMilliseconds()
+        val localId = "pending_rating_$now"
+        val imagePath = request.imageBytes?.let { bytes ->
+            store.savePendingRatingImage(localId, bytes)
+        }
+        val restaurant = request.selectedRestaurant
+
+        val pendingRating = PendingRating(
+            localId = localId,
+            userId = user.id,
+            userName = user.name.ifBlank { user.email.substringBefore("@").ifBlank { "You" } },
+            userProfilePhotoUrl = user.profilePhotoUrl,
+            dishName = request.dishName,
+            rating = request.rating,
+            comment = request.comment,
+            tags = request.tags,
+            price = request.price,
+            imagePath = imagePath,
+            restaurantId = request.restaurantId,
+            restaurantName = restaurant?.name ?: "",
+            restaurantCity = restaurant?.city ?: "",
+            restaurantCuisine = restaurant?.cuisine ?: "",
+            restaurantLatitude = restaurant?.latitude,
+            restaurantLongitude = restaurant?.longitude,
+            restaurantGooglePlaceId = restaurant?.googlePlaceId,
+            restaurantPhotoUrl = restaurant?.photoUrl,
+            latitude = request.latitude,
+            longitude = request.longitude,
+            createdAt = now
+        )
+
+        store.upsertPendingRating(pendingRating)
+        sideEffectScope.launch {
+            processPendingSubmissions()
+        }
+        return Result.success(pendingRating)
+    }
+
+    fun kickPendingSubmissionSync() {
+        if (preferencesRepository == null) return
+        sideEffectScope.launch {
+            processPendingSubmissions()
+        }
+    }
+
+    suspend fun processPendingSubmissions() {
+        val store = preferencesRepository ?: return
+        val pending = store.getPendingRatings()
+        pending.forEach { item ->
+            val syncing = item.copy(status = PendingRatingSyncStatus.SYNCING, lastError = null)
+            store.upsertPendingRating(syncing)
+
+            val imageBytes = syncing.imagePath?.let { store.readPendingRatingImage(it) }
+            val result = submit(syncing.toSubmissionRequest(imageBytes))
+            result.fold(
+                onSuccess = {
+                    store.removePendingRating(syncing.localId)
+                    syncing.imagePath?.let { path -> store.deletePendingRatingImage(path) }
+                },
+                onFailure = { error ->
+                    store.upsertPendingRating(
+                        syncing.copy(
+                            status = PendingRatingSyncStatus.FAILED,
+                            lastError = error.message ?: "Sync failed"
+                        )
+                    )
+                }
+            )
+        }
     }
 
     private fun validate(request: DishRatingSubmissionRequest): String? {
@@ -183,7 +307,8 @@ class DishRatingSubmissionService(
                 .map { restaurant ->
                     SubmissionRestaurant(
                         id = restaurant.id,
-                        name = restaurant.name
+                        name = restaurant.name,
+                        city = restaurant.city
                     )
                 }
         }
@@ -194,7 +319,8 @@ class DishRatingSubmissionService(
                     ?: throw IllegalArgumentException("Selected restaurant no longer exists")
                 SubmissionRestaurant(
                     id = existing.id,
-                    name = existing.name
+                    name = existing.name,
+                    city = existing.city
                 )
             }
     }
@@ -234,13 +360,35 @@ class DishRatingSubmissionService(
 
     private fun calculateXp(
         request: DishRatingSubmissionRequest,
-        imageUrl: String?
+        imageUrl: String?,
+        hasValidatedReceipt: Boolean
     ): Int {
         val baseXp = 10
         val photoBonus = if (imageUrl != null) 5 else 0
         val commentBonus = if (request.comment.length > 50) 10 else 0
         val tagBonus = request.tags.size * 2
-        return baseXp + photoBonus + commentBonus + tagBonus
+        val receiptBonus = if (hasValidatedReceipt) 15 else 0
+        return baseXp + photoBonus + commentBonus + tagBonus + receiptBonus
+    }
+
+    private suspend fun uploadAndValidateReceiptIfPresent(
+        request: DishRatingSubmissionRequest,
+        userId: String,
+        ratingId: String
+    ): Result<Unit?> {
+        val receipt = request.receiptAttachment ?: return Result.success(null)
+        val uploadResult = storageRepository.uploadReceiptImage(
+            userId = userId,
+            imageBytes = receipt.imageBytes,
+            fileName = "receipt_$ratingId.jpg"
+        )
+        val receiptUrl = uploadResult.getOrElse { return Result.failure(it) }
+
+        return databaseRepository.validateRatingReceipt(
+            ratingId = ratingId,
+            receiptImageUrl = receiptUrl,
+            source = receipt.source.name.lowercase()
+        ).map { Unit }
     }
 
     private suspend fun awardXp(userId: String, xpAmount: Int) {
@@ -286,7 +434,13 @@ class DishRatingSubmissionService(
                 .onFailure { Logger.e("DishRatingSubmissionService", "Failed to refresh restaurant rating: ${it.message}", it) }
 
             if (imageUrl != null) {
-                socialRepository.uploadStory(userId, imageUrl)
+                socialRepository.uploadStory(
+                    userId = userId,
+                    imageUrl = imageUrl,
+                    dishName = request.dishName,
+                    rating = request.rating,
+                    city = restaurant.city.ifBlank { request.selectedRestaurant?.city ?: "" }
+                )
                     .onSuccess { Logger.d("DishRatingSubmissionService", "Auto-published story for rating $ratingId") }
                     .onFailure { Logger.e("DishRatingSubmissionService", "Failed to auto-publish story: ${it.message}", it) }
             }
@@ -333,4 +487,30 @@ class DishRatingSubmissionService(
             notificationService.notifyFirstDish(userId, request.dishName)
         }
     }
+}
+
+private fun PendingRating.toSubmissionRequest(imageBytes: ByteArray?): DishRatingSubmissionRequest {
+    val restaurant = Restaurant(
+        id = restaurantId,
+        name = restaurantName,
+        city = restaurantCity,
+        cuisine = restaurantCuisine,
+        latitude = restaurantLatitude,
+        longitude = restaurantLongitude,
+        googlePlaceId = restaurantGooglePlaceId,
+        photoUrl = restaurantPhotoUrl
+    )
+
+    return DishRatingSubmissionRequest(
+        dishName = dishName,
+        rating = rating,
+        comment = comment,
+        tags = tags,
+        price = price,
+        imageBytes = imageBytes,
+        restaurantId = restaurantId,
+        selectedRestaurant = restaurant.takeIf { it.name.isNotBlank() },
+        latitude = latitude,
+        longitude = longitude
+    )
 }

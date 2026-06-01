@@ -33,12 +33,14 @@ data class GroupedDishReviewItemRequest(
     val dishName: String,
     val image: CapturedImage,
     val price: Double? = null,
-    val aiConfidence: Float? = null
+    val aiConfidence: Float? = null,
+    val rating: Float = 0f,
+    val currencyCode: String? = null
 )
 
 data class GroupedDishReviewSubmissionRequest(
     val items: List<GroupedDishReviewItemRequest>,
-    val rating: Float,
+    val rating: Float = 0f,
     val comment: String = "",
     val tags: List<String> = emptyList(),
     val restaurantId: String,
@@ -102,17 +104,7 @@ class GroupedDishReviewSubmissionService(
             restaurantId = restaurant.id,
             uploadedImageUrls = uploadedImageUrls,
             receiptImageUrl = receiptImageUrl
-        ).getOrElse { backendError ->
-            Logger.e("GroupedDishReviewSubmissionService", "Backend grouped review unavailable, falling back to Supabase: ${backendError.message}", backendError)
-            submitGroupedDirectly(
-                request = request,
-                userId = userId,
-                restaurantId = restaurant.id,
-                restaurantName = restaurant.name,
-                uploadedImageUrls = uploadedImageUrls,
-                receiptImageUrl = receiptImageUrl
-            ).getOrElse { return Result.failure(it) }
-        }
+        ).getOrElse { return Result.failure(it) }
 
         val xpEarned = calculateXp(request)
         trackAnalytics(request, xpEarned)
@@ -131,7 +123,7 @@ class GroupedDishReviewSubmissionService(
     private fun validate(request: GroupedDishReviewSubmissionRequest): String? {
         if (request.items.isEmpty()) return "Add at least one dish photo"
         if (request.items.any { it.dishName.isBlank() }) return "Every dish needs a name"
-        if (request.rating == 0f) return "Please provide a rating"
+        if (request.items.any { it.rating <= 0f }) return "Please rate every dish"
         if (request.restaurantId.isBlank() && request.selectedRestaurant == null) return "Please select a restaurant"
         return null
     }
@@ -189,7 +181,7 @@ class GroupedDishReviewSubmissionService(
                 setBody(json.encodeToString(
                     BackendGroupedReviewRequest(
                         restaurantId = restaurantId,
-                        rating = request.rating,
+                        rating = request.rating.takeIf { it > 0f },
                         comment = request.comment,
                         tags = request.tags,
                         receiptImageUrl = receiptImageUrl,
@@ -202,7 +194,9 @@ class GroupedDishReviewSubmissionService(
                                 imageUrl = uploadedImageUrls[index],
                                 price = item.price,
                                 aiConfidence = item.aiConfidence,
-                                sortOrder = index
+                                sortOrder = index,
+                                rating = item.rating,
+                                currencyCode = item.currencyCode
                             )
                         }
                     )
@@ -224,69 +218,6 @@ class GroupedDishReviewSubmissionService(
             Logger.e("GroupedDishReviewSubmissionService", "Backend grouped review failed: ${e.message}", e)
             Result.failure(e)
         }
-    }
-
-    private suspend fun submitGroupedDirectly(
-        request: GroupedDishReviewSubmissionRequest,
-        userId: String,
-        restaurantId: String,
-        restaurantName: String,
-        uploadedImageUrls: List<String>,
-        receiptImageUrl: String?
-    ): Result<BackendGroupedReviewResult> = try {
-        val groupId = databaseRepository.createReviewGroup(
-            userId = userId,
-            restaurantId = restaurantId,
-            rating = request.rating,
-            comment = request.comment,
-            tags = request.tags,
-            receiptImageUrl = receiptImageUrl,
-            receiptExtractedData = receiptPayload(request),
-            latitude = request.latitude,
-            longitude = request.longitude
-        ).getOrThrow()
-
-        val dishes = request.items.mapIndexed { index, item ->
-            databaseRepository.createOrGetDish(
-                name = item.dishName,
-                restaurantId = restaurantId,
-                imageUrl = uploadedImageUrls[index],
-                restaurantName = restaurantName
-            ).getOrThrow()
-        }
-
-        val primaryRatingId = databaseRepository.submitRating(
-            userId = userId,
-            dishId = dishes.first().id,
-            restaurantId = restaurantId,
-            rating = request.rating,
-            comment = request.comment,
-            imageUrl = uploadedImageUrls.firstOrNull(),
-            latitude = request.latitude,
-            longitude = request.longitude,
-            price = request.items.firstOrNull()?.price,
-            groupId = groupId
-        ).getOrThrow()
-
-        databaseRepository.setReviewGroupPrimaryRating(groupId, primaryRatingId).getOrThrow()
-
-        request.items.forEachIndexed { index, item ->
-            databaseRepository.addReviewGroupItem(
-                groupId = groupId,
-                ratingId = primaryRatingId,
-                dishId = dishes[index].id,
-                dishName = item.dishName,
-                imageUrl = uploadedImageUrls[index],
-                price = item.price,
-                sortOrder = index,
-                aiConfidence = item.aiConfidence
-            ).getOrThrow()
-        }
-
-        Result.success(BackendGroupedReviewResult(groupId, primaryRatingId))
-    } catch (e: Exception) {
-        Logger.e("GroupedDishReviewSubmissionService", "Direct grouped review fallback failed: ${e.message}", e)
-        Result.failure(e)
     }
 
     private fun currentAccessToken(): String? {
@@ -346,7 +277,7 @@ private data class ReceiptPayload(
 private data class BackendGroupedReviewRequest(
     @SerialName("restaurant_id")
     val restaurantId: String,
-    val rating: Float,
+    val rating: Float? = null,
     val comment: String,
     val tags: List<String>,
     @SerialName("receipt_image_url")
@@ -365,10 +296,13 @@ private data class BackendGroupedReviewItem(
     @SerialName("image_url")
     val imageUrl: String,
     val price: Double?,
+    @SerialName("currency_code")
+    val currencyCode: String?,
     @SerialName("ai_confidence")
     val aiConfidence: Float?,
     @SerialName("sort_order")
-    val sortOrder: Int
+    val sortOrder: Int,
+    val rating: Float
 )
 
 @Serializable

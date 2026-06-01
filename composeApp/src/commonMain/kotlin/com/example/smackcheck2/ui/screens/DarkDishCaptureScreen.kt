@@ -3,6 +3,8 @@ package com.example.smackcheck2.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
@@ -20,6 +22,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -55,6 +58,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -66,11 +71,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.model.CapturedImage
 import com.example.smackcheck2.platform.ImagePicker
@@ -81,6 +89,10 @@ import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.PhotoCropMode
+import com.example.smackcheck2.util.PhotoEditState
+import com.example.smackcheck2.util.PhotoFilterPreset
+import com.example.smackcheck2.util.toColorFilter
 import com.example.smackcheck2.viewmodel.DishCaptureViewModel
 import kotlinx.coroutines.launch
 
@@ -90,6 +102,7 @@ private val CrimsonRed = BrandRed
 private val RosePink = Color(0xFFBB5B5C)
 private val CreamWhite = Color(0xFFFFF8F0)
 private val WarmBeige = Color(0xFFF5EDE3)
+private val LightChipBackground = Color(0xFFF7EAEA)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -99,7 +112,8 @@ fun DarkDishCaptureScreen(
     onNavigateBack: () -> Unit,
     onImageCaptured: (imageUri: String, dishName: String, imageBytes: ByteArray?, allImages: List<CapturedImage>, cuisine: String?, confidence: Float, restaurantChain: String?, restaurantType: String?) -> Unit,
     isStoryMode: Boolean = false,
-    onAddManually: ((String) -> Unit)? = null
+    onAddManually: ((String) -> Unit)? = null,
+    onImageReady: ((com.example.smackcheck2.platform.ImageResult) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val coroutineScope = rememberCoroutineScope()
@@ -165,6 +179,8 @@ fun DarkDishCaptureScreen(
                     if (result != null) {
                         if (pendingAdditionalCameraCapture && uiState.imageUri != null) {
                             viewModel.onAdditionalImageCaptured(result)
+                        } else if (onImageReady != null) {
+                            onImageReady(result)
                         } else {
                             viewModel.onImageCaptured(result)
                         }
@@ -199,6 +215,7 @@ fun DarkDishCaptureScreen(
                     canAddMoreImages = viewModel.canAddMoreImages(),
                     onSelectImage = { viewModel.selectImage(it) },
                     onRemoveImage = { viewModel.removeImage(it) },
+                    onPhotoEditChange = { viewModel.updatePhotoEdit(it) },
                     onAddMoreFromCamera = {
                         pendingAdditionalCameraCapture = true
                         requestCameraPermission()
@@ -286,9 +303,16 @@ fun DarkDishCaptureScreen(
                                 .clickable {
                                     showPickerSheet = false
                                     coroutineScope.launch {
-                                        val result = imagePicker?.pickFromGallery()
-                                        if (result != null) viewModel.onImageCaptured(result)
-                                        else showPickerSheet = true
+                                        val results = imagePicker?.pickMultipleFromGallery(DishCaptureViewModel.MAX_IMAGES).orEmpty()
+                                        if (results.isNotEmpty()) {
+                                            if (onImageReady != null) {
+                                                onImageReady(results.first())
+                                            } else {
+                                                viewModel.onImagesSelected(results)
+                                            }
+                                        } else {
+                                            showPickerSheet = true
+                                        }
                                     }
                                 }
                                 .padding(16.dp),
@@ -303,7 +327,7 @@ fun DarkDishCaptureScreen(
                             }
                             Column {
                                 Text("Choose from Gallery", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color(0xFF2D2F2F))
-                                Text("Pick an existing photo", fontSize = 13.sp, color = Color(0xFF888888))
+                                Text("Pick up to 5 photos", fontSize = 13.sp, color = Color(0xFF888888))
                             }
                         }
                     }
@@ -502,6 +526,7 @@ private fun ImagePreviewWithAI(
     canAddMoreImages: Boolean,
     onSelectImage: (Int) -> Unit,
     onRemoveImage: (Int) -> Unit,
+    onPhotoEditChange: (PhotoEditState) -> Unit,
     onAddMoreFromCamera: () -> Unit,
     onAddMoreFromGallery: () -> Unit,
     onEditedNameChange: (String) -> Unit,
@@ -516,6 +541,7 @@ private fun ImagePreviewWithAI(
 ) {
     val displayedImage = allImages.getOrNull(selectedImageIndex)
     val displayedImageBytes = displayedImage?.bytes ?: imageBytes
+    val displayedEditState = displayedImage?.editState ?: PhotoEditState()
 
     Column(
         modifier = Modifier
@@ -667,11 +693,11 @@ private fun ImagePreviewWithAI(
                         .aspectRatio(1f)
                 ) {
                     if (displayedImageBytes != null && displayedImageBytes.isNotEmpty()) {
-                        ByteArrayImage(
-                            imageBytes = displayedImageBytes,
-                            contentDescription = "Captured dish",
+                        ManualCropImage(
+                            imageBytes = displayedImage?.originalBytes ?: displayedImageBytes,
+                            editState = displayedEditState,
+                            onEditChange = onPhotoEditChange,
                             modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
-                            contentScale = ContentScale.Crop
                         )
                     } else {
                         Box(
@@ -742,6 +768,11 @@ private fun ImagePreviewWithAI(
                     imagePicker = imagePicker
                 )
             }
+
+            PhotoEditControls(
+                editState = displayedEditState,
+                onEditChange = onPhotoEditChange
+            )
 
             // TAKE ANOTHER | FROM GALLERY
             Row(
@@ -829,6 +860,216 @@ private fun CaptureActionButton(
                 letterSpacing = 0.5.sp
             )
         }
+    }
+}
+
+@Composable
+private fun ManualCropImage(
+    imageBytes: ByteArray,
+    editState: PhotoEditState,
+    onEditChange: (PhotoEditState) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var cropSize by remember { mutableStateOf(IntSize.Zero) }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        val nextScale = (editState.cropScale * zoomChange).coerceIn(1f, 4f)
+        val maxOffset = ((nextScale - 1f) / (2f * nextScale)).coerceAtLeast(0f)
+        val width = cropSize.width.coerceAtLeast(1).toFloat()
+        val height = cropSize.height.coerceAtLeast(1).toFloat()
+        val nextOffsetX = (editState.cropOffsetX + panChange.x / width).coerceIn(-maxOffset, maxOffset)
+        val nextOffsetY = (editState.cropOffsetY + panChange.y / height).coerceIn(-maxOffset, maxOffset)
+
+        onEditChange(
+            editState.copy(
+                cropScale = nextScale,
+                cropOffsetX = nextOffsetX,
+                cropOffsetY = nextOffsetY
+            )
+        )
+    }
+
+    Box(
+        modifier = modifier
+            .onSizeChanged { cropSize = it }
+            .transformable(transformState)
+            .drawWithContent {
+                drawContent()
+                val lineColor = Color.White.copy(alpha = 0.34f)
+                val stroke = 1.dp.toPx()
+                drawLine(lineColor, androidx.compose.ui.geometry.Offset(size.width / 3f, 0f), androidx.compose.ui.geometry.Offset(size.width / 3f, size.height), stroke)
+                drawLine(lineColor, androidx.compose.ui.geometry.Offset(size.width * 2f / 3f, 0f), androidx.compose.ui.geometry.Offset(size.width * 2f / 3f, size.height), stroke)
+                drawLine(lineColor, androidx.compose.ui.geometry.Offset(0f, size.height / 3f), androidx.compose.ui.geometry.Offset(size.width, size.height / 3f), stroke)
+                drawLine(lineColor, androidx.compose.ui.geometry.Offset(0f, size.height * 2f / 3f), androidx.compose.ui.geometry.Offset(size.width, size.height * 2f / 3f), stroke)
+            }
+    ) {
+        ByteArrayImage(
+            imageBytes = imageBytes,
+            contentDescription = "Captured dish",
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = editState.cropScale
+                    scaleY = editState.cropScale
+                    translationX = editState.cropOffsetX * size.width
+                    translationY = editState.cropOffsetY * size.height
+                },
+            contentScale = ContentScale.Crop,
+            colorFilter = editState.toColorFilter()
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(Color.Black.copy(alpha = 0.72f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Crop,
+                contentDescription = "Manual crop",
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun PhotoEditControls(
+    editState: PhotoEditState,
+    onEditChange: (PhotoEditState) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Crop",
+                    color = DeepMaroon,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f)
+                )
+                EditChip(
+                    label = "Reset",
+                    selected = false,
+                    onClick = {
+                        onEditChange(
+                            editState.copy(
+                                cropMode = PhotoCropMode.ORIGINAL,
+                                cropScale = 1f,
+                                cropOffsetX = 0f,
+                                cropOffsetY = 0f
+                            )
+                        )
+                    }
+                )
+            }
+
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PhotoCropMode.entries.forEach { mode ->
+                    EditChip(
+                        label = mode.label,
+                        selected = editState.cropMode == mode,
+                        onClick = { onEditChange(editState.copy(cropMode = mode)) }
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Zoom",
+                    color = WarmMaroon,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.width(48.dp)
+                )
+                Slider(
+                    value = editState.cropScale,
+                    onValueChange = { scale ->
+                        val maxOffset = ((scale - 1f) / (2f * scale)).coerceAtLeast(0f)
+                        onEditChange(
+                            editState.copy(
+                                cropScale = scale,
+                                cropOffsetX = editState.cropOffsetX.coerceIn(-maxOffset, maxOffset),
+                                cropOffsetY = editState.cropOffsetY.coerceIn(-maxOffset, maxOffset)
+                            )
+                        )
+                    },
+                    valueRange = 1f..4f,
+                    modifier = Modifier.weight(1f),
+                    colors = SliderDefaults.colors(
+                        thumbColor = CrimsonRed,
+                        activeTrackColor = CrimsonRed,
+                        inactiveTrackColor = LightChipBackground
+                    )
+                )
+            }
+
+            Text(
+                text = "Filter",
+                color = DeepMaroon,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                PhotoFilterPreset.entries.forEach { preset ->
+                    EditChip(
+                        label = preset.label,
+                        selected = editState.filterPreset == preset,
+                        onClick = { onEditChange(editState.copy(filterPreset = preset)) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (selected) CrimsonRed else LightChipBackground)
+            .border(
+                width = 1.dp,
+                color = if (selected) CrimsonRed else RosePink.copy(alpha = 0.25f),
+                shape = RoundedCornerShape(999.dp)
+            )
+            .clickable { onClick() }
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else WarmMaroon,
+            fontSize = 12.sp,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+        )
     }
 }
 

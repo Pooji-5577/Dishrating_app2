@@ -6,7 +6,9 @@ package com.example.smackcheck2.platform
 data class ImageResult(
     val uri: String,
     val bytes: ByteArray,
-    val mimeType: String
+    val mimeType: String,
+    val aiBytes: ByteArray = bytes,
+    val aiMimeType: String = mimeType
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -17,6 +19,8 @@ data class ImageResult(
         if (uri != other.uri) return false
         if (!bytes.contentEquals(other.bytes)) return false
         if (mimeType != other.mimeType) return false
+        if (!aiBytes.contentEquals(other.aiBytes)) return false
+        if (aiMimeType != other.aiMimeType) return false
 
         return true
     }
@@ -25,6 +29,8 @@ data class ImageResult(
         var result = uri.hashCode()
         result = 31 * result + bytes.contentHashCode()
         result = 31 * result + mimeType.hashCode()
+        result = 31 * result + aiBytes.contentHashCode()
+        result = 31 * result + aiMimeType.hashCode()
         return result
     }
 }

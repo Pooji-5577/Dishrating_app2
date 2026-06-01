@@ -12,7 +12,7 @@ data class CurrencyInfo(val code: String, val symbol: String) {
 }
 
 object CurrencyHelper {
-    val DEFAULT = CurrencyInfo(code = "INR", symbol = "\u20B9 ")
+    val DEFAULT = CurrencyInfo(code = "USD", symbol = "$")
 
     private val byCountry = mapOf(
         "PL" to CurrencyInfo(code = "PLN", symbol = "zł "),
@@ -50,11 +50,20 @@ object CurrencyHelper {
 
     private val euro = CurrencyInfo(code = "EUR", symbol = "€")
 
+    private val byCode = (byCountry.values + euro + DEFAULT)
+        .distinctBy { it.code }
+        .associateBy { it.code }
+
     fun forCountry(countryCode: String?): CurrencyInfo {
         if (countryCode.isNullOrBlank()) return DEFAULT
         val cc = countryCode.uppercase()
         byCountry[cc]?.let { return it }
         if (cc in euroZone) return euro
         return DEFAULT
+    }
+
+    fun forCode(currencyCode: String?): CurrencyInfo? {
+        if (currencyCode.isNullOrBlank()) return null
+        return byCode[currencyCode.uppercase()]
     }
 }

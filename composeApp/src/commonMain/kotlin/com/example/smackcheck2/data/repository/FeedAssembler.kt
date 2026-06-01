@@ -103,7 +103,8 @@ class FeedAssembler(
                 timestamp = parseTimestamp(rating.createdAt),
                 comment = rating.comment,
                 imageUrls = allImages.mapNotNull { ImageDelivery.feed(it) },
-                price = rating.price
+                price = rating.price,
+                currencyCode = rating.currencyCode
             )
         }
     }

@@ -3,6 +3,7 @@ package com.example.smackcheck2.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.smackcheck2.data.RestaurantPhotoService
+import com.example.smackcheck2.data.repository.DatabaseRepository
 import com.example.smackcheck2.model.Restaurant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,6 +27,7 @@ import kotlinx.coroutines.launch
 class RestaurantPhotoViewModel : ViewModel() {
 
     private val photoService = RestaurantPhotoService()
+    private val databaseRepository = DatabaseRepository()
 
     // ── Photo state per restaurant: restaurantId → PhotoState ──
     private val _photoStates = MutableStateFlow<Map<String, PhotoState>>(emptyMap())
@@ -73,8 +75,15 @@ class RestaurantPhotoViewModel : ViewModel() {
                     thumbnailUrlCache[restaurantId] = url
                     updateState(restaurantId, PhotoState.ThumbnailLoaded(url))
                 } else {
-                    Logger.d("RestaurantPhotoViewModel", "No photos found for '$name' (id=$restaurantId, placeId=$placeId)")
-                    updateState(restaurantId, PhotoState.NoPhotos)
+                    val fallbackUrl = getPlatformDishFallback(restaurantId)
+                    if (fallbackUrl != null) {
+                        Logger.d("RestaurantPhotoViewModel", "Using platform dish fallback for '$name': $fallbackUrl")
+                        thumbnailUrlCache[restaurantId] = fallbackUrl
+                        updateState(restaurantId, PhotoState.ThumbnailLoaded(fallbackUrl))
+                    } else {
+                        Logger.d("RestaurantPhotoViewModel", "No photos found for '$name' (id=$restaurantId, placeId=$placeId)")
+                        updateState(restaurantId, PhotoState.NoPhotos)
+                    }
                 }
             } catch (e: Exception) {
                 Logger.e("RestaurantPhotoViewModel", "Error loading thumbnail for '$name': ${e::class.simpleName} - ${e.message}", e)
@@ -155,8 +164,14 @@ class RestaurantPhotoViewModel : ViewModel() {
                     fullUrlCache[restaurantId] = urls
                     updateState(restaurantId, PhotoState.FullPhotosLoaded(urls))
                 } else {
-                    Logger.d("RestaurantPhotoViewModel", "No full photos found for '$name' (id=$restaurantId)")
-                    updateState(restaurantId, PhotoState.NoPhotos)
+                    val fallbackUrl = getPlatformDishFallback(restaurantId)
+                    if (fallbackUrl != null) {
+                        fullUrlCache[restaurantId] = listOf(fallbackUrl)
+                        updateState(restaurantId, PhotoState.FullPhotosLoaded(listOf(fallbackUrl)))
+                    } else {
+                        Logger.d("RestaurantPhotoViewModel", "No full photos found for '$name' (id=$restaurantId)")
+                        updateState(restaurantId, PhotoState.NoPhotos)
+                    }
                 }
             } catch (e: Exception) {
                 Logger.e("RestaurantPhotoViewModel", "Error loading full photos for '$name': ${e::class.simpleName} - ${e.message}", e)
@@ -169,6 +184,22 @@ class RestaurantPhotoViewModel : ViewModel() {
         _photoStates.value = _photoStates.value.toMutableMap().apply {
             put(restaurantId, state)
         }
+    }
+
+    private suspend fun getPlatformDishFallback(restaurantId: String): String? {
+        val dishes = databaseRepository.getDishesForRestaurant(restaurantId).getOrDefault(emptyList())
+        if (dishes.isEmpty()) return null
+
+        val ratedImage = databaseRepository
+            .getRatingsByDishIds(dishes.map { it.id })
+            .filter { !it.imageUrl.isNullOrBlank() }
+            .maxByOrNull { it.rating }
+            ?.imageUrl
+
+        return ratedImage ?: dishes
+            .sortedByDescending { it.rating }
+            .firstOrNull { !it.imageUrl.isNullOrBlank() }
+            ?.imageUrl
     }
 }
 

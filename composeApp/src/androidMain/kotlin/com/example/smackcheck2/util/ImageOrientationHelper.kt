@@ -219,6 +219,21 @@ object ImageOrientationHelper {
         }
     }
 
+    fun scaleToMaxDimension(bitmap: Bitmap, maxDimension: Int): Bitmap {
+        val longestSide = maxOf(bitmap.width, bitmap.height)
+        if (longestSide <= maxDimension) return bitmap
+
+        val scale = maxDimension.toFloat() / longestSide.toFloat()
+        val targetWidth = (bitmap.width * scale).toInt().coerceAtLeast(1)
+        val targetHeight = (bitmap.height * scale).toInt().coerceAtLeast(1)
+        return try {
+            Bitmap.createScaledBitmap(bitmap, targetWidth, targetHeight, true)
+        } catch (e: OutOfMemoryError) {
+            println("ImageOrientationHelper: OOM scaling bitmap, returning original")
+            bitmap
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════════
     // BITMAP DECODING
     // ═══════════════════════════════════════════════════════════════════════

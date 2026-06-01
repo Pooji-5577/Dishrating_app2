@@ -94,6 +94,7 @@ class LocationHomeViewModel : ViewModel() {
     private var locationService: LocationService? = null
     private var placesService: PlacesService? = null
     private val authRepository = AuthRepository()
+    private val databaseRepository = DatabaseRepository()
     private var hasStartedHomePreload = false
 
     init {
@@ -111,6 +112,9 @@ class LocationHomeViewModel : ViewModel() {
             databaseRepository.getSavedRestaurantIds(userId)
                 .onSuccess { ids ->
                     _uiState.update { it.copy(savedRestaurantIds = ids) }
+                }
+                .onFailure {
+                    Logger.e("LocationHomeViewModel", "Failed to load saved restaurants: ${it.message}", it)
                 }
         }
     }
@@ -159,14 +163,31 @@ class LocationHomeViewModel : ViewModel() {
                     _uiState.update { it.copy(selectedLocation = savedLocation) }
                     loadDataForLocation(savedLocation)
                 } else {
-                    Logger.d("LocationHomeViewModel", "No saved location found, loading all restaurants")
-                    _uiState.update { it.copy(selectedLocation = null) }
-                    loadAllRestaurants()
+                    Logger.d("LocationHomeViewModel", "No saved location found, waiting for current-location detection")
+                    _uiState.update {
+                        it.copy(
+                            selectedLocation = null,
+                            topRestaurants = emptyList(),
+                            allRestaurants = emptyList(),
+                            nearbyRestaurants = emptyList(),
+                            isLoading = false,
+                            isInitialDataLoaded = true,
+                            noRestaurantsFound = false
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 Logger.e("LocationHomeViewModel", "Error loading saved location: ${e.message}", e)
-                _uiState.update { it.copy(selectedLocation = null) }
-                loadAllRestaurants()
+                _uiState.update {
+                    it.copy(
+                        selectedLocation = null,
+                        topRestaurants = emptyList(),
+                        allRestaurants = emptyList(),
+                        nearbyRestaurants = emptyList(),
+                        isLoading = false,
+                        isInitialDataLoaded = true
+                    )
+                }
             }
         }
     }
@@ -376,7 +397,16 @@ class LocationHomeViewModel : ViewModel() {
                 knownLongitude = currentState.currentLongitude
             )
         } else {
-            loadAllRestaurants()
+            Logger.d("LocationHomeViewModel", "Skipping global home refresh until a city is selected")
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    isInitialDataLoaded = true,
+                    topRestaurants = emptyList(),
+                    allRestaurants = emptyList(),
+                    nearbyRestaurants = emptyList()
+                )
+            }
         }
     }
 
@@ -389,8 +419,6 @@ class LocationHomeViewModel : ViewModel() {
         if (state.isLoading || hasData) return
         refreshHomeData()
     }
-
-    private val databaseRepository = DatabaseRepository()
 
     private fun loadAllRestaurants() {
         viewModelScope.launch {
