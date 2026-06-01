@@ -103,6 +103,7 @@ RETURNS TABLE (
     comment text,
     image_urls text[],
     price double precision,
+    currency_code text,
     is_grouped boolean,
     group_id text,
     grouped_dishes jsonb
@@ -146,6 +147,7 @@ BEGIN
             coalesce(g.comment, '') AS row_comment,
             coalesce(images.image_urls, '{}'::text[]) AS row_image_urls,
             NULL::double precision AS row_price,
+            NULL::text AS row_currency_code,
             true AS row_is_grouped,
             g.id AS row_group_id,
             coalesce(items.grouped_dishes, '[]'::jsonb) AS row_grouped_dishes,
@@ -180,6 +182,7 @@ BEGIN
                     'dish_name', i.dish_name,
                     'image_url', i.image_url,
                     'price', i.price,
+                    'currency_code', i.currency_code,
                     'rating_id', i.rating_id
                 )
                 ORDER BY i.sort_order, i.created_at
@@ -213,6 +216,7 @@ BEGIN
             coalesce(r.comment, '') AS row_comment,
             array_remove(array_cat(ARRAY[coalesce(r.image_url, d.image_url)], coalesce(ri.image_urls, '{}'::text[])), NULL) AS row_image_urls,
             r.price::double precision AS row_price,
+            r.currency_code AS row_currency_code,
             false AS row_is_grouped,
             NULL::text AS row_group_id,
             '[]'::jsonb AS row_grouped_dishes,
@@ -259,6 +263,7 @@ BEGIN
         row_comment,
         row_image_urls,
         row_price,
+        row_currency_code,
         row_is_grouped,
         row_group_id,
         row_grouped_dishes

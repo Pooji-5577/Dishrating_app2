@@ -22,7 +22,17 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -46,13 +56,17 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.FeedItem
+import com.example.smackcheck2.model.PendingGroupedReviewPhase
+import com.example.smackcheck2.model.PendingGroupedReviewStatus
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.model.UserSummary
+import com.example.smackcheck2.ui.components.ByteArrayImage
 import com.example.smackcheck2.ui.components.TopDishesCarousel
 import com.example.smackcheck2.ui.components.BottomNavBar
 import com.example.smackcheck2.ui.components.NavItem
 import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.components.SmackCheckWordmark
+import com.example.smackcheck2.ui.components.SmartRestaurantImage
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.BrandRedLight
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
@@ -60,6 +74,7 @@ import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.viewmodel.RestaurantPhotoViewModel
 import io.kamel.image.KamelImage
 import io.kamel.image.asyncPainterResource
+import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -139,6 +154,7 @@ private fun Restaurant.rankingIdentityKey(): String {
 // Main composable
 // ═════════════════════════════════════════════════════════════════════════════
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun DarkHomeScreen(
     currentLocation: String,
     userName: String = "",
@@ -175,6 +191,10 @@ fun DarkHomeScreen(
     onNotificationsClick: () -> Unit = {},
     onAddRestaurantClick: () -> Unit = {},
     onToggleRestaurantSaved: (String) -> Unit = {},
+    pendingGroupedReview: PendingGroupedReviewStatus? = null,
+    onRetryPendingGroupedReview: () -> Unit = {},
+    onEditPendingGroupedReview: () -> Unit = {},
+    onDismissPendingGroupedReview: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val jakartaSans   = PlusJakartaSans()
@@ -201,6 +221,29 @@ fun DarkHomeScreen(
         .distinctBy { it.rankingIdentityKey() }
         .sortedByDescending { it.averageRating }
         .take(3)
+    val photoStates by photoViewModel?.photoStates?.collectAsState()
+        ?: remember { mutableStateOf(emptyMap()) }
+
+    LaunchedEffect(nearbyCards, rankingList, photoViewModel) {
+        val vm = photoViewModel ?: return@LaunchedEffect
+        (nearbyCards + rankingList)
+            .distinctBy { it.id }
+            .forEach { restaurant ->
+                vm.loadThumbnail(
+                    restaurantId = restaurant.id,
+                    placeId = restaurant.googlePlaceId,
+                    name = restaurant.name,
+                    city = restaurant.city
+                )
+            }
+    }
+
+    LaunchedEffect(pendingGroupedReview?.phase, pendingGroupedReview?.xpEarned) {
+        if (pendingGroupedReview?.phase == PendingGroupedReviewPhase.SUCCEEDED) {
+            delay(3500)
+            onDismissPendingGroupedReview()
+        }
+    }
 
     Box(
         modifier = modifier
@@ -490,7 +533,9 @@ fun DarkHomeScreen(
                             likesCount = 0,
                             commentsCount = 0,
                             isLiked = false,
-                            timestamp = d.createdAt
+                            timestamp = d.createdAt,
+                            price = d.price,
+                            currencyCode = d.currencyCode
                         )
                     }
                 }
@@ -538,11 +583,8 @@ fun DarkHomeScreen(
                     TopDishesCarousel(
                         dishes = feedDishes,
                         onDishClick = { id ->
-                            // id is FeedItem.id (rating id); resolve to dishId when available
-                            val feedItem = feedDishes.find { it.id == id }
-                            val navId = feedItem?.dishId?.takeIf { it.isNotBlank() } ?: id
-                            if (topDishFeedItems.isNotEmpty()) onFeedItemDishClick(navId)
-                            else onDishClick(navId)
+                            if (topDishFeedItems.isNotEmpty()) onFeedItemDishClick(id)
+                            else onDishClick(id)
                         },
                         onSeeAllClick = onTopDishesClick,
                         modifier = Modifier.padding(horizontal = 0.dp)
@@ -584,6 +626,7 @@ fun DarkHomeScreen(
 
                         NearbyRestaurantCard(
                             restaurant = restaurant,
+                            photoState = photoStates[restaurant.id],
                             distanceText = distText,
                             isSaved = savedRestaurantIds.contains(restaurant.id),
                             jakartaSans = jakartaSans,
@@ -601,6 +644,7 @@ fun DarkHomeScreen(
 
                         NearbyRestaurantCard(
                             restaurant = restaurant,
+                            photoState = photoStates[restaurant.id],
                             distanceText = distText,
                             isSaved = savedRestaurantIds.contains(restaurant.id),
                             jakartaSans = jakartaSans,
@@ -647,6 +691,7 @@ fun DarkHomeScreen(
 
                             RankingRow(
                                 restaurant = restaurant,
+                                photoState = photoStates[restaurant.id],
                                 distanceText = distText,
                                 jakartaSans = jakartaSans,
                                 onClick = { onRestaurantClick(restaurant.id) }
@@ -666,6 +711,33 @@ fun DarkHomeScreen(
             onProfileClick = onProfileClick,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        if (pendingGroupedReview != null &&
+            pendingGroupedReview.phase != PendingGroupedReviewPhase.FAILED
+        ) {
+            GroupedPostStatusCard(
+                status = pendingGroupedReview,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 96.dp)
+            )
+        }
+
+        if (pendingGroupedReview?.phase == PendingGroupedReviewPhase.FAILED) {
+            ModalBottomSheet(
+                onDismissRequest = onDismissPendingGroupedReview,
+                containerColor = Color.White,
+                shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+            ) {
+                GroupedPostFailureSheet(
+                    status = pendingGroupedReview,
+                    onRetry = onRetryPendingGroupedReview,
+                    onEdit = onEditPendingGroupedReview,
+                    onDismiss = onDismissPendingGroupedReview
+                )
+            }
+        }
 
         // Loading overlay — shown only on first load while data is empty
         if (isLoading && allRestaurants.isEmpty() && allDishes.isEmpty()) {
@@ -693,6 +765,152 @@ fun DarkHomeScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GroupedPostStatusCard(
+    status: PendingGroupedReviewStatus,
+    modifier: Modifier = Modifier
+) {
+    val jakartaSans = PlusJakartaSans()
+    val isSuccess = status.phase == PendingGroupedReviewPhase.SUCCEEDED
+    val dishes = status.draft.items
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier.size(42.dp).clip(CircleShape).background(MaroonAlpha),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSuccess) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = Maroon, modifier = Modifier.size(22.dp))
+                } else {
+                    CircularProgressIndicator(color = Maroon, modifier = Modifier.size(22.dp), strokeWidth = 2.dp)
+                }
+            }
+
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = if (isSuccess) "Posted ${dishes.size} dishes" else "Posting ${dishes.size} dishes...",
+                    fontFamily = jakartaSans,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 15.sp,
+                    color = Maroon,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    items(dishes.take(5), key = { it.image.uri }) { item ->
+                        ByteArrayImage(
+                            imageBytes = item.image.bytes,
+                            contentDescription = item.dishName,
+                            modifier = Modifier.size(34.dp).clip(RoundedCornerShape(10.dp)),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+
+            if (isSuccess && status.xpEarned != null) {
+                Text(
+                    text = "+${status.xpEarned} XP",
+                    fontFamily = jakartaSans,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 14.sp,
+                    color = Maroon
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GroupedPostFailureSheet(
+    status: PendingGroupedReviewStatus,
+    onRetry: () -> Unit,
+    onEdit: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val jakartaSans = PlusJakartaSans()
+    val dishes = status.draft.items
+
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Box(
+                modifier = Modifier.size(44.dp).clip(CircleShape).background(MaroonAlpha),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = Maroon, modifier = Modifier.size(24.dp))
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Recent post failed",
+                    fontFamily = jakartaSans,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 20.sp,
+                    color = Maroon
+                )
+                Text(
+                    text = status.errorMessage ?: "Your grouped review was not posted.",
+                    fontFamily = jakartaSans,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = TextGray,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(dishes.take(5), key = { it.image.uri }) { item ->
+                ByteArrayImage(
+                    imageBytes = item.image.bytes,
+                    contentDescription = item.dishName,
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
+
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(99.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Maroon, contentColor = Color.White)
+        ) {
+            Text("Try again", fontFamily = jakartaSans, fontWeight = FontWeight.Bold)
+        }
+
+        OutlinedButton(
+            onClick = onEdit,
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape = RoundedCornerShape(99.dp)
+        ) {
+            Text("Edit review", fontFamily = jakartaSans, fontWeight = FontWeight.Bold, color = Maroon)
+        }
+
+        Text(
+            text = "Dismiss",
+            fontFamily = jakartaSans,
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = TextGray,
+            modifier = Modifier.align(Alignment.CenterHorizontally).clickable { onDismiss() }.padding(8.dp)
+        )
     }
 }
 
@@ -918,6 +1136,7 @@ private fun TopDishCard(
 @Composable
 private fun NearbyRestaurantCard(
     restaurant: Restaurant,
+    photoState: com.example.smackcheck2.viewmodel.PhotoState?,
     distanceText: String,
     isSaved: Boolean,
     jakartaSans: androidx.compose.ui.text.font.FontFamily,
@@ -935,9 +1154,9 @@ private fun NearbyRestaurantCard(
         Column {
             // Image 256dp
             Box(modifier = Modifier.fillMaxWidth().height(256.dp)) {
-                NetworkImage(
-                    imageUrl = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull() ?: "",
-                    contentDescription = restaurant.name,
+                SmartRestaurantImage(
+                    photoState = photoState,
+                    restaurantName = restaurant.name,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
@@ -1109,6 +1328,7 @@ text = fmt1f(restaurant.averageRating),
 @Composable
 private fun RankingRow(
     restaurant: Restaurant,
+    photoState: com.example.smackcheck2.viewmodel.PhotoState?,
     distanceText: String,
     jakartaSans: androidx.compose.ui.text.font.FontFamily,
     onClick: () -> Unit
@@ -1129,9 +1349,9 @@ private fun RankingRow(
                 .size(80.dp)
                 .clip(RoundedCornerShape(24.dp))
         ) {
-            NetworkImage(
-                imageUrl = restaurant.photoUrl ?: restaurant.imageUrls.firstOrNull() ?: "",
-                contentDescription = restaurant.name,
+            SmartRestaurantImage(
+                photoState = photoState,
+                restaurantName = restaurant.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )

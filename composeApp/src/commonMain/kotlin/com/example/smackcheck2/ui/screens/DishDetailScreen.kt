@@ -16,10 +16,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
@@ -44,6 +48,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,12 +64,21 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.data.ImageDelivery
 import com.example.smackcheck2.model.Dish
 import com.example.smackcheck2.model.Comment
+import com.example.smackcheck2.model.GroupedReviewDish
 import com.example.smackcheck2.model.Review
 import com.example.smackcheck2.ui.components.NetworkImage
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.viewmodel.DishDetailViewModel
+import kotlinx.coroutines.launch
+
+private data class DishDetailHeroPage(
+    val dishId: String,
+    val ratingId: String?,
+    val dishName: String,
+    val imageUrl: String?
+)
 
 /**
  * Dish Detail Screen - displays real dish data loaded from Supabase
@@ -127,6 +142,25 @@ fun DishDetailScreen(
             uiState.dish != null -> {
                 val dish = uiState.dish!!
                 val restaurant = uiState.restaurant
+                val heroPages = remember(uiState.groupedReviewDishes, uiState.featuredReview, dish) {
+                    buildHeroPages(
+                        dish = dish,
+                        featuredReview = uiState.featuredReview,
+                        groupedDishes = uiState.groupedReviewDishes
+                    )
+                }
+                val initialHeroPage = remember(dishId, dish.id, heroPages) {
+                    heroPages.indexOfFirst { it.ratingId == dishId || it.dishId == dishId || it.dishId == dish.id }
+                        .takeIf { it >= 0 }
+                        ?: 0
+                }
+                val pagerState = rememberPagerState(initialPage = initialHeroPage, pageCount = { heroPages.size })
+                LaunchedEffect(dishId, initialHeroPage, heroPages.size) {
+                    if (heroPages.isNotEmpty() && pagerState.currentPage != initialHeroPage) {
+                        pagerState.scrollToPage(initialHeroPage)
+                    }
+                }
+                val currentPage = heroPages.getOrNull(pagerState.currentPage) ?: heroPages.first()
 
                 LazyColumn(
                     modifier = Modifier
@@ -135,51 +169,54 @@ fun DishDetailScreen(
                 ) {
                     // Hero Image with overlays
                     item {
-                        val heroImageUrl = uiState.featuredReview?.dishImageUrl
-                            ?: dish.imageUrl
+                        val scope = rememberCoroutineScope()
 
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(300.dp)
                         ) {
-                            // Actual dish image
-                            if (!heroImageUrl.isNullOrBlank()) {
-                                NetworkImage(
-                                    imageUrl = heroImageUrl,
-                                    contentDescription = dish.name,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                                // Gradient overlay for readability
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(
-                                            Brush.verticalGradient(
-                                                colors = listOf(
-                                                    Color.Black.copy(alpha = 0.25f),
-                                                    Color.Transparent,
-                                                    Color.Black.copy(alpha = 0.55f)
-                                                )
-                                            )
-                                        )
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(appColors().SurfaceVariant),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Restaurant,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(80.dp),
-                                        tint = appColors().TextTertiary
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize()
+                            ) { page ->
+                                val heroPage = heroPages[page]
+                                if (!heroPage.imageUrl.isNullOrBlank()) {
+                                    NetworkImage(
+                                        imageUrl = heroPage.imageUrl,
+                                        contentDescription = heroPage.dishName,
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentScale = ContentScale.Crop
                                     )
+                                } else {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(appColors().SurfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Restaurant,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(80.dp),
+                                            tint = appColors().TextTertiary
+                                        )
+                                    }
                                 }
                             }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.Black.copy(alpha = 0.25f),
+                                                Color.Transparent,
+                                                Color.Black.copy(alpha = 0.55f)
+                                            )
+                                        )
+                                    )
+                            )
 
                             // Top bar with back, favorite, share
                             Row(
@@ -287,6 +324,64 @@ fun DishDetailScreen(
                                     }
                                 }
                             }
+
+                            if (heroPages.size > 1) {
+                                IconButton(
+                                    onClick = {
+                                        val target = (pagerState.currentPage - 1).coerceAtLeast(0)
+                                        scope.launch { pagerState.animateScrollToPage(target) }
+                                    },
+                                    enabled = pagerState.currentPage > 0,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .padding(start = 12.dp)
+                                        .size(36.dp)
+                                        .background(Color.White.copy(alpha = 0.72f), CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronLeft,
+                                        contentDescription = "Previous dish",
+                                        tint = BrandRedDark
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        val target = (pagerState.currentPage + 1).coerceAtMost(heroPages.lastIndex)
+                                        scope.launch { pagerState.animateScrollToPage(target) }
+                                    },
+                                    enabled = pagerState.currentPage < heroPages.lastIndex,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .padding(end = 12.dp)
+                                        .size(36.dp)
+                                        .background(Color.White.copy(alpha = 0.72f), CircleShape)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ChevronRight,
+                                        contentDescription = "Next dish",
+                                        tint = BrandRedDark
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = 16.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    heroPages.forEachIndexed { index, _ ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(if (index == pagerState.currentPage) 8.dp else 7.dp)
+                                                .clip(CircleShape)
+                                                .background(
+                                                    if (index == pagerState.currentPage) Color.White
+                                                    else Color.White.copy(alpha = 0.55f)
+                                                )
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -300,7 +395,7 @@ fun DishDetailScreen(
                         ) {
                             // Name
                             Text(
-                                text = dish.name,
+                                text = currentPage.dishName,
                                 color = appColors().TextPrimary,
                                 fontSize = 24.sp,
                                 fontWeight = FontWeight.Bold
@@ -837,4 +932,32 @@ private fun formatRatingValue(value: Float): String {
     val intPart = value.toInt()
     val decimalPart = ((value - intPart) * 10).toInt()
     return "$intPart.$decimalPart"
+}
+
+private fun buildHeroPages(
+    dish: Dish,
+    featuredReview: Review?,
+    groupedDishes: List<GroupedReviewDish>
+): List<DishDetailHeroPage> {
+    val groupedPages = groupedDishes
+        .filter { !it.imageUrl.isNullOrBlank() || it.dishName.isNotBlank() }
+        .map {
+            DishDetailHeroPage(
+                dishId = it.dishId,
+                ratingId = it.ratingId,
+                dishName = it.dishName.ifBlank { dish.name },
+                imageUrl = it.imageUrl
+            )
+        }
+
+    if (groupedPages.isNotEmpty()) return groupedPages
+
+    return listOf(
+        DishDetailHeroPage(
+            dishId = dish.id,
+            ratingId = featuredReview?.id,
+            dishName = dish.name,
+            imageUrl = featuredReview?.dishImageUrl ?: dish.imageUrl
+        )
+    )
 }

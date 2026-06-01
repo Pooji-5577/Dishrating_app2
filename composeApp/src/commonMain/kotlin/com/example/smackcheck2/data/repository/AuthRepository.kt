@@ -8,9 +8,12 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.Google
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.auth.providers.OAuthProvider
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import com.example.smackcheck2.util.Logger
 import com.example.smackcheck2.util.decodePercentEncodedText
@@ -63,8 +66,17 @@ class AuthRepository(
 
             val userId = auth.currentUserOrNull()?.id
             if (userId != null) {
-                @Serializable data class ProfileReq(val name: String, val username: String?, val email: String)
-                val profile: ProfileDto = ApiClient.post("auth/profile", ProfileReq(name, username.ifBlank { null }, email))
+                @Serializable data class ProfileReq(
+                    val name: String,
+                    val username: String?,
+                    val email: String,
+                    @SerialName("profile_setup_completed")
+                    val profileSetupCompleted: Boolean
+                )
+                val profile: ProfileDto = ApiClient.post(
+                    "auth/profile",
+                    ProfileReq(name, username.ifBlank { null }, email, false)
+                )
                 try { notificationService.notifyWelcome(userId, name) } catch (_: Exception) {}
                 Result.success(profile.toUser())
             } else {
@@ -119,9 +131,15 @@ class AuthRepository(
     private suspend fun getOrCreateProfile(email: String, displayName: String? = null): ProfileDto {
         return try {
             ApiClient.get("auth/profile")
-        } catch (_: Exception) {
-            @Serializable data class ProfileReq(val name: String, val email: String)
-            ApiClient.post("auth/profile", ProfileReq(displayName ?: email.substringBefore("@"), email))
+        } catch (e: Exception) {
+            if (!e.isNotFound()) throw e
+            @Serializable data class ProfileReq(
+                val name: String,
+                val email: String,
+                @SerialName("profile_setup_completed")
+                val profileSetupCompleted: Boolean
+            )
+            ApiClient.post("auth/profile", ProfileReq(displayName ?: email.substringBefore("@"), email, false))
         }
     }
 
@@ -150,15 +168,59 @@ class AuthRepository(
         return try {
             val profile: ProfileDto = ApiClient.get("auth/profile")
             profile.toUser()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            if (!e.isNotFound()) return null
             try {
                 val email = authUser.email ?: ""
-                @Serializable data class ProfileReq(val name: String, val email: String)
-                val profile: ProfileDto = ApiClient.post("auth/profile",
-                    ProfileReq(email.substringBefore("@").ifEmpty { "User" }, email))
+                @Serializable data class ProfileReq(
+                    val name: String,
+                    val email: String,
+                    @SerialName("profile_setup_completed")
+                    val profileSetupCompleted: Boolean
+                )
+                val profile: ProfileDto = ApiClient.post(
+                    "auth/profile",
+                    ProfileReq(email.substringBefore("@").ifEmpty { "User" }, email, false)
+                )
                 profile.toUser()
             } catch (_: Exception) { null }
         }
+    }
+
+    suspend fun restorePersistedUser(maxAttempts: Int = 3): Result<User?> {
+        if (auth.currentUserOrNull() == null) return Result.success(null)
+
+        var lastError: Throwable? = null
+        repeat(maxAttempts) { attempt ->
+            try {
+                val profile: ProfileDto = ApiClient.get("auth/profile")
+                return Result.success(profile.toUser())
+            } catch (e: Exception) {
+                if (e.isNotFound()) {
+                    try {
+                        val authUser = auth.currentUserOrNull() ?: return Result.success(null)
+                        val email = authUser.email ?: ""
+                        @Serializable data class ProfileReq(
+                            val name: String,
+                            val email: String,
+                            @SerialName("profile_setup_completed")
+                            val profileSetupCompleted: Boolean
+                        )
+                        ApiClient.post<ProfileReq, ProfileDto>(
+                            "auth/profile",
+                            ProfileReq(email.substringBefore("@").ifEmpty { "User" }, email, false)
+                        )
+                    } catch (repairError: Exception) {
+                        lastError = repairError
+                    }
+                } else {
+                    lastError = e
+                }
+            }
+            delay(250L * (attempt + 1))
+        }
+
+        return Result.failure(lastError ?: Exception("Failed to restore session"))
     }
 
     fun isSignedIn(): Boolean = auth.currentUserOrNull() != null
@@ -168,8 +230,13 @@ class AuthRepository(
 
     suspend fun saveProfileSetup(userId: String, username: String, profilePhotoUrl: String?): Result<Unit> {
         return try {
-            @Serializable data class Req(val username: String, val profile_photo_url: String?)
-            ApiClient.put<Req, ProfileDto>("auth/profile", Req(username, profilePhotoUrl))
+            @Serializable data class Req(
+                val username: String,
+                val profile_photo_url: String?,
+                @SerialName("profile_setup_completed")
+                val profileSetupCompleted: Boolean
+            )
+            ApiClient.put<Req, ProfileDto>("auth/profile", Req(username, profilePhotoUrl, true))
             Result.success(Unit)
         } catch (e: Exception) {
             if (e.message?.contains("username", ignoreCase = true) == true)
@@ -286,8 +353,12 @@ class AuthRepository(
         lastLocation = lastLocation?.let(::decodePercentEncodedText),
         bio = bio?.let(::decodePercentEncodedText),
         followersCount = followersCount,
-        followingCount = followingCount
+        followingCount = followingCount,
+        profileSetupCompleted = profileSetupCompleted
     )
+
+    private fun Exception.isNotFound(): Boolean =
+        this is ClientRequestException && response.status == HttpStatusCode.NotFound
 
     private fun sanitizeError(message: String): String = when {
         message.contains("invalid_credentials", ignoreCase = true) ||

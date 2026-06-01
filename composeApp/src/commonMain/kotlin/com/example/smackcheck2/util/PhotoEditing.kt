@@ -26,8 +26,14 @@ enum class PhotoFilterPreset(
 data class PhotoEditState(
     val cropMode: PhotoCropMode = PhotoCropMode.ORIGINAL,
     val filterPreset: PhotoFilterPreset = PhotoFilterPreset.NATURAL,
-    val rotationDegrees: Int = 0
-)
+    val rotationDegrees: Int = 0,
+    val cropScale: Float = 1f,
+    val cropOffsetX: Float = 0f,
+    val cropOffsetY: Float = 0f
+) {
+    val hasManualCrop: Boolean
+        get() = cropScale != 1f || cropOffsetX != 0f || cropOffsetY != 0f
+}
 
 fun PhotoEditState.toColorFilter(): ColorFilter =
     filterPreset.toColorFilter()

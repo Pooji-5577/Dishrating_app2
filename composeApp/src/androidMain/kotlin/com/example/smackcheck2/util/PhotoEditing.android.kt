@@ -18,7 +18,7 @@ actual suspend fun renderEditedPhoto(
     var working: Bitmap = source
     try {
         working = rotateBitmap(source, editState.rotationDegrees)
-        val cropped = cropBitmap(working, editState.cropMode)
+        val cropped = cropBitmap(working, editState)
         if (cropped !== working && working !== source && !working.isRecycled) working.recycle()
         working = cropped
         val filtered = applyFilter(working, editState.filterPreset)
@@ -42,9 +42,9 @@ private fun rotateBitmap(bitmap: Bitmap, degrees: Int): Bitmap {
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
-private fun cropBitmap(bitmap: Bitmap, cropMode: PhotoCropMode): Bitmap {
-    val targetAspect = when (cropMode) {
-        PhotoCropMode.ORIGINAL -> return bitmap
+private fun cropBitmap(bitmap: Bitmap, editState: PhotoEditState): Bitmap {
+    val targetAspect = when (editState.cropMode) {
+        PhotoCropMode.ORIGINAL -> if (editState.hasManualCrop) 1f else return bitmap
         PhotoCropMode.SQUARE -> 1f
         PhotoCropMode.STORY -> 9f / 16f
         PhotoCropMode.WIDE -> 16f / 9f
@@ -61,9 +61,19 @@ private fun cropBitmap(bitmap: Bitmap, cropMode: PhotoCropMode): Bitmap {
         cropHeight = (cropWidth / targetAspect).roundToInt().coerceAtLeast(1)
     }
 
-    val x = ((bitmap.width - cropWidth) / 2).coerceAtLeast(0)
-    val y = ((bitmap.height - cropHeight) / 2).coerceAtLeast(0)
-    return Bitmap.createBitmap(bitmap, x, y, cropWidth.coerceAtMost(bitmap.width), cropHeight.coerceAtMost(bitmap.height))
+    val scale = editState.cropScale.coerceIn(1f, 4f)
+    val manualCropWidth = (cropWidth / scale).roundToInt().coerceIn(1, bitmap.width)
+    val manualCropHeight = (cropHeight / scale).roundToInt().coerceIn(1, bitmap.height)
+    val maxOffsetX = ((cropWidth - manualCropWidth) / 2f).coerceAtLeast(0f)
+    val maxOffsetY = ((cropHeight - manualCropHeight) / 2f).coerceAtLeast(0f)
+    val offsetX = (-editState.cropOffsetX * cropWidth).coerceIn(-maxOffsetX, maxOffsetX).roundToInt()
+    val offsetY = (-editState.cropOffsetY * cropHeight).coerceIn(-maxOffsetY, maxOffsetY).roundToInt()
+
+    val x = ((bitmap.width - manualCropWidth) / 2 + offsetX)
+        .coerceIn(0, bitmap.width - manualCropWidth)
+    val y = ((bitmap.height - manualCropHeight) / 2 + offsetY)
+        .coerceIn(0, bitmap.height - manualCropHeight)
+    return Bitmap.createBitmap(bitmap, x, y, manualCropWidth, manualCropHeight)
 }
 
 private fun applyFilter(bitmap: Bitmap, preset: PhotoFilterPreset): Bitmap {

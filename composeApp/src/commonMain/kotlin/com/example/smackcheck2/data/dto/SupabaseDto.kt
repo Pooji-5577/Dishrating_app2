@@ -28,6 +28,8 @@ data class ProfileDto(
     @SerialName("following_count")
     val followingCount: Int = 0,
     val username: String? = null,
+    @SerialName("profile_setup_completed")
+    val profileSetupCompleted: Boolean = false,
     @SerialName("created_at")
     val createdAt: String? = null,
     @SerialName("updated_at")
@@ -155,6 +157,10 @@ data class RatingDto(
     @OptIn(ExperimentalSerializationApi::class)
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val price: Double? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.NEVER)
+    @SerialName("currency_code")
+    val currencyCode: String? = null,
     @SerialName("likes_count")
     val likesCount: Int = 0,
     @OptIn(ExperimentalSerializationApi::class)
@@ -388,6 +394,8 @@ data class ReviewGroupItemDto(
     @SerialName("image_url")
     val imageUrl: String? = null,
     val price: Double? = null,
+    @SerialName("currency_code")
+    val currencyCode: String? = null,
     @SerialName("sort_order")
     val sortOrder: Int = 0,
     @SerialName("ai_confidence")

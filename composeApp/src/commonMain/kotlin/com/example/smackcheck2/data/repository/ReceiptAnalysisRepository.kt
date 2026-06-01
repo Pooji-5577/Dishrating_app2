@@ -15,7 +15,9 @@ data class ReceiptPriceSuggestion(
 data class ReceiptAnalysisResult(
     val suggestions: List<ReceiptPriceSuggestion> = emptyList(),
     val rawItems: List<String> = emptyList(),
-    val summary: String? = null
+    val summary: String? = null,
+    val currencyCode: String? = null,
+    val currencySymbol: String? = null
 )
 
 class ReceiptAnalysisRepository {
@@ -47,6 +49,8 @@ class ReceiptAnalysisRepository {
     private fun ReceiptAnalysisResponse.toResult(): ReceiptAnalysisResult {
         val matches = matches.ifEmpty { suggestions }
         val rawItems = receiptItems.ifEmpty { this.rawItems }
+        val detectedCurrencyCode = currencyCode ?: currency_code
+        val detectedCurrencySymbol = currencySymbol ?: currency_symbol
         return ReceiptAnalysisResult(
             suggestions = matches.mapNotNull { match ->
                 val price = match.price ?: return@mapNotNull null
@@ -59,7 +63,9 @@ class ReceiptAnalysisRepository {
                 )
             },
             rawItems = rawItems,
-            summary = summary
+            summary = summary,
+            currencyCode = detectedCurrencyCode,
+            currencySymbol = detectedCurrencySymbol
         )
     }
 }
@@ -77,7 +83,11 @@ private data class ReceiptAnalysisResponse(
     val suggestions: List<ReceiptMatchResponse> = emptyList(),
     val receiptItems: List<String> = emptyList(),
     val rawItems: List<String> = emptyList(),
-    val summary: String? = null
+    val summary: String? = null,
+    val currencyCode: String? = null,
+    val currency_code: String? = null,
+    val currencySymbol: String? = null,
+    val currency_symbol: String? = null
 )
 
 @Serializable

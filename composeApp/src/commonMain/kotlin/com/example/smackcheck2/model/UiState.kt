@@ -147,6 +147,7 @@ data class DishDetailUiState(
     val dish: Dish? = null,
     val restaurant: Restaurant? = null,
     val reviews: List<Review> = emptyList(),
+    val groupedReviewDishes: List<GroupedReviewDish> = emptyList(),
     val comments: List<Comment> = emptyList(),
     val relatedDishes: List<Dish> = emptyList(),
     val featuredReview: Review? = null,

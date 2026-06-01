@@ -188,6 +188,7 @@ class SocialRepository(
         val comment: String = "",
         @SerialName("image_urls") val imageUrls: List<String> = emptyList(),
         val price: Double? = null,
+        @SerialName("currency_code") val currencyCode: String? = null,
         @SerialName("created_at") val createdAt: String? = null
     )
 
@@ -854,7 +855,8 @@ class SocialRepository(
         timestamp = parseTimestamp(createdAt),
         comment = comment,
         imageUrls = imageUrls,
-        price = price
+        price = price,
+        currencyCode = currencyCode
     )
 
     private fun parseTimestamp(timestamp: String?): Long {

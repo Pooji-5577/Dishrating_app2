@@ -58,6 +58,7 @@ class FeedReadRepository {
                 dishName = it.dishName,
                 imageUrl = ImageDelivery.feed(it.imageUrl),
                 price = it.price,
+                currencyCode = it.currencyCode,
                 ratingId = it.ratingId
             )
         }
@@ -80,6 +81,7 @@ class FeedReadRepository {
             comment = comment,
             imageUrls = images.mapNotNull { ImageDelivery.feed(it) },
             price = price,
+            currencyCode = currencyCode,
             isGrouped = isGrouped,
             groupId = groupId,
             groupedDishes = grouped
@@ -128,6 +130,8 @@ private data class FeedPageRow(
     @SerialName("image_urls")
     val imageUrls: List<String> = emptyList(),
     val price: Double? = null,
+    @SerialName("currency_code")
+    val currencyCode: String? = null,
     @SerialName("is_grouped")
     val isGrouped: Boolean = false,
     @SerialName("group_id")
@@ -145,6 +149,8 @@ private data class GroupedFeedDishRow(
     @SerialName("image_url")
     val imageUrl: String? = null,
     val price: Double? = null,
+    @SerialName("currency_code")
+    val currencyCode: String? = null,
     @SerialName("rating_id")
     val ratingId: String? = null
 )

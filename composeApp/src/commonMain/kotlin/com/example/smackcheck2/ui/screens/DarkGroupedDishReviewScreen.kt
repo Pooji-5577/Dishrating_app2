@@ -1,6 +1,7 @@
 package com.example.smackcheck2.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +34,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -46,6 +48,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -72,6 +75,7 @@ import androidx.compose.ui.unit.sp
 import com.example.smackcheck2.data.repository.ReceiptAnalysisRepository
 import com.example.smackcheck2.data.repository.ReceiptPriceSuggestion
 import com.example.smackcheck2.model.CapturedDishDraft
+import com.example.smackcheck2.model.GroupedReviewFormDraft
 import com.example.smackcheck2.model.Restaurant
 import com.example.smackcheck2.platform.ImagePicker
 import com.example.smackcheck2.service.GroupedDishReviewItemRequest
@@ -81,6 +85,7 @@ import com.example.smackcheck2.ui.components.StarRating
 import com.example.smackcheck2.ui.theme.BrandRed
 import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
+import com.example.smackcheck2.util.CurrencyHelper
 import kotlinx.coroutines.launch
 
 private val GroupDeepMaroon = Color(0xFF3B1011)
@@ -93,10 +98,24 @@ private data class EditableDishDraft(
     val image: com.example.smackcheck2.model.CapturedImage,
     val initialName: String,
     val confidence: Float,
+    val initialPrice: String = "",
+    val initialRating: Float = 0f
 ) {
     var name by mutableStateOf(initialName)
-    var price by mutableStateOf("")
-    var dishRating by mutableFloatStateOf(0f)
+    var price by mutableStateOf(initialPrice)
+    var dishRating by mutableFloatStateOf(initialRating)
+}
+
+private data class ReceiptPriceRow(
+    val dishName: String,
+    val price: Double?,
+    val applied: Boolean
+)
+
+private enum class ReceiptSheet {
+    Prompt,
+    Applied,
+    Review
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -113,50 +132,98 @@ fun DarkGroupedDishReviewScreen(
     showSuccess: Boolean,
     xpEarned: Int?,
     errorMessage: String?,
+    initialDraft: GroupedReviewFormDraft? = null,
     onNavigateBack: () -> Unit,
     onRatingComplete: () -> Unit,
-    onSubmit: (
-        rating: Float,
-        comment: String,
-        tags: List<String>,
-        restaurant: Restaurant?,
-        items: List<GroupedDishReviewItemRequest>,
-        receiptBytes: ByteArray?,
-        receiptSummary: String?,
-        receiptItems: List<String>
-    ) -> Unit,
+    onSubmit: (GroupedReviewFormDraft) -> Unit,
     onDismissError: () -> Unit,
     onSearchRestaurants: (String) -> Unit,
-    currencySymbol: String = "\u20B9 "
+    currencySymbol: String = "\u20B9 ",
+    currencyCode: String? = null
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val receiptAnalysisRepository = remember { ReceiptAnalysisRepository() }
 
-    val editableDishes = remember(dishDrafts) {
+    val editableDishes = remember(dishDrafts, initialDraft) {
         mutableStateListOf<EditableDishDraft>().also { list ->
-            list.addAll(dishDrafts.map {
+            val restoredItems = initialDraft?.items.orEmpty()
+            list.addAll(dishDrafts.mapIndexed { index, draft ->
+                val restored = restoredItems.getOrNull(index)
                 EditableDishDraft(
-                    image = it.image,
-                    initialName = it.dishName,
-                    confidence = it.confidence
+                    image = draft.image,
+                    initialName = restored?.dishName ?: draft.dishName,
+                    confidence = draft.confidence,
+                    initialPrice = restored?.price?.toString().orEmpty(),
+                    initialRating = restored?.rating ?: 0f
                 )
             })
         }
     }
 
-    var rating by remember { mutableFloatStateOf(0f) }
-    var comment by remember { mutableStateOf("") }
-    var selectedRestaurant by remember { mutableStateOf<Restaurant?>(null) }
-    var selectedTags by remember { mutableStateOf(setOf<String>()) }
+    var rating by remember { mutableFloatStateOf(initialDraft?.rating ?: 0f) }
+    var comment by remember { mutableStateOf(initialDraft?.comment.orEmpty()) }
+    var selectedRestaurant by remember { mutableStateOf<Restaurant?>(initialDraft?.restaurant) }
+    var selectedTags by remember { mutableStateOf(initialDraft?.tags?.toSet() ?: emptySet()) }
     var showRestaurantPicker by remember { mutableStateOf(false) }
     var restaurantSearchQuery by remember { mutableStateOf("") }
-    var receiptBytes by remember { mutableStateOf<ByteArray?>(null) }
-    var receiptSummary by remember { mutableStateOf<String?>(null) }
-    var receiptItems by remember { mutableStateOf<List<String>>(emptyList()) }
+    var receiptBytes by remember { mutableStateOf<ByteArray?>(initialDraft?.receiptBytes) }
+    var receiptSummary by remember { mutableStateOf<String?>(initialDraft?.receiptSummary) }
+    var receiptItems by remember { mutableStateOf<List<String>>(initialDraft?.receiptItems ?: emptyList()) }
     var isAnalyzingReceipt by remember { mutableStateOf(false) }
+    var activeCurrencySymbol by remember(currencySymbol) { mutableStateOf(initialDraft?.currencySymbol ?: currencySymbol) }
+    var activeCurrencyCode by remember(currencyCode) { mutableStateOf(initialDraft?.currencyCode ?: currencyCode) }
+    var receiptSheet by remember { mutableStateOf<ReceiptSheet?>(ReceiptSheet.Prompt) }
+    var receiptPriceRows by remember { mutableStateOf<List<ReceiptPriceRow>>(emptyList()) }
+    var reviewSuggestions by remember { mutableStateOf<List<ReceiptPriceSuggestion>>(emptyList()) }
 
     val tags = listOf("Highly Recommended", "Authentic", "Must Try", "Spicy", "Comfort Food", "Good Presentation", "Value for Money")
+
+    fun applyDetectedCurrency(analysisCurrencyCode: String?, analysisCurrencySymbol: String?) {
+        val detected = CurrencyHelper.forCode(analysisCurrencyCode)
+        activeCurrencyCode = detected?.code ?: analysisCurrencyCode
+        activeCurrencySymbol = detected?.symbol ?: analysisCurrencySymbol?.takeIf { it.isNotBlank() } ?: activeCurrencySymbol
+    }
+
+    suspend fun pickAndAnalyzeReceipt() {
+        val receipt = imagePicker?.pickFromGallery() ?: return
+        receiptBytes = receipt.bytes
+        isAnalyzingReceipt = true
+        receiptSheet = null
+        try {
+            receiptAnalysisRepository.analyzeReceipt(
+                receiptBytes = receipt.bytes,
+                dishNames = editableDishes.map { it.name },
+                mimeType = receipt.mimeType
+            ).onSuccess { analysis ->
+                receiptSummary = analysis.summary
+                receiptItems = analysis.rawItems
+                applyDetectedCurrency(analysis.currencyCode, analysis.currencySymbol)
+                val suggestions = mergeReceiptPriceSuggestions(
+                    aiSuggestions = analysis.suggestions,
+                    inferredSuggestions = inferReceiptPriceSuggestions(editableDishes, analysis.rawItems)
+                )
+                val autoSuggestions = suggestions.filter { it.confidence >= 0.60f }
+                val appliedRows = applyReceiptPriceSuggestions(editableDishes, autoSuggestions)
+                val appliedDishNames = appliedRows.filter { it.applied }.map { normalizedReceiptName(it.dishName) }.toSet()
+                reviewSuggestions = suggestions.filter { normalizedReceiptName(it.dishName) !in appliedDishNames }
+                receiptPriceRows = appliedRows
+
+                receiptSheet = when {
+                    appliedRows.any { it.applied } -> ReceiptSheet.Applied
+                    reviewSuggestions.isNotEmpty() -> ReceiptSheet.Review
+                    else -> {
+                        snackbarHostState.showSnackbar("Receipt added, but no prices were detected")
+                        null
+                    }
+                }
+            }.onFailure {
+                snackbarHostState.showSnackbar("Receipt added, but prices could not be read")
+            }
+        } finally {
+            isAnalyzingReceipt = false
+        }
+    }
 
     LaunchedEffect(errorMessage) {
         errorMessage?.let {
@@ -212,7 +279,7 @@ fun DarkGroupedDishReviewScreen(
                 DishDraftCard(
                     index = index,
                     draft = draft,
-                    currencySymbol = currencySymbol,
+                    currencySymbol = activeCurrencySymbol,
                     onNameChange = { draft.name = it },
                     onPriceChange = { draft.price = cleanPrice(it) },
                     onRatingChange = { editableDishes[index].dishRating = it }
@@ -286,71 +353,107 @@ fun DarkGroupedDishReviewScreen(
             OutlinedButton(
                 onClick = {
                     coroutineScope.launch {
-                        val receipt = imagePicker?.pickFromGallery()
-                        if (receipt != null) {
-                            receiptBytes = receipt.bytes
-                            isAnalyzingReceipt = true
-                            try {
-                                receiptAnalysisRepository.analyzeReceipt(
-                                    receiptBytes = receipt.bytes,
-                                    dishNames = editableDishes.map { it.name },
-                                    mimeType = receipt.mimeType
-                                ).onSuccess { analysis ->
-                                    receiptSummary = analysis.summary
-                                    receiptItems = analysis.rawItems
-                                    val suggestions = mergeReceiptPriceSuggestions(
-                                        aiSuggestions = analysis.suggestions,
-                                        inferredSuggestions = inferReceiptPriceSuggestions(editableDishes, analysis.rawItems)
-                                    )
-                                    val appliedCount = applyReceiptPriceSuggestions(editableDishes, suggestions)
-                                    when {
-                                        suggestions.isEmpty() -> snackbarHostState.showSnackbar("Receipt added, but no prices were detected")
-                                        appliedCount == 0 -> snackbarHostState.showSnackbar("Receipt found prices, but none matched these dishes")
-                                        else -> snackbarHostState.showSnackbar("Applied receipt prices to $appliedCount ${if (appliedCount == 1) "dish" else "dishes"}")
-                                    }
-                                }
-                            } finally {
-                                isAnalyzingReceipt = false
-                            }
-                        }
+                        pickAndAnalyzeReceipt()
                     }
                 },
                 enabled = imagePicker != null && !isAnalyzingReceipt,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(99.dp)
-            ) {
-                Icon(Icons.Default.ReceiptLong, contentDescription = null, tint = GroupCrimson)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    when {
-                        isAnalyzingReceipt -> "Reading receipt..."
-                        receiptBytes != null -> "Receipt added. Prices are editable"
-                        else -> "Add receipt for price suggestions"
-                    },
-                    color = GroupDeepMaroon,
-                    fontWeight = FontWeight.SemiBold
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(
+                    width = 1.dp,
+                    color = if (receiptBytes != null) GroupCrimson.copy(alpha = 0.28f) else GroupWarmMaroon.copy(alpha = 0.35f)
+                ),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = if (receiptBytes != null) Color.White else GroupCream,
+                    disabledContainerColor = GroupCream.copy(alpha = 0.7f)
                 )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (receiptBytes != null) GroupBlush else Color.White),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isAnalyzingReceipt) {
+                        CircularProgressIndicator(
+                            color = GroupCrimson,
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(
+                            imageVector = if (receiptBytes != null) Icons.Default.Check else Icons.Default.ReceiptLong,
+                            contentDescription = null,
+                            tint = GroupCrimson,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = when {
+                            isAnalyzingReceipt -> "Reading receipt"
+                            receiptBytes != null -> "Receipt added"
+                            else -> "Add receipt"
+                        },
+                        color = GroupDeepMaroon,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = when {
+                            isAnalyzingReceipt -> "Finding item prices"
+                            receiptBytes != null -> "Prices can be suggested from it"
+                            else -> "Auto-fill dish prices"
+                        },
+                        color = GroupWarmMaroon,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                if (receiptBytes != null && !isAnalyzingReceipt) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Replace",
+                        color = GroupCrimson,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
 
             Button(
                 onClick = {
+                    val currencyForSubmit = activeCurrencyCode
+                    val items = editableDishes.map {
+                        GroupedDishReviewItemRequest(
+                            dishName = it.name,
+                            image = it.image,
+                            price = it.price.toDoubleOrNull(),
+                            aiConfidence = it.confidence,
+                            rating = it.dishRating,
+                            currencyCode = currencyForSubmit
+                        )
+                    }
                     onSubmit(
-                        rating,
-                        comment,
-                        selectedTags.toList(),
-                        selectedRestaurant,
-                        editableDishes.map {
-                            GroupedDishReviewItemRequest(
-                                dishName = it.name,
-                                image = it.image,
-                                price = it.price.toDoubleOrNull(),
-                                aiConfidence = it.confidence,
-                                rating = it.dishRating
-                            )
-                        },
-                        receiptBytes,
-                        receiptSummary,
-                        receiptItems
+                        GroupedReviewFormDraft(
+                            dishDrafts = dishDrafts,
+                            rating = rating,
+                            comment = comment,
+                            tags = selectedTags.toList(),
+                            restaurant = selectedRestaurant,
+                            items = items,
+                            receiptBytes = receiptBytes,
+                            receiptSummary = receiptSummary,
+                            receiptItems = receiptItems,
+                            currencySymbol = activeCurrencySymbol,
+                            currencyCode = currencyForSubmit
+                        )
                     )
                 },
                 enabled = !isSubmitting && selectedRestaurant != null && editableDishes.all { it.name.isNotBlank() && it.dishRating > 0f },
@@ -384,6 +487,175 @@ fun DarkGroupedDishReviewScreen(
                         showRestaurantPicker = false
                     }
                 )
+            }
+        }
+
+        when (receiptSheet) {
+            ReceiptSheet.Prompt -> {
+                ReceiptPromptSheet(
+                    onUpload = { coroutineScope.launch { pickAndAnalyzeReceipt() } },
+                    onSkip = { receiptSheet = null },
+                    enabled = imagePicker != null && !isAnalyzingReceipt
+                )
+            }
+            ReceiptSheet.Applied -> {
+                ReceiptAppliedSheet(
+                    rows = receiptPriceRows,
+                    currencySymbol = activeCurrencySymbol,
+                    onLooksGood = { receiptSheet = null },
+                    onEditPrices = { receiptSheet = null }
+                )
+            }
+            ReceiptSheet.Review -> {
+                ReceiptReviewSheet(
+                    suggestions = reviewSuggestions,
+                    currencySymbol = activeCurrencySymbol,
+                    onApply = {
+                        receiptPriceRows = applyReceiptPriceSuggestions(editableDishes, reviewSuggestions)
+                        receiptSheet = ReceiptSheet.Applied
+                    },
+                    onSkip = { receiptSheet = null }
+                )
+            }
+            null -> Unit
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReceiptPromptSheet(
+    onUpload: () -> Unit,
+    onSkip: () -> Unit,
+    enabled: Boolean
+) {
+    ModalBottomSheet(
+        onDismissRequest = onSkip,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("Got the receipt?", color = GroupDeepMaroon, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Upload it once and SmackCheck will fill dish prices for you.",
+                color = GroupWarmMaroon,
+                fontSize = 14.sp
+            )
+            Button(
+                onClick = onUpload,
+                enabled = enabled,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(99.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = GroupCrimson, contentColor = Color.White)
+            ) {
+                if (!enabled) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp), strokeWidth = 2.dp) else Text("Upload receipt", fontWeight = FontWeight.SemiBold)
+            }
+            OutlinedButton(
+                onClick = onSkip,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(99.dp),
+                border = BorderStroke(1.dp, GroupCrimson)
+            ) {
+                Text("Skip for now", color = GroupCrimson, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReceiptAppliedSheet(
+    rows: List<ReceiptPriceRow>,
+    currencySymbol: String,
+    onLooksGood: () -> Unit,
+    onEditPrices: () -> Unit
+) {
+    val applied = rows.count { it.applied }
+    ModalBottomSheet(
+        onDismissRequest = onLooksGood,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                if (rows.size <= 1) "Price applied" else "$applied of ${rows.size} prices applied",
+                color = GroupDeepMaroon,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+            rows.forEach { row ->
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(row.dishName, color = GroupDeepMaroon, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(
+                        row.price?.let { formatDisplayPrice(it, currencySymbol) } ?: "Not found",
+                        color = if (row.applied) GroupCrimson else GroupWarmMaroon,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+            Text("You can still edit anything before posting.", color = GroupWarmMaroon, fontSize = 13.sp)
+            Button(
+                onClick = onLooksGood,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(99.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = GroupCrimson, contentColor = Color.White)
+            ) {
+                Text("Looks good", fontWeight = FontWeight.SemiBold)
+            }
+            OutlinedButton(
+                onClick = onEditPrices,
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(99.dp),
+                border = BorderStroke(1.dp, GroupCrimson)
+            ) {
+                Text("Edit prices", color = GroupCrimson, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReceiptReviewSheet(
+    suggestions: List<ReceiptPriceSuggestion>,
+    currencySymbol: String,
+    onApply: () -> Unit,
+    onSkip: () -> Unit
+) {
+    ModalBottomSheet(
+        onDismissRequest = onSkip,
+        containerColor = Color.White,
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text("Review matches", color = GroupDeepMaroon, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text("We found prices, but need your help matching them.", color = GroupWarmMaroon, fontSize = 14.sp)
+            suggestions.forEach { suggestion ->
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(suggestion.dishName, color = GroupDeepMaroon, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(formatDisplayPrice(suggestion.price, currencySymbol), color = GroupCrimson, fontWeight = FontWeight.SemiBold)
+                }
+            }
+            Button(
+                onClick = onApply,
+                enabled = suggestions.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(99.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = GroupCrimson, contentColor = Color.White)
+            ) {
+                Text("Apply selected prices", fontWeight = FontWeight.SemiBold)
+            }
+            TextButton(onClick = onSkip, modifier = Modifier.fillMaxWidth()) {
+                Text("Skip prices", color = GroupCrimson, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -586,11 +858,14 @@ private fun cleanPrice(value: String): String {
 private fun formatSuggestedPrice(price: Double): String =
     if (price % 1.0 == 0.0) price.toInt().toString() else price.toString()
 
+private fun formatDisplayPrice(price: Double, currencySymbol: String): String =
+    currencySymbol + formatSuggestedPrice(price)
+
 private fun applyReceiptPriceSuggestions(
     dishes: List<EditableDishDraft>,
     suggestions: List<ReceiptPriceSuggestion>
-): Int {
-    var applied = 0
+): List<ReceiptPriceRow> {
+    val pricesByDish = mutableMapOf<Int, Double>()
     val usedDishIndexes = mutableSetOf<Int>()
 
     suggestions.forEach { suggestion ->
@@ -602,20 +877,24 @@ private fun applyReceiptPriceSuggestions(
         if (matchIndex != null) {
             dishes[matchIndex].price = formatSuggestedPrice(suggestion.price)
             usedDishIndexes += matchIndex
-            applied++
+            pricesByDish[matchIndex] = suggestion.price
         }
     }
 
-    if (applied == 0 && suggestions.isNotEmpty()) {
+    if (pricesByDish.isEmpty() && suggestions.isNotEmpty()) {
         suggestions.take(dishes.size).forEachIndexed { index, suggestion ->
-            if (dishes[index].price.isBlank()) {
-                dishes[index].price = formatSuggestedPrice(suggestion.price)
-                applied++
-            }
+            dishes[index].price = formatSuggestedPrice(suggestion.price)
+            pricesByDish[index] = suggestion.price
         }
     }
 
-    return applied
+    return dishes.mapIndexed { index, dish ->
+        ReceiptPriceRow(
+            dishName = dish.name,
+            price = pricesByDish[index],
+            applied = pricesByDish.containsKey(index)
+        )
+    }
 }
 
 private fun mergeReceiptPriceSuggestions(

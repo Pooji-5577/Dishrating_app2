@@ -58,6 +58,7 @@ import com.example.smackcheck2.ui.theme.BrandRedDark
 import com.example.smackcheck2.ui.theme.NewsreaderFontFamily
 import com.example.smackcheck2.ui.theme.PlusJakartaSans
 import com.example.smackcheck2.ui.theme.appColors
+import com.example.smackcheck2.util.CurrencyHelper
 import com.example.smackcheck2.util.formatOneDecimal
 import com.example.smackcheck2.util.formatRelativeTime
 import io.kamel.image.KamelImage
@@ -66,7 +67,8 @@ import io.kamel.image.asyncPainterResource
 private data class ReviewImagePage(
     val dishName: String,
     val imageUrl: String?,
-    val price: Double?
+    val price: Double?,
+    val currencyCode: String?
 )
 
 @Composable
@@ -93,7 +95,8 @@ fun ReviewPostCard(
                 ReviewImagePage(
                     dishName = it.dishName,
                     imageUrl = it.imageUrl,
-                    price = it.price
+                    price = it.price,
+                    currencyCode = it.currencyCode
                 )
             }
         } else {
@@ -101,7 +104,8 @@ fun ReviewPostCard(
                 ReviewImagePage(
                     dishName = feedItem.dishName,
                     imageUrl = feedItem.dishImageUrl,
-                    price = feedItem.price
+                    price = feedItem.price,
+                    currencyCode = feedItem.currencyCode
                 )
             )
         }
@@ -410,7 +414,7 @@ fun ReviewPostCard(
                                 modifier = Modifier.align(Alignment.Start)
                             ) {
                                 Text(
-                                    text = formatDishPrice(price),
+                                    text = formatDishPrice(price, currentPage.currencyCode),
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.ExtraBold,
                                     fontFamily = jakartaSans,
@@ -461,7 +465,7 @@ fun ReviewPostCard(
                                         color = if (index == pagerState.currentPage) Color.White else BrandRedDark,
                                         maxLines = 1,
                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        modifier = Modifier.width(112.dp).padding(horizontal = 10.dp, vertical = 7.dp)
+                                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp)
                                     )
                                 }
                             }
@@ -549,7 +553,6 @@ fun ReviewPostCard(
     }
 }
 
-private fun formatDishPrice(price: Double): String {
-    val amount = if (price % 1.0 == 0.0) price.toInt().toString() else formatOneDecimal(price)
-    return "\u20B9 $amount"
+private fun formatDishPrice(price: Double, currencyCode: String?): String {
+    return (CurrencyHelper.forCode(currencyCode) ?: CurrencyHelper.DEFAULT).format(price)
 }

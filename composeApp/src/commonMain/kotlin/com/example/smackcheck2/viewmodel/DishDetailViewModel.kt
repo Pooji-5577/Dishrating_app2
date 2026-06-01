@@ -29,25 +29,41 @@ class DishDetailViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(DishDetailUiState(isLoading = true))
     val uiState: StateFlow<DishDetailUiState> = _uiState.asStateFlow()
     private var loadedDishId: String? = null
+    private var loadedRequestId: String? = null
+    private val dishCache = mutableMapOf<String, DishDetailUiState>()
 
     /**
      * Load all data for a dish: dish info, restaurant, reviews, and related dishes
      */
     fun loadDish(dishId: String) {
-        if (loadedDishId == dishId && _uiState.value.dish?.id == dishId && _uiState.value.errorMessage == null) {
+        if (loadedRequestId == dishId && _uiState.value.errorMessage == null) {
+            return
+        }
+        dishCache[dishId]?.let { cached ->
+            loadedRequestId = dishId
+            loadedDishId = cached.dish?.id
+            _uiState.value = cached.copy(
+                isLoading = false,
+                errorMessage = null,
+                commentDraft = "",
+                isCommentSubmitting = false,
+                commentErrorMessage = null
+            )
             return
         }
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            _uiState.value = DishDetailUiState(isLoading = true)
 
             // 1. Load the dish itself; if not found, the ID may be a rating ID —
             //    resolve to the real dish ID and retry.
             var resolvedDishId = dishId
+            var requestedRatingId: String? = null
             var dishResult = databaseRepository.getDishById(resolvedDishId)
             var dish = dishResult.getOrNull()
             if (dish == null) {
                 val realDishId = databaseRepository.getDishIdFromRating(dishId)
                 if (realDishId != null) {
+                    requestedRatingId = dishId
                     resolvedDishId = realDishId
                     dishResult = databaseRepository.getDishById(resolvedDishId)
                     dish = dishResult.getOrNull()
@@ -61,21 +77,14 @@ class DishDetailViewModel : ViewModel() {
                     return@launch
                 }
 
-                _uiState.update { it.copy(dish = dish) }
                 loadedDishId = resolvedDishId
+                loadedRequestId = dishId
 
                 coroutineScope {
                     val restaurantDeferred = async {
                         if (dish.restaurantId.isNotBlank()) {
                             databaseRepository.getRestaurantById(dish.restaurantId).getOrNull()
                         } else null
-                    }
-                    val relatedDeferred = async {
-                        if (dish.restaurantId.isNotBlank()) {
-                            databaseRepository.getDishesForRestaurant(dish.restaurantId)
-                                .getOrDefault(emptyList())
-                                .filter { it.id != resolvedDishId }
-                        } else emptyList()
                     }
                     val reviewsDeferred = async {
                         databaseRepository.getRatingsForDish(
@@ -85,13 +94,22 @@ class DishDetailViewModel : ViewModel() {
                     }
 
                     val restaurant = restaurantDeferred.await()
-                    val related = enrichRelatedDishesWithRatings(relatedDeferred.await())
                     val reviews = reviewsDeferred.await()
-                    val featured = reviews
-                        .filter { !it.dishImageUrl.isNullOrBlank() }
-                        .maxByOrNull { it.rating }
+                    val requestedReview = requestedRatingId?.let { ratingId ->
+                        reviews.firstOrNull { it.id == ratingId }
+                    }
+                    val featured = requestedReview
+                        ?: reviews.firstOrNull { it.dishId == resolvedDishId && !it.dishImageUrl.isNullOrBlank() }
+                        ?: reviews.firstOrNull { it.dishId == resolvedDishId }
+                        ?: reviews.filter { !it.dishImageUrl.isNullOrBlank() }.maxByOrNull { it.rating }
                         ?: reviews.maxByOrNull { it.rating }
                     val anchorRatingId = featured?.id ?: reviews.firstOrNull()?.id
+                    val groupedReviewDishes = if (anchorRatingId.isNullOrBlank()) {
+                        emptyList()
+                    } else {
+                        databaseRepository.getGroupedReviewDishesForRating(anchorRatingId)
+                            .getOrDefault(emptyList())
+                    }
                     val comments = if (anchorRatingId.isNullOrBlank()) {
                         emptyList()
                     } else {
@@ -99,18 +117,24 @@ class DishDetailViewModel : ViewModel() {
                             .getOrDefault(emptyList())
                     }
 
+                    if (loadedDishId != resolvedDishId) return@coroutineScope
                     _uiState.update {
                         it.copy(
+                            dish = dish,
                             restaurant = restaurant,
-                            relatedDishes = related,
                             reviews = reviews,
                             comments = comments,
-                            featuredReview = featured
+                            featuredReview = featured,
+                            groupedReviewDishes = groupedReviewDishes,
+                            isLoading = false
                         )
                     }
+                    cacheCurrentDishState(dishId, resolvedDishId)
                 }
 
-                _uiState.update { it.copy(isLoading = false) }
+                if (loadedDishId == resolvedDishId) {
+                    loadRelatedDishes(dish, resolvedDishId)
+                }
 
             }.onFailure { error ->
                 _uiState.update {
@@ -121,6 +145,34 @@ class DishDetailViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    private fun loadRelatedDishes(dish: Dish, resolvedDishId: String) {
+        if (dish.restaurantId.isBlank()) return
+
+        viewModelScope.launch {
+            val related = databaseRepository.getDishesForRestaurant(dish.restaurantId)
+                .getOrDefault(emptyList())
+                .filter { it.id != resolvedDishId }
+
+            if (loadedDishId != resolvedDishId) return@launch
+            _uiState.update {
+                it.copy(relatedDishes = enrichRelatedDishesWithRatings(related))
+            }
+            cacheCurrentDishState(loadedRequestId ?: resolvedDishId, resolvedDishId)
+        }
+    }
+
+    private fun cacheCurrentDishState(requestId: String, resolvedDishId: String) {
+        val cacheableState = _uiState.value.copy(
+            isLoading = false,
+            errorMessage = null,
+            commentDraft = "",
+            isCommentSubmitting = false,
+            commentErrorMessage = null
+        )
+        dishCache[requestId] = cacheableState
+        dishCache[resolvedDishId] = cacheableState
     }
 
     /**

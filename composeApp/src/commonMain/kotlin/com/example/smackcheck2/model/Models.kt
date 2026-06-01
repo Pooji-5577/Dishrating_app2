@@ -18,7 +18,8 @@ data class User(
     val bio: String? = null,
     val badges: List<Badge> = emptyList(),
     val followersCount: Int = 0,
-    val followingCount: Int = 0
+    val followingCount: Int = 0,
+    val profileSetupCompleted: Boolean = false
 )
 
 /**
@@ -50,7 +51,8 @@ data class Dish(
     val uploaderProfileUrl: String? = null,
     val userId: String = "",
     val createdAt: Long = 0L,
-    val price: Double? = null
+    val price: Double? = null,
+    val currencyCode: String? = null
 )
 
 /**
@@ -91,7 +93,8 @@ data class Review(
     val commentsCount: Int = 0,
     val isLiked: Boolean = false,
     val createdAt: Long = 0L,
-    val price: Double? = null
+    val price: Double? = null,
+    val currencyCode: String? = null
 )
 
 /**
@@ -117,6 +120,7 @@ data class FeedItem(
     val comment: String = "",
     val imageUrls: List<String> = emptyList(),
     val price: Double? = null,
+    val currencyCode: String? = null,
     val syncStatus: PendingRatingSyncStatus? = null,
     val isGrouped: Boolean = false,
     val groupId: String? = null,
@@ -128,7 +132,17 @@ data class GroupedFeedDish(
     val dishName: String,
     val imageUrl: String?,
     val price: Double? = null,
+    val currencyCode: String? = null,
     val ratingId: String? = null
+)
+
+data class GroupedReviewDish(
+    val ratingId: String,
+    val dishId: String,
+    val dishName: String,
+    val imageUrl: String?,
+    val price: Double? = null,
+    val currencyCode: String? = null
 )
 
 @Serializable
@@ -149,6 +163,7 @@ data class PendingRating(
     val comment: String = "",
     val tags: List<String> = emptyList(),
     val price: Double? = null,
+    val currencyCode: String? = null,
     val imagePath: String? = null,
     val restaurantId: String,
     val restaurantName: String,
@@ -181,6 +196,7 @@ data class PendingRating(
         comment = comment,
         imageUrls = imagePath?.let { listOf("file://$it") } ?: emptyList(),
         price = price,
+        currencyCode = currencyCode,
         syncStatus = status
     )
 }

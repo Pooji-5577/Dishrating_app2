@@ -7,9 +7,8 @@ import com.example.smackcheck2.data.SupabaseClientProvider
 import com.example.smackcheck2.data.repository.AuthRepository
 import com.example.smackcheck2.model.AuthState
 import com.example.smackcheck2.model.User
-import io.github.jan.supabase.auth.status.SessionStatus
 import io.github.jan.supabase.auth.auth
-import io.github.jan.supabase.auth.user.UserInfo
+import io.github.jan.supabase.auth.status.SessionStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,18 +35,30 @@ class AuthViewModel : ViewModel() {
                 when (status) {
                     is SessionStatus.Authenticated -> {
                         try {
-                            val user = authRepository.getCurrentUser()
-                            if (user != null) {
-                                Logger.d("AuthViewModel", "Session authenticated, user: ${user.email}")
-                                Analytics.identify(user.id)
-                                Analytics.track("app_opened", mapOf("email" to user.email))
-                                _authState.value = AuthState.Authenticated(user)
-                            } else {
-                                keepSupabaseSessionAuthenticated("profile unavailable after auth")
-                            }
+                            val result = authRepository.restorePersistedUser()
+                            result.fold(
+                                onSuccess = { user ->
+                                    if (user != null) {
+                                        Logger.d("AuthViewModel", "Session authenticated, user: ${user.email}")
+                                        Analytics.identify(user.id)
+                                        Analytics.track("app_opened", mapOf("email" to user.email))
+                                        _authState.value = AuthState.Authenticated(user)
+                                    } else {
+                                        _authState.value = AuthState.Unauthenticated
+                                    }
+                                },
+                                onFailure = { error ->
+                                    Logger.w("AuthViewModel", "Stored session could not load profile: ${error.message}")
+                                    authRepository.signOut()
+                                    Analytics.reset()
+                                    _authState.value = AuthState.Unauthenticated
+                                }
+                            )
                         } catch (e: Exception) {
-                            Logger.e("AuthViewModel", "Error getting user after auth: ${e.message}", e)
-                            keepSupabaseSessionAuthenticated("profile fetch failed")
+                            Logger.e("AuthViewModel", "Error restoring authenticated session: ${e.message}", e)
+                            authRepository.signOut()
+                            Analytics.reset()
+                            _authState.value = AuthState.Unauthenticated
                         }
                     }
                     is SessionStatus.NotAuthenticated -> {
@@ -61,46 +72,13 @@ class AuthViewModel : ViewModel() {
                     }
                     is SessionStatus.RefreshFailure -> {
                         Logger.w("AuthViewModel", "Network error loading session: ${status.cause}")
-                        keepSupabaseSessionAuthenticated("session refresh failed")
+                        authRepository.signOut()
+                        Analytics.reset()
+                        _authState.value = AuthState.Unauthenticated
                     }
                 }
             }
         }
-    }
-
-    private fun keepSupabaseSessionAuthenticated(reason: String) {
-        val authUser = SupabaseClientProvider.client.auth.currentUserOrNull()
-        val existingUser = (_authState.value as? AuthState.Authenticated)?.user
-
-        when {
-            existingUser != null -> {
-                Logger.w("AuthViewModel", "Keeping existing authenticated state: $reason")
-                _authState.value = AuthState.Authenticated(existingUser)
-            }
-            authUser != null -> {
-                val fallbackUser = authUser.toFallbackUser()
-                Logger.w("AuthViewModel", "Keeping Supabase session authenticated with fallback profile: $reason")
-                Analytics.identify(fallbackUser.id)
-                _authState.value = AuthState.Authenticated(fallbackUser)
-            }
-            else -> {
-                Logger.w("AuthViewModel", "No Supabase user while handling auth issue: $reason")
-                _authState.value = AuthState.Unauthenticated
-            }
-        }
-    }
-
-    private fun UserInfo.toFallbackUser(): User {
-        val fallbackEmail = email ?: ""
-        val displayName = userMetadata?.get("full_name")?.toString()
-            ?: userMetadata?.get("name")?.toString()
-            ?: fallbackEmail.substringBefore("@").ifEmpty { "User" }
-
-        return User(
-            id = id,
-            name = displayName,
-            email = fallbackEmail
-        )
     }
 
     fun signIn(email: String, password: String, onSuccess: () -> Unit, onError: (String) -> Unit) {

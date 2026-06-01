@@ -34,7 +34,8 @@ data class GroupedDishReviewItemRequest(
     val image: CapturedImage,
     val price: Double? = null,
     val aiConfidence: Float? = null,
-    val rating: Float = 0f
+    val rating: Float = 0f,
+    val currencyCode: String? = null
 )
 
 data class GroupedDishReviewSubmissionRequest(
@@ -194,7 +195,8 @@ class GroupedDishReviewSubmissionService(
                                 price = item.price,
                                 aiConfidence = item.aiConfidence,
                                 sortOrder = index,
-                                rating = item.rating
+                                rating = item.rating,
+                                currencyCode = item.currencyCode
                             )
                         }
                     )
@@ -294,6 +296,8 @@ private data class BackendGroupedReviewItem(
     @SerialName("image_url")
     val imageUrl: String,
     val price: Double?,
+    @SerialName("currency_code")
+    val currencyCode: String?,
     @SerialName("ai_confidence")
     val aiConfidence: Float?,
     @SerialName("sort_order")

@@ -1,6 +1,7 @@
 package com.example.smackcheck2.data.repository
 
 import com.example.smackcheck2.data.ApiClient
+import com.example.smackcheck2.data.ImageDelivery
 import com.example.smackcheck2.data.dto.*
 import com.example.smackcheck2.model.*
 import com.example.smackcheck2.util.Logger
@@ -38,7 +39,8 @@ private data class SubmitRatingRequest(
     @SerialName("image_url") val imageUrl: String? = null,
     val latitude: Double? = null,
     val longitude: Double? = null,
-    val price: Double? = null
+    val price: Double? = null,
+    @SerialName("currency_code") val currencyCode: String? = null
 )
 
 @Serializable
@@ -135,6 +137,24 @@ private data class UniqueRestaurantsResponse(
 @Serializable
 private data class WithPhotosCountResponse(
     val count: Int = 0
+)
+
+@Serializable
+private data class GroupedReviewItemResponse(
+    val id: String = "",
+    @SerialName("group_id")
+    val groupId: String = "",
+    @SerialName("rating_id")
+    val ratingId: String? = null,
+    @SerialName("dish_id")
+    val dishId: String? = null,
+    @SerialName("dish_name")
+    val dishName: String = "",
+    @SerialName("image_url")
+    val imageUrl: String? = null,
+    val price: Double? = null,
+    @SerialName("currency_code")
+    val currencyCode: String? = null
 )
 
 @Serializable
@@ -442,6 +462,25 @@ class DatabaseRepository(
         }
     }
 
+    suspend fun getGroupedReviewDishesForRating(ratingId: String): Result<List<GroupedReviewDish>> {
+        return try {
+            val rows = ApiClient.get<List<GroupedReviewItemResponse>>("ratings/$ratingId/group-items")
+            Result.success(rows.map { row ->
+                GroupedReviewDish(
+                    ratingId = row.ratingId.orEmpty(),
+                    dishId = row.dishId.orEmpty(),
+                    dishName = row.dishName,
+                    imageUrl = ImageDelivery.feed(row.imageUrl),
+                    price = row.price,
+                    currencyCode = row.currencyCode
+                )
+            })
+        } catch (e: Exception) {
+            Logger.e("DatabaseRepository", "Error fetching grouped review dishes for rating $ratingId: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+
     /**
      * Get all ratings for a dish, optionally restricted to a specific restaurant
      * (for location-specific review filtering).
@@ -473,7 +512,9 @@ class DatabaseRepository(
                     rating = rating.rating,
                     comment = rating.comment,
                     likesCount = rating.likesCount,
-                    createdAt = 0L
+                    createdAt = 0L,
+                    price = rating.price,
+                    currencyCode = rating.currencyCode
                 )
             }
 
@@ -622,17 +663,16 @@ class DatabaseRepository(
      * Batch-fetch all ratings for a list of dish IDs (used to compute avg rating/price per dish)
      */
     suspend fun getRatingsByDishIds(dishIds: List<String>): List<RatingDto> {
-        if (dishIds.isEmpty()) return emptyList()
+        val uniqueDishIds = dishIds.filter { it.isNotBlank() }.distinct()
+        if (uniqueDishIds.isEmpty()) return emptyList()
         return try {
-            // Fetch ratings for each dish ID and combine — the backend supports dishId param
-            dishIds.flatMap { dishId ->
-                try {
-                    ApiClient.get<List<RatingDto>>(
-                        "ratings",
-                        mapOf("dishId" to dishId)
-                    )
-                } catch (_: Exception) { emptyList() }
-            }
+            ApiClient.get<List<RatingDto>>(
+                "ratings",
+                mapOf(
+                    "dishIds" to uniqueDishIds.joinToString(","),
+                    "limit" to (uniqueDishIds.size * 20).coerceIn(20, 200).toString()
+                )
+            )
         } catch (_: Exception) { emptyList() }
     }
 
@@ -650,7 +690,8 @@ class DatabaseRepository(
         imageUrl: String? = null,
         latitude: Double? = null,
         longitude: Double? = null,
-        price: Double? = null
+        price: Double? = null,
+        currencyCode: String? = null
     ): Result<String> {
         if (rating <= 0f) {
             return Result.failure(IllegalArgumentException("Star rating is required"))
@@ -664,7 +705,8 @@ class DatabaseRepository(
                 imageUrl = imageUrl,
                 latitude = latitude,
                 longitude = longitude,
-                price = price
+                price = price,
+                currencyCode = currencyCode
             )
             val created = ApiClient.post<SubmitRatingRequest, RatingDto>("ratings", request)
             Result.success(created.id ?: "")

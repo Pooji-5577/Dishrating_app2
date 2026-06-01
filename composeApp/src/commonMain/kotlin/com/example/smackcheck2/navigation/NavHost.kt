@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +34,9 @@ import com.example.smackcheck2.service.GroupedDishReviewSubmissionService
 import com.example.smackcheck2.ui.theme.appColors
 import com.example.smackcheck2.model.CapturedDishDraft
 import com.example.smackcheck2.model.CapturedImage
+import com.example.smackcheck2.model.GroupedReviewFormDraft
+import com.example.smackcheck2.model.PendingGroupedReviewPhase
+import com.example.smackcheck2.model.PendingGroupedReviewStatus
 import com.example.smackcheck2.model.Restaurant
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.smackcheck2.model.AuthState
@@ -311,16 +315,8 @@ private fun List<Restaurant>.findRestaurantPreview(restaurantId: String): Restau
  */
 @Composable
 fun SmackCheckNavHost(preferencesRepository: PreferencesRepository) {
-    val authRepository = remember { AuthRepository() }
-    val isSignedIn = remember { authRepository.isSignedIn() }
-
     val navigationState = remember {
-        NavigationState(
-            initialScreen = when {
-                isSignedIn -> Screen.DarkHome
-                else -> Screen.Login
-            }
-        )
+        NavigationState(initialScreen = Screen.Splash)
     }
     val authViewModel: AuthViewModel = viewModel { AuthViewModel() }
     val authState by authViewModel.authState.collectAsState()
@@ -401,6 +397,73 @@ private fun NavHostContent(
     shareService: com.example.smackcheck2.platform.ShareService?
 ) {
     val locationUiState by locationHomeViewModel.uiState.collectAsState()
+    val navScope = rememberCoroutineScope()
+    val groupedSubmissionService = remember { GroupedDishReviewSubmissionService() }
+    var pendingGroupedReview by remember { mutableStateOf<PendingGroupedReviewStatus?>(null) }
+    var groupedReviewEditDraft by remember { mutableStateOf<GroupedReviewFormDraft?>(null) }
+
+    fun submitGroupedReviewInBackground(draft: GroupedReviewFormDraft) {
+        val restaurant = draft.restaurant
+        if (restaurant == null) {
+            pendingGroupedReview = PendingGroupedReviewStatus(
+                draft = draft,
+                phase = PendingGroupedReviewPhase.FAILED,
+                errorMessage = "Please select a restaurant"
+            )
+            navigationState.navigateToMainTab(Screen.DarkHome)
+            return
+        }
+
+        pendingGroupedReview = PendingGroupedReviewStatus(
+            draft = draft,
+            phase = PendingGroupedReviewPhase.POSTING
+        )
+        groupedReviewEditDraft = null
+        navigationState.navigateToMainTab(Screen.DarkHome)
+
+        gamificationViewModel.recordAction(
+            actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
+            actionLabel = "Dish Rated"
+        )
+
+        navScope.launch {
+            val location = locationService?.getCurrentLocation()
+            val result = groupedSubmissionService.submit(
+                GroupedDishReviewSubmissionRequest(
+                    items = draft.items,
+                    rating = draft.rating,
+                    comment = draft.comment,
+                    tags = draft.tags,
+                    restaurantId = restaurant.id,
+                    selectedRestaurant = restaurant,
+                    receiptImageBytes = draft.receiptBytes,
+                    receiptAnalysisSummary = draft.receiptSummary,
+                    receiptRawItems = draft.receiptItems,
+                    latitude = location?.latitude,
+                    longitude = location?.longitude
+                )
+            )
+            result.fold(
+                onSuccess = {
+                    pendingGroupedReview = PendingGroupedReviewStatus(
+                        draft = draft,
+                        phase = PendingGroupedReviewPhase.SUCCEEDED,
+                        xpEarned = it.xpEarned
+                    )
+                    socialFeedViewModel.refreshHomeData()
+                    navigationState.clearCaptureData()
+                },
+                onFailure = {
+                    pendingGroupedReview = PendingGroupedReviewStatus(
+                        draft = draft,
+                        phase = PendingGroupedReviewPhase.FAILED,
+                        errorMessage = it.message ?: "Failed to submit grouped review"
+                    )
+                }
+            )
+        }
+    }
+
     val isAuthenticated = when (authState) {
         is AuthState.Authenticated -> true
         is AuthState.Unauthenticated -> false
@@ -504,7 +567,7 @@ private fun NavHostContent(
                 onNavigateToLogin = { navigationState.replaceWith(Screen.Login) },
                 onNavigateToHome = {
                     val user = authViewModel.getCurrentUser()
-                    if (user != null && user.username.isBlank()) {
+                    if (user != null && !user.profileSetupCompleted) {
                         navigationState.replaceWith(Screen.ProfileSetup)
                     } else {
                         navigationState.replaceWith(Screen.DarkHome)
@@ -523,7 +586,7 @@ private fun NavHostContent(
                 onNavigateToRegister = { navigationState.navigateTo(Screen.Register) },
                 onNavigateToHome = {
                     val user = authViewModel.getCurrentUser()
-                    if (user != null && user.username.isBlank()) {
+                    if (user != null && !user.profileSetupCompleted) {
                         navigationState.replaceWith(Screen.ProfileSetup)
                     } else {
                         navigationState.replaceWith(Screen.Splash)
@@ -1328,6 +1391,21 @@ private fun NavHostContent(
                     onAddRestaurantClick = { navigationState.navigateTo(Screen.ManualRestaurantEntry) },
                     onToggleRestaurantSaved = { restaurantId ->
                         locationHomeViewModel.toggleRestaurantSaved(restaurantId)
+                    },
+                    pendingGroupedReview = pendingGroupedReview,
+                    onRetryPendingGroupedReview = {
+                        pendingGroupedReview?.draft?.let { submitGroupedReviewInBackground(it) }
+                    },
+                    onEditPendingGroupedReview = {
+                        pendingGroupedReview?.draft?.let { draft ->
+                            groupedReviewEditDraft = draft
+                            pendingGroupedReview = null
+                            navigationState.updateCapturedDishDrafts(draft.dishDrafts)
+                            navigationState.navigateTo(Screen.DarkDishRating)
+                        }
+                    },
+                    onDismissPendingGroupedReview = {
+                        pendingGroupedReview = null
                     }
                 )
             }
@@ -1462,7 +1540,6 @@ private fun NavHostContent(
                 DishRatingViewModel(preferencesRepository)
             }
             val ratingUiState by dishRatingViewModel.uiState.collectAsState()
-            val groupedSubmissionService = remember { GroupedDishReviewSubmissionService() }
             val imagePicker = LocalImagePicker.current
             val databaseRepository = remember { DatabaseRepository() }
             val locationUiState by locationHomeViewModel.uiState.collectAsState()
@@ -1477,9 +1554,6 @@ private fun NavHostContent(
             var searchedRestaurants by remember { mutableStateOf<List<Restaurant>>(emptyList()) }
             var isSearchingRestaurants by remember { mutableStateOf(false) }
             var searchQuery by remember { mutableStateOf("") }
-            var isGroupedSubmitting by remember { mutableStateOf(false) }
-            var groupedSuccess by remember { mutableStateOf(false) }
-            var groupedXpEarned by remember { mutableStateOf<Int?>(null) }
             var groupedErrorMessage by remember { mutableStateOf<String?>(null) }
 
             // Convert Google Places nearby restaurants to Restaurant format
@@ -1672,6 +1746,8 @@ private fun NavHostContent(
                 }
             }
 
+            val currencyInfo = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode)
+
             DarkGroupedDishReviewScreen(
                 dishDrafts = navigationState.capturedDishDrafts.ifEmpty {
                     navigationState.allCapturedImages.map {
@@ -1692,62 +1768,25 @@ private fun NavHostContent(
                 searchedRestaurants = searchedRestaurants,
                 isLoadingRestaurants = isLoadingRestaurants,
                 isSearchingRestaurants = isSearchingRestaurants,
-                isSubmitting = isGroupedSubmitting,
-                showSuccess = groupedSuccess,
-                xpEarned = groupedXpEarned,
+                isSubmitting = false,
+                showSuccess = false,
+                xpEarned = null,
                 errorMessage = groupedErrorMessage,
+                initialDraft = groupedReviewEditDraft,
                 onNavigateBack = { navigationState.navigateBack() },
                 onRatingComplete = {
                     dishRatingViewModel.resetForm()
                     navigationState.clearCaptureData()
                     navigationState.popToRoot()
                 },
-                onSubmit = { rating, comment, tags, restaurant, items, receiptBytes, receiptSummary, receiptItems ->
-                    // Award points for rating a dish (from main)
-                    gamificationViewModel.recordAction(
-                        actionType = com.example.smackcheck2.gamification.PointsConfig.ACTION_RATE_DISH,
-                        actionLabel = "Dish Rated"
-                    )
-                    kotlinx.coroutines.MainScope().launch {
-                        if (restaurant == null) {
-                            groupedErrorMessage = "Please select a restaurant"
-                            return@launch
-                        }
-                        isGroupedSubmitting = true
-                        groupedErrorMessage = null
-                        val location = locationService?.getCurrentLocation()
-                        val result = groupedSubmissionService.submit(
-                            GroupedDishReviewSubmissionRequest(
-                                items = items,
-                                rating = rating,
-                                comment = comment,
-                                tags = tags,
-                                restaurantId = restaurant.id,
-                                selectedRestaurant = restaurant,
-                                receiptImageBytes = receiptBytes,
-                                receiptAnalysisSummary = receiptSummary,
-                                receiptRawItems = receiptItems,
-                                latitude = location?.latitude,
-                                longitude = location?.longitude
-                            )
-                        )
-                        result.fold(
-                            onSuccess = {
-                                isGroupedSubmitting = false
-                                groupedSuccess = true
-                                groupedXpEarned = it.xpEarned
-                                socialFeedViewModel.refreshHomeData()
-                            },
-                            onFailure = {
-                                isGroupedSubmitting = false
-                                groupedErrorMessage = it.message ?: "Failed to submit grouped review"
-                            }
-                        )
-                    }
+                onSubmit = { draft ->
+                    groupedErrorMessage = null
+                    submitGroupedReviewInBackground(draft)
                 },
                 onDismissError = { groupedErrorMessage = null },
                 onSearchRestaurants = { query -> searchQuery = query },
-                currencySymbol = com.example.smackcheck2.util.CurrencyHelper.forCountry(locationUiState.countryCode).symbol
+                currencySymbol = currencyInfo.symbol,
+                currencyCode = currencyInfo.code
             )
         }
 
