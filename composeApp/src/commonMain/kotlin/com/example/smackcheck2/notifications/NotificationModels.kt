@@ -26,6 +26,7 @@ enum class NotificationEventType(val value: String) {
     WELCOME("welcome"),
     FIRST_DISH("first_dish"),
     INACTIVITY_REMINDER("inactivity_reminder"),
+    ADMIN_ACTION("admin_action"),
     ADMIN_BROADCAST("admin_broadcast");
 
     companion object {

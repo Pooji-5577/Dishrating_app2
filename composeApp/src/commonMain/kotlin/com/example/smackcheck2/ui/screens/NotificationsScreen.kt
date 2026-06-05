@@ -322,6 +322,10 @@ private fun getNotificationIcon(eventType: NotificationEventType?): Notification
             icon = Icons.Filled.Notifications,
             backgroundColor = Color(0xFF2196F3) // Blue
         )
+        NotificationEventType.ADMIN_ACTION -> NotificationIconData(
+            icon = Icons.Filled.Notifications,
+            backgroundColor = Color(0xFFA33A3A) // Moderation red
+        )
         NotificationEventType.ADMIN_BROADCAST -> NotificationIconData(
             icon = Icons.Filled.Notifications,
             backgroundColor = Color(0xFFFF6B35) // SmackCheck brand
