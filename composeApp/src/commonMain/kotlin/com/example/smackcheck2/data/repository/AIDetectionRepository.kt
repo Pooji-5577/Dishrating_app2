@@ -23,10 +23,10 @@ data class DishDetectionResult(
 )
 
 /**
- * Repository for AI-powered dish detection using Supabase Edge Function
+ * Repository for AI-powered dish detection using the SmackCheck backend
  * 
- * This implementation calls the 'analyze-dish' Edge Function which handles
- * the Gemini API call server-side, keeping the API key secure.
+ * This implementation calls POST /api/ai/detect-dish, which handles
+ * the Azure OpenAI call server-side, keeping the API key secure.
  */
 class AIDetectionRepository {
 

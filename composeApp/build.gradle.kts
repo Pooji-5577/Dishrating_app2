@@ -159,8 +159,8 @@ android {
         // The Places API key is now handled server-side via Supabase Edge Function.
         manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = getConfigProperty("GOOGLE_MAPS_API_KEY")
 
-        // Note: GEMINI_API_KEY is no longer needed client-side
-        // AI dish detection now uses Supabase Edge Functions with the key stored server-side
+        // Note: no AI API key is needed client-side
+        // AI dish detection goes through the SmackCheck backend (Azure OpenAI) with the key stored server-side
     }
     lint {
         abortOnError = false

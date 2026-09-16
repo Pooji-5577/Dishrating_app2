@@ -5,7 +5,7 @@ package com.example.smackcheck2.data
  * Values are loaded from local.properties or .env file via BuildConfig (Android)
  * or from Info.plist via NSBundle (iOS)
  * 
- * Note: All third-party API keys (GEMINI_API_KEY, GOOGLE_PLACES_API_KEY) are stored
+ * Note: All third-party API keys (AZURE_OPENAI_API_KEY, GOOGLE_PLACES_API_KEY) are stored
  * as Supabase secrets and accessed only by Edge Functions. They are NOT needed client-side.
  */
 expect object SupabaseConfig {
